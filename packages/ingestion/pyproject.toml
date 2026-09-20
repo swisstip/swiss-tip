@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-ingestion"
+version = "0.2.5"
+description = "Bounded source acquisition for Swiss TIP: catalogue download, Fedlex documents, gap report"
+requires-python = ">=3.14"
+
+[project.scripts]
+swisstip-download = "swisstip.ingestion.download_cli:main"
+swisstip-gaps = "swisstip.ingestion.gap_report:main"
+swisstip-places = "swisstip.ingestion.places:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
