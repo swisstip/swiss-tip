@@ -1,0 +1,15 @@
+# The context is the repository root, for LICENSE and NOTICE. Everything
+# else this image carries is in this directory, shared with a pack's demo
+# image; the OpenCode binary comes from the npm registry.
+*
+!LICENSE
+!NOTICE
+!docker/opencode/requirements.txt
+!docker/opencode/README.md
+!docker/opencode/opencode.json
+!docker/opencode/with-opencode.sh
+!docker/opencode/opencode_web_shim.py
+!docker/opencode/opencode_health.py
+!docker/opencode/welcome.js
+!docker/opencode/swiss-tip-tools-only.js
+!docker/opencode/welcome.json
