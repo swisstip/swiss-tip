@@ -1,0 +1,65 @@
+schema_version = "swisstip.semantic-models/v2"
+active_profile = "deepseek_flash"
+
+[generation]
+temperature = 0.0
+max_output_tokens = 8192
+
+[extraction]
+chunk_content_characters = 6400
+chunk_overlap_characters = 400
+max_concepts_per_chunk = 6
+max_model_requests_per_page = 12
+max_model_requests_per_run = 400
+max_total_input_characters = 1200000
+max_characters_per_document = 120000
+max_review_input_characters = 64000
+review_fallback_batch_size = 2
+classify_basis = true
+
+[retries]
+max_retries = 3
+backoff_seconds = 2.0
+max_backoff_seconds = 30.0
+max_retry_after_seconds = 300.0
+
+[profiles.deepseek_flash]
+adapter = "deepseek"
+model = "deepseek-flash"
+base_url = "https://api.deepseek.com"
+timeout_seconds = 180
+
+[profiles.deepseek_pro]
+adapter = "deepseek"
+model = "deepseek-v4-pro"
+base_url = "https://api.deepseek.com"
+timeout_seconds = 180
+
+[profiles.apertus_70b]
+adapter = "huggingface"
+model = "swiss-ai/Apertus-70B-Instruct-2509"
+base_url = "https://router.huggingface.co/v1"
+provider = "publicai"
+response_mode = "json_schema"
+timeout_seconds = 180
+status = "untested-live"
+
+[profiles.groq_gpt_oss_120b]
+adapter = "groq"
+model = "openai/gpt-oss-120b"
+base_url = "https://api.groq.com/openai/v1"
+timeout_seconds = 180
+
+[profiles.ollama_apertus_8b]
+adapter = "ollama"
+model = "MichelRosselli/apertus:8b-instruct-2509-q4_k_m"
+base_url = "http://127.0.0.1:11434"
+num_ctx = 8192
+keep_alive = "5m"
+timeout_seconds = 180
+status = "untested-live"
+
+[profiles.assistant_exchange]
+adapter = "exchange"
+model = "claude-fable-5-1"
+provider = "anthropic-assistant"

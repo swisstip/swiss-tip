@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-concepts"
+version = "0.2.5"
+description = "Resumable concept proposals and separate model review over Swiss TIP text records"
+requires-python = ">=3.14"
+dependencies = ["swisstip-extraction", "swisstip-build"]
+
+[project.scripts]
+swisstip-concepts = "swisstip.concepts.concepts_cli:main"
+swisstip-concepts-package = "swisstip.concepts.package_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
+
+[tool.setuptools.package-data]
+"swisstip.concepts" = ["prompts/*.md"]

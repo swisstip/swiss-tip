@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-build"
+version = "0.2.5"
+description = "Swiss TIP release build: curation file plus text dataset to a validated knowledge release"
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic>=2.11,<3",
+    "pyyaml==6.0.3",
+    "swisstip-core",
+    "swisstip-extraction",
+]
+
+[project.scripts]
+swisstip-build-release = "swisstip.build.build_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
