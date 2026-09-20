@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-mcp-server"
+version = "0.2.5"
+description = "Swiss TIP MCP server: the four tools over stdio or Streamable HTTP on a validated knowledge release"
+requires-python = ">=3.14"
+dependencies = [
+    "mcp>=1.29,<2",
+    "pydantic>=2.11,<3",
+    "starlette>=0.48",
+    "uvicorn>=0.31.1",
+    "swisstip-core",
+    "swisstip-runtime",
+]
+
+[project.scripts]
+swisstip-mcp = "swisstip.mcp_server.server:main"
+swisstip-server = "swisstip.mcp_server.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
