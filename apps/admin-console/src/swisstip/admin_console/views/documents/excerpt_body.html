@@ -1,0 +1,38 @@
+{% if selection %}
+  <p class="small mono">blocks {{ selection.first }}-{{ selection.last }},
+    offsets {{ selection.start }}-{{ selection.end }}, {{ selection.blocks }} block(s)</p>
+  <p class="small mono muted">{{ selection.heading_path | join(' / ') }}</p>
+  <div class="excerpt">{{ selection.text }}</div>
+  <p class="small muted">This is the excerpt the build would cut: the first block's start offset to the last
+  block's end offset of the record's <code>content_text</code>.</p>
+
+  {% if not read_only %}
+  <h3>Cite this range</h3>
+  <form method="post" action="/packs/{{ pack.pack }}/workbench/cite">
+    <input type="hidden" name="sha256" value="{{ pack.curation.sha256 or '' }}">
+    <input type="hidden" name="document_id" value="{{ document_id }}">
+    <input type="hidden" name="first_block" value="{{ selection.first }}">
+    <input type="hidden" name="last_block" value="{{ selection.last }}">
+    <label for="cite-existing"><input type="radio" id="cite-existing" name="mode" value="existing" checked>
+      add as evidence to an existing fact</label>
+    <select name="fact_id">
+      <option value="">-- choose a fact --</option>
+      {% for fact_id, statement in facts %}<option value="{{ fact_id }}">{{ fact_id }} - {{ statement }}</option>{% endfor %}
+    </select>
+    <label for="cite-new"><input type="radio" id="cite-new" name="mode" value="new"> create a new fact under a concept</label>
+    <select name="concept_id">
+      <option value="">-- choose a concept --</option>
+      {% for concept_id, label in concepts %}<option value="{{ concept_id }}">{{ concept_id }} - {{ label }}</option>{% endfor %}
+    </select>
+    <label for="new-fact-id">new fact_id <span class="hint">defaults to &lt;concept&gt;-new</span></label>
+    <input type="text" id="new-fact-id" name="new_fact_id">
+    <label for="new-statement">statement <span class="hint">leave empty to start from the excerpt and edit it</span></label>
+    <textarea id="new-statement" name="statement"></textarea>
+    <label for="new-jurisdiction">jurisdiction</label>
+    <input type="text" id="new-jurisdiction" name="jurisdiction" value="CH">
+    <button type="submit">Cite</button>
+  </form>
+  {% endif %}
+{% else %}
+  <p class="muted small">Pick a range of consecutive blocks to see the excerpt as the build would cut it.</p>
+{% endif %}

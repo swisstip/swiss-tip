@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Swiss TIP admin console{% endblock %}</title>
+  <link rel="stylesheet" href="/static/console.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/console.js" defer></script>
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="/">Swiss TIP admin console</a>
+  <span class="mode {{ 'read-only' if read_only else 'edit' }}">{{ 'read-only mode' if read_only else 'edit mode' }}</span>
+  <span class="actor">actor: {{ actor }}</span>
+  {% if pack_name %}<span class="pack">pack: <strong>{{ pack_name }}</strong></span>{% endif %}
+  <span class="spacer"></span>
+  <span class="version">v{{ console_version }}</span>
+</header>
+
+{% if pack_name %}
+<nav class="tabs" aria-label="Screens of this pack">
+  {% set screens = [('sources', 'Sources'), ('runs', 'Runs'), ('documents', 'Documents'),
+                    ('workbench', 'Workbench'), ('review', 'Review'), ('release', 'Release'),
+                    ('sandbox', 'Sandbox'), ('operations', 'Operations')] %}
+  <a href="/" class="{{ 'current' if active == 'packs' }}">Packs</a>
+  {% for slug, label in screens %}
+    <a href="/packs/{{ pack_name }}/{{ slug }}" class="{{ 'current' if active == slug }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+{% if notice %}<p class="notice" role="status"><span aria-hidden="true">+</span> {{ notice }}</p>{% endif %}
+{% if error %}<p class="alert" role="alert"><span aria-hidden="true">!</span> {{ error }}</p>{% endif %}
+
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

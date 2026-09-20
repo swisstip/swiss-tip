@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Audit log - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Audit log: {{ pack.pack }}</h1>
+<p class="small muted">One line per write, newest first, from
+<code>{{ pack.console_dir }}/audit.jsonl</code>. The log lives outside Git; the Git history holds the file-level
+record. The console never commits.</p>
+<div class="scroll">
+<table>
+  <thead><tr><th>At</th><th>Actor</th><th>File</th><th>Reason</th><th>IDs</th><th>Before</th><th>After</th></tr></thead>
+  <tbody>
+  {% for entry in entries %}
+    <tr>
+      <td class="mono">{{ entry.at[:19] }}</td>
+      <td>{{ entry.actor }}</td>
+      <td class="mono">{{ entry.file }}</td>
+      <td>{{ entry.reason }}</td>
+      <td class="mono small">{{ entry.ids | join(', ') }}</td>
+      <td class="mono small">{{ entry.sha256_before | shorten }}</td>
+      <td class="mono small">{{ entry.sha256_after | shorten }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="muted">Nothing written yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Diff {{ entry.document_id }} - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Diff of a superseded record</h1>
+<p class="small">
+  old: {{ m.document_link(pack.pack, entry.document_id, entry.title or entry.document_id) }}
+  <span class="mono muted">{{ (entry.retrieved_at or '')[:19] }}</span><br>
+  new: {% if successor %}{{ m.document_link(pack.pack, successor.document_id, successor.title or successor.document_id) }}
+       <span class="mono muted">{{ (successor.retrieved_at or '')[:19] }}</span>
+       {% else %}<span class="badge bad">no record replaced it</span>{% endif %}
+</p>
+{% if successor %}<p class="small muted">Blocks are aligned by <code>text_sha256</code>; unchanged runs are
+collapsed. {{ changed }} changed, added or removed block group(s).</p>{% endif %}
+
+<h2>Citations into the old record</h2>
+<table>
+  <thead><tr><th>Fact</th><th>Concept</th><th>Blocks</th><th>Last build outcome</th><th>Warnings</th></tr></thead>
+  <tbody>
+  {% for citation in citations %}
+    <tr>
+      <td>{{ m.fact_link(pack.pack, citation.fact_id) }}</td>
+      <td>{{ m.concept_link(pack.pack, citation.concept_id) }}</td>
+      <td class="mono">{{ citation.first_block }}-{{ citation.last_block or citation.first_block }}</td>
+      <td>{{ citation.outcome.get('outcome') or 'not in the last build report' }}
+        {% if citation.outcome.get('reason') %}<div class="small">{{ citation.outcome.reason }}</div>{% endif %}</td>
+      <td class="small">{{ (citation.outcome.get('warnings') or []) | join(', ') }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">No fact cites this record.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Blocks</h2>
+<div class="scroll blocks diff">
+{% for row in rows %}
+  {% if row.state == 'same' %}
+    <div class="block same"><span class="no">=</span>
+      <div class="body small">{{ row.count }} unchanged block(s): old b{{ row.old_from }}-b{{ row.old_to }},
+        new b{{ row.new_from }}-b{{ row.new_to }}</div></div>
+  {% else %}
+    <div class="block {{ row.state }}">
+      <span class="no">{% if row.old_number %}-b{{ row.old_number }}{% endif %}
+        {% if row.new_number %}+b{{ row.new_number }}{% endif %}</span>
+      <div class="body">
+        <span class="badge {{ 'bad' if row.state == 'removed' else 'ok' if row.state == 'added' else 'warn' }}">{{ row.state }}</span>
+        {% if row.old %}<div class="small"><strong>old:</strong> {{ row.old.text | shorten(400) }}</div>{% endif %}
+        {% if row.new %}<div class="small"><strong>new:</strong> {{ row.new.text | shorten(400) }}</div>{% endif %}
+      </div>
+    </div>
+  {% endif %}
+{% else %}
+  <p class="muted" style="padding:10px">No successor record to compare against.</p>
+{% endfor %}
+</div>
+{% endblock %}

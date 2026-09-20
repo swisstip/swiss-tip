@@ -1,0 +1,15 @@
+{% extends layout %}
+{% block content %}
+{% if job %}
+  <p>
+    <span class="badge {{ 'ok' if job.status == 'finished' else 'bad' if job.status in ('failed', 'interrupted') else 'warn' }}">{{ job.status }}</span>
+    <span class="mono">{{ job.job_id }}</span> {{ job.kind }}, started by {{ job.actor }} at {{ job.started_at[:19] }}
+    {% if job.finished_at %}, finished {{ job.finished_at[:19] }}{% endif %}
+  </p>
+  {% if job.error %}<p class="alert">{{ job.error }}</p>{% endif %}
+  {% if job.result %}<p class="small">Result: {{ job.result | as_json }}</p>{% endif %}
+{% else %}
+  <p class="muted">This job is not in the current console process; its log is below.</p>
+{% endif %}
+<pre class="job-log">{{ tail.text }}</pre>
+{% endblock %}

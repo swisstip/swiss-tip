@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Checks - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Stored checks against {{ release_id }}</h1>
+<p class="small muted">The result and the time are written into <code>checks.yaml</code> and shown on the pack card.</p>
+{% for row in results %}
+  <div class="card">
+    <h2 style="margin-top:0">{{ m.verdict(row.passed) }} {{ row.check_id }}
+      <span class="small muted">{{ row.tool }}</span></h2>
+    <p class="small">{{ row.title }}</p>
+    <table>
+      <thead><tr><th>Expectation</th><th>Result</th><th>Detail</th></tr></thead>
+      <tbody>{% for item in row.expectations %}
+        <tr><td>{{ item.description }}</td><td>{{ m.verdict(item.passed) }}</td>
+            <td class="small">{{ item.detail }}</td></tr>{% endfor %}</tbody>
+    </table>
+    <details><summary>the answer</summary><pre>{{ row.answer | as_json }}</pre></details>
+  </div>
+{% endfor %}
+<p><a class="button secondary" href="/packs/{{ pack.pack }}/sandbox">Back to the sandbox</a></p>
+{% endblock %}

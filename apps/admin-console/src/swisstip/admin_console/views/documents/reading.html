@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}{{ record.title or record.source_url }} - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>{{ record.title or record.source_url }}</h1>
+
+<div class="card small">
+  <div><strong>Document</strong> <code>{{ record.document_id }}</code> ({{ record.representation }}, {{ record.status }})</div>
+  <div><strong>Source URL</strong> <a href="{{ record.source_url }}" rel="noreferrer">{{ record.source_url }}</a></div>
+  {% if record.document_url != record.source_url %}
+    <div><strong>Document URL</strong> <a href="{{ record.document_url }}" rel="noreferrer">{{ record.document_url }}</a></div>{% endif %}
+  {% if record.version_uri %}<div><strong>Version</strong> <a href="{{ record.version_uri }}" rel="noreferrer">{{ record.version_uri }}</a></div>{% endif %}
+  <div><strong>Attribution</strong> {{ (record.attribution or {}).kind }}
+       {{ ((record.attribution or {}).source_ids or []) | join(', ') }}</div>
+  <div><strong>Language</strong> declared <code>{{ record.language_declared }}</code>, hint <code>{{ record.language_hint }}</code></div>
+  <div><strong>Retrieved</strong> {{ (record.acquisition or {}).retrieved_at }} ({{ (record.acquisition or {}).attempt }})</div>
+  <div><strong>Hashes</strong> raw <code>{{ (record.acquisition or {}).raw_sha256 | shorten(16) }}</code>,
+       text <code>{{ record.content_sha256 | shorten(16) }}</code></div>
+  {% if record.warnings %}<div class="badge warn">warnings: {{ record.warnings | join(', ') }}</div>{% endif %}
+  {% if record.exclusion_reasons %}<div class="badge bad">excluded: {{ record.exclusion_reasons | join(', ') }}</div>{% endif %}
+  {% if record.imported_text %}<div class="badge">imported_text: {{ record.imported_text | as_json | shorten(120) }}</div>{% endif %}
+  {% if entry.superseded %}
+    <div class="badge warn">superseded</div>
+    {% if successor %}<a href="/packs/{{ pack.pack }}/documents/{{ record.document_id }}/diff">open the diff against
+      {{ successor.document_id }}</a>{% endif %}
+  {% endif %}
+</div>
+
+<form method="get" class="filters">
+  <label><input type="checkbox" name="furniture" value="1" {{ 'checked' if show_furniture }}
+         onchange="this.form.submit()"> show furniture</label>
+  <label><input type="checkbox" name="hidden" value="1" {{ 'checked' if show_hidden }}
+         onchange="this.form.submit()"> show hidden blocks</label>
+  <label><input type="checkbox" name="raw" value="1" {{ 'checked' if show_raw }}
+         onchange="this.form.submit()"> show dom_path and links</label>
+  <input type="hidden" name="first" value="{{ first }}">
+  <input type="hidden" name="last" value="{{ last }}">
+  <noscript><button type="submit">Apply</button></noscript>
+</form>
+
+<div class="split wide">
+<div>
+<p class="small muted">Block numbers are the <code>bNNNNN</code> suffix of the block IDs. Click the first block and
+then the last, or type the numbers on the right.</p>
+<div class="blocks">
+{% for row in rows %}
+  {% if (show_furniture or not row.furniture) and (show_hidden or not row.hidden) %}
+  <div class="block {{ 'furniture' if row.furniture }} {{ 'hidden' if row.hidden }} {{ 'cited' if row.facts }} {{ 'selected' if first and first <= row.number <= (last or first) }}"
+       data-number="{{ row.number }}" id="b{{ row.number }}">
+    <span class="no">b{{ row.number }}
+      {% if row.facts %}<br>{% for fact_id in row.facts %}<a href="/packs/{{ pack.pack }}/workbench/facts/{{ fact_id }}"
+         title="{{ fact_id }}">fact</a> {% endfor %}{% endif %}</span>
+    <div class="body" style="padding-left: {{ row.depth * 12 }}px">
+      {% if row.kind == 'heading' %}
+        <h4>{{ row.block.text }}</h4>
+      {% elif row.kind == 'table' %}
+        {% if row.block.caption %}<div class="small"><em>{{ row.block.caption }}</em></div>{% endif %}
+        {% if row.block.rows %}
+        <table>
+          {% for line in row.block.rows %}
+            <tr>
+            {%- for cell in line -%}
+              {% if cell.header %}
+                <th {% if cell.colspan != '1' %}colspan="{{ cell.colspan }}"{% endif %}
+                    {% if cell.rowspan != '1' %}rowspan="{{ cell.rowspan }}"{% endif %}>{{ cell.text }}</th>
+              {% else %}
+                <td {% if cell.colspan != '1' %}colspan="{{ cell.colspan }}"{% endif %}
+                    {% if cell.rowspan != '1' %}rowspan="{{ cell.rowspan }}"{% endif %}>{{ cell.text }}</td>
+              {% endif %}
+            {%- endfor -%}
+            </tr>
+          {% endfor %}
+        </table>
+        {% else %}<span>{{ row.block.text }}</span>{% endif %}
+      {% else %}
+        {{ row.block.text }}
+      {% endif %}
+      {% if row.marks %}<span class="marks">[{{ row.marks | join(', ') }}]</span>{% endif %}
+      {% if show_raw %}
+        <div class="small mono muted">{{ row.dom_path }}</div>
+        {% for link in row.links %}<div class="small mono"><a href="{{ link.href }}" rel="noreferrer">{{ link.text | shorten(60) }}</a></div>{% endfor %}
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+</div>
+</div>
+
+<div>
+  <div class="card" style="position: sticky; top: 10px">
+    <h2 style="margin-top:0">Selection</h2>
+    <form id="selection" method="get" action="/packs/{{ pack.pack }}/documents/{{ record.document_id }}"
+          hx-get="/packs/{{ pack.pack }}/documents/{{ record.document_id }}/excerpt"
+          hx-trigger="rangechanged, change" hx-target="#excerpt" hx-swap="innerHTML">
+      <div class="filters">
+        <div><label for="first">first block</label>
+          <input type="number" id="first" name="first" value="{{ first or '' }}" min="1"></div>
+        <div><label for="last">last block</label>
+          <input type="number" id="last" name="last" value="{{ last or '' }}" min="1"></div>
+        <noscript><button type="submit">Show</button></noscript>
+      </div>
+    </form>
+    <div id="excerpt">
+      {% set document_id = record.document_id %}
+      {% include "documents/excerpt_body.html" %}
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}

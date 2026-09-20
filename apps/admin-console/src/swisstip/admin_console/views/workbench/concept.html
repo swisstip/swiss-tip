@@ -1,0 +1,90 @@
+{% import "macros.html" as m %}
+<h2>Concept {{ concept_id }}</h2>
+{% if concept is none %}
+  <p class="alert">No concept <code>{{ concept_id }}</code> in the curation file. A concept is created together
+  with its first fact from a reading view selection.</p>
+{% else %}
+<div class="split wide">
+<div>
+<form method="post" action="/packs/{{ pack.pack }}/workbench/concepts">
+  <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+  <input type="hidden" name="concept_id" value="{{ concept.concept_id }}">
+  <label>concept_id <span class="hint">immutable here; use the rename action below</span></label>
+  <input type="text" value="{{ concept.concept_id }}" disabled>
+  <label for="c-topic">topic_id</label>
+  <select id="c-topic" name="topic_id">
+    {% for node in nodes %}<option {{ 'selected' if concept.topic_id == node.topic.topic_id }}>{{ node.topic.topic_id }}</option>{% endfor %}
+  </select>
+  <label for="c-label">label</label>
+  <input type="text" id="c-label" name="label" value="{{ concept.label }}" required>
+  <label for="c-desc">description</label>
+  <textarea id="c-desc" name="description" rows="4" required>{{ concept.description }}</textarea>
+  <label for="c-aliases">aliases <span class="hint">one per line; search weights them twice the description</span></label>
+  <textarea id="c-aliases" name="aliases" rows="5">{{ concept.aliases | join('\n') }}</textarea>
+  <label for="c-questions">questions <span class="hint">one per line</span></label>
+  <textarea id="c-questions" name="questions" rows="4">{{ concept.questions | join('\n') }}</textarea>
+  <label for="c-context">required_context <span class="hint">one field per line; known: {{ context_fields | join(', ') }}</span></label>
+  <textarea id="c-context" name="required_context" rows="3">{{ concept.required_context | join('\n') }}</textarea>
+  <label for="c-userfacts">required_user_facts <span class="hint">name=status|instruction, one per line</span></label>
+  <textarea id="c-userfacts" name="required_user_facts" rows="4">{% for item in concept.required_user_facts %}{{ item.name }}={{ item.status }}|{{ item.instruction }}
+{% endfor %}</textarea>
+  <label for="c-rule">decision_rule description <span class="hint">empty removes the rule</span></label>
+  <input type="text" id="c-rule" name="decision_rule_description" value="{{ concept.decision_rule.description if concept.decision_rule else '' }}">
+  <label for="c-steps">decision_rule steps <span class="hint">one per line</span></label>
+  <textarea id="c-steps" name="decision_rule_steps" rows="4">{{ (concept.decision_rule.steps if concept.decision_rule else []) | join('\n') }}</textarea>
+  <label for="c-notes">notes <span class="hint">one per line</span></label>
+  <textarea id="c-notes" name="notes" rows="3">{{ concept.notes | join('\n') }}</textarea>
+  {% if not read_only %}<button type="submit">Save the concept</button>{% endif %}
+</form>
+
+{% if not read_only %}
+<details class="card">
+  <summary>Rename the concept</summary>
+  <p class="small muted">Renaming rewrites the fact IDs that start with the concept ID and the references in
+  <code>checks.yaml</code>. Callers that stored the old ID will not find it.</p>
+  <form method="post" action="/packs/{{ pack.pack }}/workbench/concepts/{{ concept.concept_id }}/rename">
+    <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+    <label for="c-new">new concept_id</label>
+    <input type="text" id="c-new" name="new_id" required pattern="[a-z0-9]+(-[a-z0-9]+)*">
+    <button type="submit" class="danger">Rename</button>
+  </form>
+</details>
+{% endif %}
+</div>
+
+<div>
+  <div class="card">
+    <h3 style="margin-top:0">As search indexes it</h3>
+    <p class="small muted">The terms after the runtime's tokenizer, with the weight each field carries. A query can
+    only hit these words.</p>
+    <table>
+      <thead><tr><th>Field</th><th>Weight</th><th>Terms</th></tr></thead>
+      <tbody>
+      {% for field, weight in [('label', '3.0'), ('aliases', '2.0'), ('questions', '2.0'),
+                               ('description', '1.0'), ('statements', '0.5')] %}
+        <tr><td>{{ field }}</td><td>{{ weight }}</td>
+            <td class="small mono">{{ terms.get(field, []) | join(' ') or '-' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">Facts ({{ concept.facts | length }})</h3>
+    <table>
+      <thead><tr><th>Fact</th><th>Jurisdiction</th><th>Condition</th><th>Review</th></tr></thead>
+      <tbody>
+      {% for fact in concept.facts %}
+        <tr>
+          <td>{{ m.fact_link(pack.pack, fact.fact_id) }}<div class="small">{{ fact.statement | shorten(120) }}</div></td>
+          <td>{{ fact.jurisdiction }}</td>
+          <td class="small mono">{{ fact.condition or '-' }}</td>
+          <td><span class="badge {{ 'ok' if fact.provenance.review_status == 'human-reviewed' else 'warn' }}">{{ fact.provenance.review_status }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+{% endif %}

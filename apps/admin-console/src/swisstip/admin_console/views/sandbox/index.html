@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Sandbox - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Tool sandbox</h1>
+{% if not service %}
+  <p class="alert">No release to call. Build one on the release screen.</p>
+{% else %}
+<form method="get" class="filters">
+  <div><label for="rel">Release</label>
+    <select id="rel" name="release_id" onchange="this.form.submit()">
+      {% for item in releases %}<option {{ 'selected' if item == release_id }}>{{ item }}</option>{% endfor %}
+    </select></div>
+  <noscript><button type="submit">Use</button></noscript>
+  <span class="small muted">the pack's release.json and every release the console archived</span>
+</form>
+
+<div class="cards">
+  <section class="card">
+    <h2 style="margin-top:0">get_coverage</h2>
+    <form method="post" action="/packs/{{ pack.pack }}/sandbox/get_coverage"
+          hx-post="/packs/{{ pack.pack }}/sandbox/get_coverage" hx-target="#result" hx-swap="innerHTML">
+      <input type="hidden" name="release_id" value="{{ release_id }}">
+      <label for="cov-parent">parent_id <span class="hint">a topic; empty for the root page</span></label>
+      <select id="cov-parent" name="parent_id_helper" onchange="document.getElementById('cov-args').value =
+        this.value ? JSON.stringify({parent_id: this.value}) : '{}'">
+        <option value="">(root)</option>
+        {% for topic in topics %}<option>{{ topic }}</option>{% endfor %}
+      </select>
+      <label for="cov-args">arguments</label>
+      <textarea id="cov-args" name="arguments" rows="2">{}</textarea>
+      <button type="submit">Call get_coverage</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-top:0">search</h2>
+    <form method="post" action="/packs/{{ pack.pack }}/sandbox/search"
+          hx-post="/packs/{{ pack.pack }}/sandbox/search" hx-target="#result" hx-swap="innerHTML">
+      <input type="hidden" name="release_id" value="{{ release_id }}">
+      <label for="s-args">arguments</label>
+      <textarea id="s-args" name="arguments" rows="3">{"query": "", "limit": 5}</textarea>
+      <button type="submit">Call search</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-top:0">resolve</h2>
+    <form method="post" action="/packs/{{ pack.pack }}/sandbox/resolve"
+          hx-post="/packs/{{ pack.pack }}/sandbox/resolve" hx-target="#result" hx-swap="innerHTML">
+      <input type="hidden" name="release_id" value="{{ release_id }}">
+      <label for="r-args">arguments <span class="hint">validated against ResolveRequest</span></label>
+      <textarea id="r-args" name="arguments" rows="6">{"concept_ids": [], "jurisdiction": {"canton": "Zurich", "city": "Zurich"}, "context": {}}</textarea>
+      <button type="submit">Call resolve</button>
+    </form>
+    <details><summary>concepts ({{ concepts | length }})</summary>
+      <p class="small mono">{{ concepts | join(', ') }}</p></details>
+    <details><summary>context fields</summary>
+      <table class="small"><thead><tr><th>Field</th><th>Enum</th></tr></thead><tbody>
+        {% for name, spec in context_fields.items() %}
+          <tr><td class="mono">{{ name }}</td><td class="mono">{{ (spec.enum or []) | join(', ') }}</td></tr>
+        {% endfor %}</tbody></table></details>
+    <details><summary>published jurisdictions</summary>
+      <p class="small mono">{{ cantons | join(', ') }}</p></details>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-top:0">get_evidence</h2>
+    <form method="post" action="/packs/{{ pack.pack }}/sandbox/get_evidence"
+          hx-post="/packs/{{ pack.pack }}/sandbox/get_evidence" hx-target="#result" hx-swap="innerHTML">
+      <input type="hidden" name="release_id" value="{{ release_id }}">
+      <label for="e-args">arguments <span class="hint">evidence IDs from the last resolve result</span></label>
+      <textarea id="e-args" name="arguments" rows="3">{"evidence_ids": []}</textarea>
+      <button type="submit">Call get_evidence</button>
+    </form>
+  </section>
+</div>
+
+<div id="result"></div>
+{% endif %}
+
+<h2>Stored checks</h2>
+{% if checks_error %}<p class="alert">checks.yaml does not validate: {{ checks_error }}</p>{% endif %}
+{% if not checks %}
+  <p class="muted">No <code>checks.yaml</code> for this pack yet.</p>
+  {% if not read_only %}
+  <form method="post" action="/packs/{{ pack.pack }}/sandbox/checks/seed">
+    <input type="hidden" name="release_id" value="{{ release_id }}">
+    <button type="submit">Seed the two standing cases</button>
+  </form>
+  {% endif %}
+{% else %}
+  <p class="small">
+    {% if checks.last_run %}last run {{ checks.last_run.at }} against <code>{{ checks.last_run.release_id }}</code>:
+      {% for name, result in checks.last_run.results.items() %}
+        <span class="badge {{ 'ok' if result == 'pass' else 'bad' }}">{{ name }} {{ result }}</span>{% endfor %}
+    {% else %}never run{% endif %}</p>
+  <table>
+    <thead><tr><th>Check</th><th>Tool</th><th>Request</th><th>Expect</th></tr></thead>
+    <tbody>
+    {% for check in checks.checks %}
+      <tr>
+        <td class="mono">{{ check.check_id }}<div class="small">{{ check.title }}</div></td>
+        <td>{{ check.tool }}</td>
+        <td class="small mono">{{ check.request | as_json | shorten(220) }}</td>
+        <td class="small mono">{{ check.expect.model_dump() | as_json | shorten(220) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if checks.samples %}
+    <h3>Sample verdicts</h3>
+    <table><thead><tr><th>Document</th><th>Reviewer</th><th>On</th><th class="num">Blocks</th><th>Verdict</th></tr></thead>
+      <tbody>{% for document_id, sample in checks.samples.items() %}
+        <tr><td class="mono">{{ document_id }}</td><td>{{ sample.reviewed_by }}</td><td>{{ sample.on }}</td>
+            <td class="num">{{ sample.blocks_checked }}</td><td>{{ sample.verdict }}</td></tr>{% endfor %}</tbody></table>
+  {% endif %}
+  {% if not read_only %}
+  <form method="post" action="/packs/{{ pack.pack }}/sandbox/checks/run">
+    <input type="hidden" name="release_id" value="{{ release_id }}">
+    <button type="submit">Run all checks</button>
+  </form>
+  <details class="card">
+    <summary>Save a call as a check</summary>
+    <form method="post" action="/packs/{{ pack.pack }}/sandbox/checks/save">
+      <label for="ch-id">check_id</label><input type="text" id="ch-id" name="check_id" required>
+      <label for="ch-title">title</label><input type="text" id="ch-title" name="title">
+      <label for="ch-tool">tool</label>
+      <select id="ch-tool" name="tool"><option>resolve</option><option>search</option>
+        <option>get_coverage</option><option>get_evidence</option></select>
+      <label for="ch-args">request <span class="hint">JSON, validated against the contract</span></label>
+      <textarea id="ch-args" name="arguments" rows="4">{}</textarea>
+      <label for="ch-status">expect status <span class="hint">concept_id=STATUS, one per line</span></label>
+      <textarea id="ch-status" name="expect_status" rows="3"></textarea>
+      <label for="ch-facts">expect fact_ids <span class="hint">one per line</span></label>
+      <textarea id="ch-facts" name="expect_fact_ids" rows="3"></textarea>
+      <label for="ch-concepts">expect concept_ids in the hits <span class="hint">one per line</span></label>
+      <textarea id="ch-concepts" name="expect_concepts" rows="2"></textarea>
+      <button type="submit">Save as a check</button>
+    </form>
+  </details>
+  {% endif %}
+{% endif %}
+{% endblock %}

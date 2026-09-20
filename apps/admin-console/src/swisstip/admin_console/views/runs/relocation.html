@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Relocation review - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Relocation review</h1>
+<p class="small muted">Every citation of the last build whose outcome is not <code>same-snapshot</code>, grouped by
+outcome. Build report of {{ report.built_at or 'no build yet' }}, release <code>{{ report.release_id }}</code>.
+Citation outcomes:
+{% for outcome, count in (report.citation_outcomes or {}).items() %}{{ count }} {{ outcome }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+
+{% for group in order %}
+  {% set rows = groups.get(group, []) %}
+  {% if rows %}
+  <h2>{{ group }} ({{ rows | length }})</h2>
+  {% if group == 'same-text' %}<p class="small muted">The page was downloaded anew and the text is identical.
+    Listed for the record; nothing to do.</p>{% endif %}
+  {% if group == 'moved' %}<p class="small muted">The excerpt moved inside the page and was found by its block
+    hashes. Nothing to do.</p>{% endif %}
+  {% if group == 'moved-with-warnings' %}<p class="small muted">The excerpt was found but its context changed.
+    Confirm it again in the review queue.</p>{% endif %}
+  {% if group == 'ambiguous' %}<p class="small muted">The excerpt occurs more than once. Pick the range that is
+    meant, or drop the fact.</p>{% endif %}
+  {% if group == 'changed' %}<p class="small muted">The excerpt is gone. Open the reading view at the closest
+    block and re-cite, or drop the fact with a note.</p>{% endif %}
+  {% if group == 'dropped' %}<p class="small muted">The build dropped these facts. Fix the citation or the
+    source.</p>{% endif %}
+
+  {% for row in rows %}
+    <div class="card">
+      <p>{{ m.fact_link(pack.pack, row.fact_id) }}
+        {% if row.concept_id %}in {{ m.concept_link(pack.pack, row.concept_id) }}{% endif %}
+        citation {{ row.number }}
+        {% if row.dropped %}<span class="badge bad">dropped</span>{% endif %}
+        {% for warning in row.warnings %}<span class="badge warn">{{ warning }}</span>{% endfor %}
+      </p>
+      <p>{{ row.statement | shorten(300) }}</p>
+      <p class="small mono">document {{ row.document_id }}
+        {% if row.entry %}- {{ row.entry.title | shorten(70) }}{% endif %}
+        {% if row.citation.reason %}<br>reason: {{ row.citation.reason }}{% endif %}</p>
+
+      {% if row.anchor %}
+        <details><summary>anchored excerpt and heading path</summary>
+          <p class="small mono">{{ row.anchor.heading_path | join(' / ') }}</p>
+          <div class="excerpt">{{ row.anchor.excerpt }}</div>
+        </details>
+      {% endif %}
+
+      {% if row.candidates %}
+        <h3>Candidates</h3>
+        <table>
+          <thead><tr><th>Blocks</th><th>Heading path</th><th>Closest text</th>{% if not read_only %}<th>Action</th>{% endif %}</tr></thead>
+          <tbody>
+          {% for candidate in row.candidates %}
+            {% if candidate.block_ids %}
+              <tr>
+                <td class="mono small">{{ candidate.block_ids | join(', ') }}</td>
+                <td class="small">{{ (candidate.heading_path or []) | join(' / ') }}</td>
+                <td class="small">-</td>
+                {% if not read_only %}
+                <td>
+                  <form method="post" action="/packs/{{ pack.pack }}/runs/relocation/pick">
+                    <input type="hidden" name="sha256" value="{{ pack.curation.sha256 or '' }}">
+                    <input type="hidden" name="fact_id" value="{{ row.fact_id }}">
+                    <input type="hidden" name="number" value="{{ row.number }}">
+                    <input type="hidden" name="document_id" value="{{ row.document_id }}">
+                    <input type="hidden" name="first_block" value="{{ candidate.block_ids[0] | block_number }}">
+                    <input type="hidden" name="last_block" value="{{ candidate.block_ids[-1] | block_number }}">
+                    <button type="submit">pick this range</button>
+                  </form>
+                </td>
+                {% endif %}
+              </tr>
+            {% endif %}
+            {% for match in candidate.matches or [] %}
+              <tr>
+                <td class="mono small">{{ match.block_id }}</td>
+                <td class="small">similarity {{ match.ratio }}</td>
+                <td class="small">{{ match.text | shorten(200) }}</td>
+                {% if not read_only %}
+                <td>
+                  <a class="button secondary small"
+                     href="/packs/{{ pack.pack }}/documents/{{ row.document_id }}?first={{ match.block_id | block_number }}&last={{ match.block_id | block_number }}">open the reading view</a>
+                </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+
+      {% if not read_only and group in ('ambiguous', 'changed', 'dropped') %}
+        <details>
+          <summary>drop this fact</summary>
+          <form method="post" action="/packs/{{ pack.pack }}/runs/relocation/drop">
+            <input type="hidden" name="sha256" value="{{ pack.curation.sha256 or '' }}">
+            <input type="hidden" name="fact_id" value="{{ row.fact_id }}">
+            <label for="note-{{ row.fact_id }}">Why is it dropped? <span class="hint">required; kept outside Git with the fact as it was</span></label>
+            <input type="text" id="note-{{ row.fact_id }}" name="note" required>
+            <button type="submit" class="danger">drop the fact</button>
+          </form>
+        </details>
+      {% endif %}
+    </div>
+  {% endfor %}
+  {% endif %}
+{% else %}
+{% endfor %}
+
+{% if not groups %}
+  <p class="badge ok">Every citation of the last build resolved inside its own snapshot.</p>
+{% endif %}
+{% endblock %}

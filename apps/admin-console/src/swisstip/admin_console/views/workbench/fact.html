@@ -1,0 +1,134 @@
+{% import "macros.html" as m %}
+<h2>Fact {{ fact_id }}</h2>
+{% if fact is none %}
+  <p class="alert">No fact <code>{{ fact_id }}</code> in the curation file.</p>
+{% else %}
+<p class="small">in concept {{ m.concept_link(pack.pack, concept.concept_id) }} - {{ concept.label }}</p>
+
+<form method="post" action="/packs/{{ pack.pack }}/workbench/facts">
+  <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+  <input type="hidden" name="fact_id" value="{{ fact.fact_id }}">
+  <fieldset>
+    <legend>Statement</legend>
+    <label for="f-statement">statement</label>
+    <textarea id="f-statement" name="statement" rows="4" required>{{ fact.statement }}</textarea>
+    <label for="f-language">language</label>
+    <input type="text" id="f-language" name="language" value="{{ fact.language }}" size="4">
+    <label for="f-jur">jurisdiction</label>
+    <select id="f-jur" name="jurisdiction">
+      {% for code in jurisdictions %}<option {{ 'selected' if fact.jurisdiction == code }}>{{ code }}</option>{% endfor %}
+    </select>
+    <p class="small muted">{{ containment }}</p>
+    <label for="f-condition">condition <span class="hint">field=value, one per line</span></label>
+    <textarea id="f-condition" name="condition" rows="3">{% for name, value in (fact.condition or {}).items() %}{{ name }}={{ value }}
+{% endfor %}</textarea>
+    <table class="small">
+      <thead><tr><th>Context field</th><th>Enum</th><th>Description</th></tr></thead>
+      <tbody>{% for name, spec in context_fields.items() %}
+        <tr><td class="mono">{{ name }}</td><td class="mono">{{ (spec.enum or []) | join(', ') }}</td>
+            <td>{{ spec.description | shorten(120) }}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+    <label for="f-from">valid_from</label>
+    <input type="date" id="f-from" name="valid_from" value="{{ fact.valid_from or '' }}">
+    <label for="f-through">valid_through</label>
+    <input type="date" id="f-through" name="valid_through" value="{{ fact.valid_through or '' }}">
+  </fieldset>
+
+  <fieldset>
+    <legend>Provenance</legend>
+    <label for="f-kind">kind</label>
+    <select id="f-kind" name="kind">
+      {% for value in kinds %}<option {{ 'selected' if fact.provenance.kind == value }}>{{ value }}</option>{% endfor %}
+    </select>
+    <label>review_status <span class="hint">read-only here; only the review queue changes it</span></label>
+    <input type="text" value="{{ fact.provenance.review_status }}" disabled>
+    {% if fact.provenance.reviewed_by %}
+      <p class="small">confirmed by {{ fact.provenance.reviewed_by }} on {{ fact.provenance.reviewed_on }}</p>{% endif %}
+    <label for="f-author">author</label>
+    <input type="text" id="f-author" name="author" value="{{ fact.provenance.author }}">
+    <label for="f-source">source</label>
+    <input type="text" id="f-source" name="source" value="{{ fact.provenance.source or '' }}">
+    <label for="f-reviewed">reviewed_on</label>
+    <input type="date" id="f-reviewed" name="reviewed_on" value="{{ fact.provenance.reviewed_on or '' }}">
+    <label for="f-notes">notes <span class="hint">one per line</span></label>
+    <textarea id="f-notes" name="notes" rows="3">{{ fact.provenance.notes | join('\n') }}</textarea>
+    <p class="small muted">Editing the statement of a confirmed fact clears its review status, so an edit is
+    followed by a confirm.</p>
+  </fieldset>
+
+  {% if not read_only %}<button type="submit">Save the fact</button>{% endif %}
+</form>
+
+{% if draft_provider is none and not fact.statement.strip() %}
+  <p class="small muted">The assistant draft needs the concept-extraction provider port of <code>TODO.md</code>;
+  until it exists the button is absent and no statement is written by a machine.</p>
+{% endif %}
+
+<h3>Evidence ({{ evidence | length }})</h3>
+<p class="small muted">A fact needs at least one citation; the form refuses to save without one, as the model does.</p>
+{% for row in evidence %}
+  <div class="card">
+    <p class="small">
+      {{ m.document_link(pack.pack, row.citation.document_id, row.entry.title or row.citation.document_id) }}
+      blocks <code>{{ row.citation.first_block }}-{{ row.citation.last_block or row.citation.first_block }}</code>
+      <span class="badge {{ 'ok' if 'matching' in row.state else 'bad' if 'broken' in row.state else 'warn' }}">{{ row.state }}</span>
+    </p>
+    {% if row.heading_path %}<p class="small mono muted">{{ row.heading_path | join(' / ') }}</p>{% endif %}
+    <div class="excerpt">{{ row.excerpt or 'no anchor yet; the next build writes one' }}</div>
+    <p class="small">basis:
+      {% if row.basis.label %}<strong>{{ row.basis.label }}</strong> <span class="muted">({{ row.basis.rule }}{% if row.basis.institution %}; published by {{ row.basis.institution.name }}, {{ row.basis.institution.level }}{% endif %})</span>
+      {% else %}<span class="muted">{{ row.basis.rule }}</span>{% endif %}
+      {% for warning in row.basis.warnings %}<span class="badge warn">{{ warning }}</span>{% endfor %}
+    </p>
+    <p class="small">
+      <a href="/packs/{{ pack.pack }}/documents/{{ row.citation.document_id }}?first={{ row.citation.first_block }}&last={{ row.citation.last_block or row.citation.first_block }}">open in the reading view</a>
+    </p>
+    {% if not read_only %}
+    <form method="post" action="/packs/{{ pack.pack }}/workbench/facts/{{ fact.fact_id }}/evidence" class="filters">
+      <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+      <input type="hidden" name="number" value="{{ row.number }}">
+      <div><label for="basis-kind-{{ row.number }}">kind <span class="hint">empty: the page default</span></label>
+        <select id="basis-kind-{{ row.number }}" name="basis_kind"><option value=""></option>
+          {% for value in basis_kinds %}<option {{ 'selected' if row.citation.basis and row.citation.basis.kind == value }}>{{ value }}</option>{% endfor %}
+        </select></div>
+      <div><label for="basis-level-{{ row.number }}">level <span class="hint">empty: the publisher's</span></label>
+        <select id="basis-level-{{ row.number }}" name="basis_level"><option value=""></option>
+          {% for value in basis_levels %}<option {{ 'selected' if row.citation.basis and row.citation.basis.level == value }}>{{ value }}</option>{% endfor %}
+        </select></div>
+      <div><label for="basis-norm-{{ row.number }}">norm <span class="hint">AIG, SR 142.20, Art. 12</span></label>
+        <input type="text" id="basis-norm-{{ row.number }}" name="basis_norm" value="{{ row.citation.basis.norm if row.citation.basis and row.citation.basis.norm else '' }}"></div>
+      <div><label for="basis-refers-{{ row.number }}">refers_to</label>
+        <input type="text" id="basis-refers-{{ row.number }}" name="basis_refers_to" value="{{ row.citation.basis.refers_to if row.citation.basis and row.citation.basis.refers_to else '' }}"></div>
+      <button type="submit" name="action" value="basis">set the basis</button>
+    </form>
+    <form method="post" action="/packs/{{ pack.pack }}/workbench/facts/{{ fact.fact_id }}/evidence" class="filters">
+      <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+      <input type="hidden" name="number" value="{{ row.number }}">
+      <input type="hidden" name="document_id" value="{{ row.citation.document_id }}">
+      <div><label for="adj-first-{{ row.number }}">first block</label>
+        <input type="number" id="adj-first-{{ row.number }}" name="first_block" value="{{ row.citation.first_block }}" min="1"></div>
+      <div><label for="adj-last-{{ row.number }}">last block</label>
+        <input type="number" id="adj-last-{{ row.number }}" name="last_block" value="{{ row.citation.last_block or row.citation.first_block }}" min="1"></div>
+      <button type="submit" name="action" value="adjust">adjust the range</button>
+      <button type="submit" name="action" value="remove" class="danger">remove</button>
+    </form>
+    {% endif %}
+  </div>
+{% endfor %}
+
+{% if not read_only %}
+<details class="card">
+  <summary>Add a citation</summary>
+  <form method="post" action="/packs/{{ pack.pack }}/workbench/facts/{{ fact.fact_id }}/evidence" class="filters">
+    <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+    <div><label for="add-doc">document_id</label><input type="text" id="add-doc" name="document_id" required></div>
+    <div><label for="add-first">first block</label><input type="number" id="add-first" name="first_block" min="1" required></div>
+    <div><label for="add-last">last block</label><input type="number" id="add-last" name="last_block" min="1"></div>
+    <button type="submit" name="action" value="add">add</button>
+  </form>
+  <p class="small muted">Picking a range in the reading view is the usual way; this form is for a range you already
+  know.</p>
+</details>
+{% endif %}
+{% endif %}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Packs - Swiss TIP admin console{% endblock %}
+{% block content %}
+<h1>Packs</h1>
+<p class="small muted">Every number below is read from a file the pipeline wrote. The console writes only the
+curation file, the source catalogue and the checks file.</p>
+
+<div class="cards">
+{% for item in cards %}
+  {% set card = item.card %}
+  <section class="card">
+    <h2 style="margin-top:0">
+      <a href="/packs/{{ card.pack }}/sources">{{ card.pack }}</a>
+      {% if item.job %}<span class="badge warn">job {{ item.job.kind }} running</span>{% endif %}
+      {% if card.catalogue_changed %}<span class="badge warn">catalogue changed since the run</span>{% endif %}
+    </h2>
+    <p class="small muted mono">run: {{ card.run_dir }}</p>
+    {% for name, message in [('catalogue', card.catalogue_error), ('curation', card.curation_error),
+                             ('release', card.release_error), ('checks', card.checks_error)] %}
+      {% if message %}<p class="alert small">{{ name }} file does not validate: {{ message }}</p>{% endif %}
+    {% endfor %}
+
+    <div class="row">
+      <span class="label">Sources</span>
+      <span>{{ card.sources.total }} catalogued
+        ({% for level, count in card.sources.by_level.items() %}{{ count }} {{ level }}{% if not loop.last %}, {% endif %}{% endfor %}{% if not card.sources.by_level %}none{% endif %})</span>
+      <span>{{ card.sources.saved }} of {{ card.sources.planned }} targets saved</span>
+      <span>outstanding: {{ card.sources.retriable }} retriable, {{ card.sources.not_retriable }} not retriable</span>
+      {% if card.sources.approved %}<span>{{ card.sources.approved }} human-reviewed and approved for scope</span>{% endif %}
+    </div>
+
+    <div class="row">
+      <span class="label">Text</span>
+      <span>{{ card.text.records }} records, {{ card.text.eligible }} eligible, {{ card.text.blocks }} blocks</span>
+      <span class="muted">dataset {{ card.text.generated_at or 'not built' }}</span>
+      <span>{{ card.text.superseded }} superseded since the last build</span>
+    </div>
+
+    <div class="row">
+      <span class="label">Curation</span>
+      <div style="flex:1; min-width: 260px">
+        <div>{{ card.curation.concepts }} concepts, {{ card.curation.facts }} facts
+          ({{ card.curation.reviewed }} human-reviewed)</div>
+        {{ m.stacked(card.curation.review, card.curation.facts) }}
+        {{ m.stacked(card.curation.kinds, card.curation.facts) }}
+        <div class="small">
+          standing-case facts:
+          {% if card.curation.expected_by_checks %}
+            {{ card.curation.expected_present | length }} present,
+            {% if card.curation.expected_missing %}
+              <span class="badge bad">{{ card.curation.expected_missing | length }} missing:
+                {{ card.curation.expected_missing | join(', ') }}</span>
+            {% else %}<span class="badge ok">none missing</span>{% endif %}
+            ({{ card.curation.expected_reviewed }} reviewed)
+          {% else %}<span class="muted">no stored check names a fact yet</span>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <span class="label">Release</span>
+      <div style="flex:1; min-width: 260px">
+        {% if card.release.release_id %}
+          <div class="mono">{{ card.release.release_id }}</div>
+          <div>snapshot {{ card.release.snapshot_date }},
+            <span class="badge {{ 'bad' if card.release.days_to_stale is not none and card.release.days_to_stale < 14 else 'ok' }}">
+              {{ card.release.days_to_stale }} days until stale</span></div>
+        {% else %}<div class="muted">no release built yet</div>{% endif %}
+        <div class="small muted">last run {{ card.release.last_run or 'never' }}
+          {% if card.release.exit_code is not none %}(exit {{ card.release.exit_code }}){% endif %}</div>
+        {{ m.stage_strip(card.release.stages) }}
+        <div class="small">
+          {% if card.release.last_check_run %}
+            stored checks on {{ card.release.last_check_run.at[:19] }}:
+            {% for name, result in card.release.last_check_run.results.items() %}
+              <span class="badge {{ 'ok' if result == 'pass' else 'bad' }}">{{ name }} {{ result }}</span>
+            {% endfor %}
+          {% else %}<span class="muted">stored checks never run</span>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <p class="small">
+      <a href="/packs/{{ card.pack }}/runs">runs</a> -
+      <a href="/packs/{{ card.pack }}/review">review queue</a> -
+      <a href="/packs/{{ card.pack }}/release">release</a> -
+      <a href="/packs/{{ card.pack }}/sandbox">sandbox</a> -
+      <a href="/packs/{{ card.pack }}/audit">audit log</a>
+    </p>
+  </section>
+{% else %}
+  <p>No pack under <code>releases/</code> yet.</p>
+{% endfor %}
+</div>
+
+{% if not read_only %}
+<section class="card">
+  <h2>Add a pack</h2>
+  <p class="small muted">Creates <code>releases/&lt;pack&gt;/sources.json</code> from the catalogue template with an
+  empty source list. The pipeline refuses to plan a run until the first source is added.</p>
+  <form method="post" action="/packs" class="filters">
+    <div><label for="new-pack">Pack name</label><input type="text" id="new-pack" name="name" required
+         pattern="[a-z0-9][a-z0-9-]*" title="lower case letters, digits and hyphens"></div>
+    <div><label for="new-title">Catalogue title</label><input type="text" id="new-title" name="title"></div>
+    <button type="submit">Add pack</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

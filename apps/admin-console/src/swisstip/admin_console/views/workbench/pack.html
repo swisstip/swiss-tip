@@ -1,0 +1,64 @@
+<h2>Pack</h2>
+{% if not curation %}
+  <p class="muted">No curation file for this pack yet. The build stage skips until one exists.</p>
+{% else %}
+<p class="small muted">These fields become the release manifest. <code>scope_statement</code> and
+<code>out_of_scope_response</code> are returned on every coverage root call, so their length matters; the release
+screen shows the root's size against the 2 KB target.</p>
+<form method="post" action="/packs/{{ pack.pack }}/workbench/pack" {{ 'inert' if read_only }}>
+  <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+  <fieldset>
+    <legend>Manifest text</legend>
+    <label for="p-title">title</label>
+    <input type="text" id="p-title" name="title" value="{{ curation.title }}" required>
+    <label for="p-scope">scope_statement <span class="hint">{{ curation.scope_statement | length }} characters</span></label>
+    <textarea id="p-scope" name="scope_statement" rows="5" required>{{ curation.scope_statement }}</textarea>
+    <label for="p-oos">out_of_scope <span class="hint">one per line</span></label>
+    <textarea id="p-oos" name="out_of_scope" rows="6">{{ curation.out_of_scope | join('\n') }}</textarea>
+    <label for="p-oosr">out_of_scope_response <span class="hint">{{ curation.out_of_scope_response | length }} characters</span></label>
+    <textarea id="p-oosr" name="out_of_scope_response" rows="3" required>{{ curation.out_of_scope_response }}</textarea>
+    <label for="p-lim">limitations <span class="hint">one per line</span></label>
+    <textarea id="p-lim" name="limitations" rows="5">{{ curation.limitations | join('\n') }}</textarea>
+    <label for="p-fresh">freshness_max_age_days</label>
+    <input type="number" id="p-fresh" name="freshness_max_age_days" value="{{ curation.freshness_max_age_days }}" min="1">
+  </fieldset>
+
+  <fieldset>
+    <legend>Publishers <span class="hint">host=name, one per line; the fallback when no institution rule matches a cited host</span></legend>
+    <textarea name="publishers" rows="4">{% for host, name in curation.publishers.items() %}{{ host }}={{ name }}
+{% endfor %}</textarea>
+  </fieldset>
+
+  <fieldset>
+    <legend>Institutions <span class="hint">YAML list: who publishes the cited pages; institution_id, name, native_name, level, body, jurisdiction, urls</span></legend>
+    <textarea name="institutions" rows="12" class="mono">{{ blocks.institutions }}</textarea>
+    <p class="small muted">A page takes the entry whose URL rule (a host, or a host plus path prefix) is the longest
+    one it falls under; a page matching no rule takes its catalogue entry. The registry is never weighed in ranking.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Page basis <span class="hint">YAML mapping: default basis of every excerpt of a page, by host or prefix</span></legend>
+    <textarea name="page_basis" rows="8" class="mono">{{ blocks.page_basis }}</textarea>
+    <p class="small muted">A citation's own basis, set in the fact form, wins over the page default; a page without a
+    rule defaults to guidance at its institution's level. For an act, an ordinance or a treaty the build appends the
+    article from the cited block's heading path.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Ranking policy <span class="hint">YAML; empty means the defaults; never served</span></legend>
+    <textarea name="ranking_policy" rows="6" class="mono">{{ blocks.ranking_policy }}</textarea>
+  </fieldset>
+
+  <fieldset>
+    <legend>Context fields <span class="hint">name=value,value|description, one per line</span></legend>
+    <textarea name="context_fields" rows="8">{% for name, spec in curation.context_fields.items() %}{{ name }}={{ (spec.enum or []) | join(',') }}|{{ spec.description }}
+{% endfor %}</textarea>
+    <p class="small muted">A field a condition uses cannot be removed, and an enum value in use cannot be renamed
+    without confirming; both refusals name the facts.</p>
+    <label><input type="checkbox" name="confirm_enum_change" value="1"> I understand that renaming an enum value in
+      use changes which facts resolve</label>
+  </fieldset>
+
+  {% if not read_only %}<button type="submit">Save the pack</button>{% endif %}
+</form>
+{% endif %}

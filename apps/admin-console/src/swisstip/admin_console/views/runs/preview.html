@@ -1,0 +1,7 @@
+{% extends layout %}
+{% block content %}
+<p class="small mono">{{ document_id }} blocks {{ first_block }}-{{ last_block }}
+  {% if heading %}- {{ heading | join(' / ') }}{% endif %}</p>
+{% if excerpt %}<div class="excerpt">{{ excerpt }}</div>
+{% else %}<p class="alert">That range is outside the record.</p>{% endif %}
+{% endblock %}

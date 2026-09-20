@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Runs - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Pipeline runs</h1>
+
+<h2>Last run</h2>
+{% if report %}
+  <p class="small muted">{{ report.started_at }} to {{ report.finished_at }},
+  exit {{ report.exit_code }}, {{ report.facts_dropped }} fact(s) dropped.
+  Options: {% for key, value in report.options.items() %}{{ key }}={{ value }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  {{ m.stage_strip(strip) }}
+  <div class="scroll" style="max-height:320px">
+  <table>
+    <thead><tr><th>Stage</th><th>Status</th><th class="num">Seconds</th><th>Counts, reason or error</th></tr></thead>
+    <tbody>
+    {% for stage in strip %}
+      <tr>
+        <td>{{ stage.stage }}</td>
+        <td><span class="badge {{ 'ok' if stage.status == 'ran' else 'bad' if stage.status == 'failed' else '' }}">{{ stage.status }}</span></td>
+        <td class="num">{{ stage.seconds }}</td>
+        <td class="small"><code>{{ stage | as_json | shorten(400) }}</code></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p><a href="/packs/{{ pack.pack }}/runs/relocation">Relocation review</a> - every citation the last build did not
+  resolve inside its own snapshot.</p>
+{% else %}
+  <p class="muted">No pipeline report yet.</p>
+{% endif %}
+
+{% if job %}
+  <h2>Running job</h2>
+  <div hx-get="/packs/{{ pack.pack }}/runs/jobs/{{ job.job_id }}" hx-trigger="load, every 2s" hx-swap="innerHTML">
+    <p class="muted">Loading the job log...</p>
+  </div>
+{% endif %}
+
+{% if not read_only %}
+<h2>Start a run</h2>
+{% if catalogue_changed %}
+  <p class="alert">The catalogue changed since this run directory was planned. The acquire stage would fail;
+  plan a new run directory instead (start the console with <code>--run-dir {{ pack.pack }}=DIR</code>).</p>
+{% endif %}
+<form method="post" action="/packs/{{ pack.pack }}/runs" class="card">
+  <div class="filters">
+    <div><label for="start">from stage</label>
+      <select id="start" name="start">{% for stage in stages %}<option>{{ stage }}</option>{% endfor %}</select></div>
+    <div><label for="until">until stage</label>
+      <select id="until" name="until">{% for stage in stages %}<option {{ 'selected' if loop.last }}>{{ stage }}</option>{% endfor %}</select></div>
+    <div><label for="workers">workers</label><input type="number" id="workers" name="workers" value="1" min="1" max="8"></div>
+    <div><label for="scope">scope</label>
+      <select id="scope" name="scope"><option>attributed</option><option>all</option></select></div>
+    <div><label for="release_id">release_id</label><input type="text" id="release_id" name="release_id"
+         placeholder="{{ next_release }}"></div>
+  </div>
+  <label><input type="checkbox" name="thorough" value="1"> thorough (re-hash every saved response)</label>
+  <label><input type="checkbox" name="update_curation" value="1"> update_curation (write relocated citations back)</label>
+  <label><input type="checkbox" name="retry_failed" value="1"> retry_failed (with download)</label>
+
+  <details>
+    <summary><strong>download</strong> - the only option that makes network requests</summary>
+    <p class="small">This run would request <strong>{{ budget.targets }}</strong> target(s) from
+      {{ budget.hosts | length }} host(s): {{ budget.hosts | join(', ') | shorten(400) }}.</p>
+    <p class="small">Etiquette from the plan's crawl profiles:
+      {% for name, limits in budget.profiles.items() %}<code>{{ name }}</code>:
+        delay {{ limits.delay_seconds }}s, response cap {{ limits.max_response_bytes }} bytes,
+        at most {{ limits.max_pages }} pages, {{ limits.max_requests }} requests,
+        timeout {{ limits.request_timeout_seconds }}s{% if not loop.last %}; {% endif %}{% endfor %}
+      {% if not budget.profiles %}no crawl profile in the catalogue{% endif %}</p>
+    <label><input type="checkbox" name="download" value="1"> make the requests</label>
+    <label for="confirm_pack">Type the pack name to confirm</label>
+    <input type="text" id="confirm_pack" name="confirm_pack" placeholder="{{ pack.pack }}">
+    <p class="small muted">Confirmation is asked on every start; there is no "always allow".</p>
+  </details>
+
+  <p><button type="submit" {{ 'disabled' if job }}>Start the run</button>
+  {% if job %}<span class="small muted">a job is already running for this pack</span>{% endif %}</p>
+</form>
+{% endif %}
+
+<h2>Run history</h2>
+<p class="small muted">Kept under <code>{{ pack.console_dir }}/runs/</code>, because the pipeline overwrites
+<code>pipeline-report.json</code>.</p>
+<table>
+  <thead><tr><th>Started</th><th>Finished</th><th>Exit</th><th>Stages</th><th>Options</th></tr></thead>
+  <tbody>
+  {% for entry in history %}
+    <tr>
+      <td class="mono small">{{ entry.started_at[:19] }}</td>
+      <td class="mono small">{{ entry.finished_at[:19] }}</td>
+      <td><span class="badge {{ 'ok' if entry.exit_code == 0 else 'bad' }}">{{ entry.exit_code }}</span></td>
+      <td class="small">{% for stage in entry.stages %}{{ stage.stage }}:{{ stage.status }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      <td class="small">{{ entry.options.stages }}{% if entry.options.download %}, download{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">No run has finished through the console yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Jobs</h2>
+<table>
+  <thead><tr><th>Job</th><th>Kind</th><th>Actor</th><th>Status</th><th>Started</th><th>Log</th></tr></thead>
+  <tbody>
+  {% for entry in jobs %}
+    <tr>
+      <td class="mono">{{ entry.job_id }}</td>
+      <td>{{ entry.kind }}</td>
+      <td>{{ entry.actor }}</td>
+      <td><span class="badge {{ 'ok' if entry.status == 'finished' else 'bad' if entry.status in ('failed', 'interrupted') else 'warn' }}">{{ entry.status }}</span>
+        {% if entry.error %}<div class="small">{{ entry.error | shorten(120) }}</div>{% endif %}</td>
+      <td class="mono small">{{ entry.started_at[:19] }}</td>
+      <td><a href="/packs/{{ pack.pack }}/runs/jobs/{{ entry.job_id }}">tail</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">No job started yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
