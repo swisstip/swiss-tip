@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-core"
+version = "0.2.5"
+description = "Swiss TIP knowledge release format: Pydantic models and the release validator"
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic>=2.11,<3",
+]
+
+[project.scripts]
+swisstip-validate-release = "swisstip.core.validation:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
