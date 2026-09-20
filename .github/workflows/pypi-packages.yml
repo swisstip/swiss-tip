@@ -1,0 +1,158 @@
+# Build the three PyPI distributions (swisstip-core, swisstip-mcp,
+# swisstip-builder) from the component source trees, test them, and publish
+# them with PyPI trusted publishing, so no token is stored anywhere.
+#
+#   push a tag v<version>, e.g. v0.2.0     build, test, publish to PyPI
+#   run the workflow by hand with a version build, test, publish to TestPyPI
+#
+# The one-time setup on PyPI, TestPyPI and GitHub is in scripts/pypi/README.md.
+name: PyPI packages
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish to TestPyPI, PEP 440 normalised, e.g. 0.2.0rc1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then version="${GITHUB_REF_NAME#v}"; else version="$INPUT_VERSION"; fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "Building version $version"
+
+      - name: Install the components and the build tools
+        run: |
+          python -m pip install build twine \
+            -e packages/core -e packages/runtime -e apps/mcp-server \
+            -e packages/ingestion -e "packages/extraction[office]" -e packages/build -e packages/concepts \
+            -e apps/knowledge-builder -e "apps/admin-console[test]"
+
+      - name: Offline tests of every component
+        run: |
+          for tests in packages/*/tests apps/*/tests; do
+            echo "::group::$tests"
+            python -m unittest discover -s "$tests"
+            echo "::endgroup::"
+          done
+
+      - name: Build the distributions
+        run: python scripts/pypi/build_distributions.py --version "$VERSION" --out dist
+
+      - name: Check the package metadata
+        run: python -m twine check --strict dist/*
+
+      - name: Test the server wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/serve"
+          "$RUNNER_TEMP/serve/bin/python" -m pip install \
+            "dist/swisstip_core-$VERSION-py3-none-any.whl" "dist/swisstip_mcp-$VERSION-py3-none-any.whl"
+          # Serving never carries the build tooling. (A "!" command would not stop a bash -e step.)
+          if "$RUNNER_TEMP/serve/bin/python" -c "import swisstip.build" 2> /dev/null; then
+            echo "swisstip-mcp pulled in the build tooling"; exit 1
+          fi
+          # A synthetic release: the build depends on no knowledge base. The packs have their own checks in their
+          # own repository (swiss-tip-mvp).
+          "$RUNNER_TEMP/serve/bin/swisstip-mcp" --release apps/mcp-server/tests/fixtures/release.json --health > /dev/null
+          # The round trip starts the server with the interpreter that runs it, so it tests the installed wheel.
+          "$RUNNER_TEMP/serve/bin/python" scripts/test/mcp/check_wheel.py
+
+      - name: Test the workstation wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/work"
+          "$RUNNER_TEMP/work/bin/python" -m pip install \
+            "dist/swisstip_core-$VERSION-py3-none-any.whl" "dist/swisstip_builder-$VERSION-py3-none-any.whl[office]"
+          for command in "$RUNNER_TEMP"/work/bin/swisstip-*; do
+            "$command" --help > /dev/null
+            echo "ok $(basename "$command")"
+          done
+          # The console must find its templates and static files inside the installed package. It starts on a packs
+          # directory without packs, so that a pack cannot fail the build.
+          mkdir -p "$RUNNER_TEMP/packs/releases"
+          "$RUNNER_TEMP/work/bin/swisstip-admin" --packs-dir "$RUNNER_TEMP/packs" --read-only --port 8765 > "$RUNNER_TEMP/admin.log" 2>&1 &
+          console=$!
+          for attempt in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8765/ && break; sleep 1; done
+          status=0
+          curl -fsS -o /dev/null http://127.0.0.1:8765/ && curl -fsS -o /dev/null http://127.0.0.1:8765/static/console.css || status=1
+          kill "$console"
+          [ "$status" = 0 ] || { cat "$RUNNER_TEMP/admin.log"; exit 1; }
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: distributions
+          path: dist/
+          if-no-files-found: error
+
+  # One job per distribution, each in its own environment (pypi-core,
+  # testpypi-mcp, ...): PyPI accepts a pending trusted publisher for a
+  # repository, workflow and environment for one project name only. The core
+  # goes first, because the other two require it at the same version.
+  publish-core:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}-core
+      url: ${{ github.event_name == 'push' && 'https://pypi.org' || 'https://test.pypi.org' }}/project/swisstip-core/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist/
+
+      - name: Select the files of swisstip-core
+        run: mkdir upload && mv dist/swisstip_core-* upload/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: upload/
+          repository-url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+
+  publish:
+    needs: publish-core
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [mcp, builder]
+    environment:
+      name: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}-${{ matrix.package }}
+      url: ${{ github.event_name == 'push' && 'https://pypi.org' || 'https://test.pypi.org' }}/project/swisstip-${{ matrix.package }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist/
+
+      - name: Select the files of swisstip-${{ matrix.package }}
+        run: mkdir upload && mv dist/swisstip_${{ matrix.package }}-* upload/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: upload/
+          repository-url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}

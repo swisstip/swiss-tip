@@ -1,0 +1,43 @@
+# The PyPI distributions of Swiss TIP. Each one bundles the source trees of
+# one or more components (a directory with its own pyproject.toml under
+# packages/ or apps/); build_distributions.py takes the dependencies, scripts,
+# optional dependencies and package data from the components' pyproject.toml
+# files, so those stay the only place where they are declared. Every component
+# belongs to exactly one distribution. Knowledge releases are not published
+# here; they are GitHub release assets.
+
+repository = "https://github.com/swisstip/swiss-tip"
+author = "Alexander Bobrovsky"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+]
+
+[distributions.swisstip-core]
+description = "Swiss TIP knowledge release format, validator and the four tool operations over a release"
+components = ["packages/core", "packages/runtime"]
+keywords = ["mcp", "grounding", "switzerland", "knowledge-release"]
+
+[distributions.swisstip-mcp]
+description = "Swiss TIP MCP server: grounded, cited facts on Swiss public information over stdio or Streamable HTTP"
+components = ["apps/mcp-server"]
+keywords = ["mcp", "mcp-server", "grounding", "switzerland"]
+classifiers = ["Topic :: Scientific/Engineering :: Artificial Intelligence"]
+
+[distributions.swisstip-builder]
+description = "Swiss TIP workstation tools: source acquisition, text extraction, release build and the admin console"
+components = [
+    "packages/ingestion",
+    "packages/extraction",
+    "packages/build",
+    "packages/concepts",
+    "apps/knowledge-builder",
+    "apps/admin-console",
+]
+keywords = ["mcp", "grounding", "switzerland", "crawler", "curation"]
+drop-extras = ["test"]
+classifiers = ["Environment :: Web Environment", "Framework :: FastAPI"]
