@@ -3,9 +3,9 @@
 **Last update:** 21 September 2026
 
 The images of the Swiss TIP MCP server with `swisstip-mcp` 0.3.0 from PyPI.
-The basic image carries no knowledge release and no model; the semantic
+The slim MCP image carries no knowledge release and no model; the MCP
 image adds a bundled Ollama with `qwen3-embedding:0.6b`. Two images serve a
-release in two containers: a slim release image, the basic image plus one
+release in two containers: a slim release image, the slim MCP image plus one
 pack's release, and the embedding sidecar, Ollama and the model without a
 server; [compose.yaml](../compose.yaml) at the repository root starts them
 together. The lexical image built from this checkout's source, with a pack
@@ -15,7 +15,7 @@ knowledge base without an MCP client: the OpenCode image is an agent and a
 browser interface for a server that runs elsewhere - the profile `demo` of
 `compose.yaml` starts it beside the slim image and the sidecar.
 
-This repository holds no pack. The packs, their pack images (the semantic
+This repository holds no pack. The packs, their pack images (the MCP
 image plus a release and its index), the demo image (a pack image plus the
 agent and interface of the OpenCode image), the workflow that builds, tests
 and pushes the images that hold a release, and the AWS deployment of the
@@ -25,27 +25,27 @@ directory that holds a pack's files.
 
 | Image | Dockerfile | Build context | Contains |
 | --- | --- | --- | --- |
-| `swiss-tip-mcp:0.3.0` | [mcp/Dockerfile](mcp/Dockerfile) | the repository root | `swisstip-mcp` 0.3.0 only; the release is mounted on `/srv/swiss-tip` |
-| `swiss-tip-semantic:0.3.0` | [semantic/Dockerfile](semantic/Dockerfile) | `docker/semantic` | the basic image, plus CPU-only Ollama 0.34.0 on `127.0.0.1:11434` and `qwen3-embedding:0.6b`; no release |
-| `swiss-tip:<pack>` | the pack's Dockerfile in the packs repository | `releases/<pack>` | the semantic image, plus `release.json`, `readiness.json`, `semantic-index.json` and the pack's image `README.md`: the release image, labelled with the release ID and content digest |
-| `swiss-tip:<pack>-slim` | [slim/Dockerfile](slim/Dockerfile), one for every pack | `releases/<pack>` | the slim release image: the basic image, plus the pack's `release.json`, `readiness.json`, `semantic-index.json` and its image `README.md` where it has one, with the same labels; no Ollama and no model, so lexical search on its own and hybrid search beside the sidecar |
-| `swiss-tip-ollama:qwen3-embedding-0.6b` | [ollama/Dockerfile](ollama/Dockerfile) | `docker/ollama` | the embedding sidecar: `python:3.14-slim`, plus the CPU-only Ollama 0.34.0 and the `qwen3-embedding:0.6b` model copied out of the semantic image, on `127.0.0.1:11434`; no server and no release |
+| `swiss-tip-mcp-slim:0.3.0` | [mcp-slim/Dockerfile](mcp-slim/Dockerfile) | the repository root | `swisstip-mcp` 0.3.0 only; the release is mounted on `/srv/swiss-tip` |
+| `swiss-tip-mcp:0.3.0` | [mcp/Dockerfile](mcp/Dockerfile) | `docker/mcp` | the slim MCP image, plus CPU-only Ollama 0.34.0 on `127.0.0.1:11434` and `qwen3-embedding:0.6b`; no release |
+| `swiss-tip:<pack>` | the pack's Dockerfile in the packs repository | `releases/<pack>` | the MCP image, plus `release.json`, `readiness.json`, `semantic-index.json` and the pack's image `README.md`: the release image, labelled with the release ID and content digest |
+| `swiss-tip:<pack>-slim` | [slim/Dockerfile](slim/Dockerfile), one for every pack | `releases/<pack>` | the slim release image: the slim MCP image, plus the pack's `release.json`, `readiness.json`, `semantic-index.json` and its image `README.md` where it has one, with the same labels; no Ollama and no model, so lexical search on its own and hybrid search beside the sidecar |
+| `swiss-tip-ollama:qwen3-embedding-0.6b` | [ollama/Dockerfile](ollama/Dockerfile) | `docker/ollama` | the embedding sidecar: `python:3.14-slim`, plus the CPU-only Ollama 0.34.0 and the `qwen3-embedding:0.6b` model copied out of the MCP image, on `127.0.0.1:11434`; no server and no release |
 | `swiss-tip-demo:<pack>` | the demo Dockerfile in the packs repository | its directory there | test image: a pack image, plus the OpenCode agent and its web interface on port 4096, configured against the MCP server on the container's loopback, with a proxy for the routes the interface needs and the server does not answer, and a welcome panel with the pack's coverage and sample questions; its configuration, plugin, proxy and start script are those of `docker/opencode` |
 | `swiss-tip-opencode` | [opencode/Dockerfile](opencode/Dockerfile) | the repository root | test image: `python:3.14-slim`, plus the OpenCode agent, its web interface on port 4096, and the configuration, plugin, proxy and a generic welcome panel from `docker/opencode`; no server, no release and no model - the MCP server is named by `SWISSTIP_MCP_URL` |
 
 Semantic search is hybrid: lexical matching fused with the embedding ranking
 of concept IDs in `search`. `resolve` and the facts it returns are
 unchanged. The server only accepts a loopback Ollama address, so Ollama
-either runs in the same container (the semantic images) or in a container
+either runs in the same container (the MCP images) or in a container
 that shares the server's network namespace (the embedding sidecar beside a
-slim image or the basic image).
+slim image or the slim MCP image).
 
 Each Dockerfile has a `Dockerfile.dockerignore` next to it, so a release
 image's build context is the files it serves (`release.json`,
 `readiness.json`, `semantic-index.json` and the image README where the pack
 has one), not the build's working files (fetched pages and text records).
 The context can also be a directory with the same
-files downloaded from a GitHub release. The basic image is the exception: it
+files downloaded from a GitHub release. The slim MCP image is the exception: it
 builds from the repository root with only `LICENSE` and `NOTICE` admitted,
 and copies them to `/usr/share/doc/swiss-tip/`, outside the release mount
 point, so every image built on it carries them.
@@ -55,22 +55,22 @@ point, so every image built on it carries them.
 The order matters: each image builds on the previous one.
 
 ```shell
-docker build -f docker/mcp/Dockerfile -t swiss-tip-mcp:0.3.0 .
-docker build -t swiss-tip-semantic:0.3.0 docker/semantic
+docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp-slim:0.3.0 .
+docker build -t swiss-tip-mcp:0.3.0 docker/mcp
 docker build -f docker/opencode/Dockerfile -t local/swiss-tip-opencode:latest .
 docker build -t local/swiss-tip-ollama:qwen3-embedding-0.6b docker/ollama
 docker build -f docker/slim/Dockerfile --build-arg PACK=<pack> -t local/swiss-tip:<pack>-slim <packs>/releases/<pack>
 ```
 
 The last two are the two-container setup: the sidecar comes out of the
-semantic image and a slim image builds on the basic image, so neither needs
+MCP image and a slim image builds on the slim MCP image, so neither needs
 a pack image. The OpenCode image needs no other image. `compose.yaml` takes
 its images from one prefix, which `SWISSTIP_REGISTRY=local SWISSTIP_PACK=<pack>
 docker compose up -d --wait` points at these builds. The pack images and the
-demo image are built in the packs repository, on the semantic image and on
+demo image are built in the packs repository, on the MCP image and on
 the files of `docker/opencode`.
 
-The semantic build pulls the model and fails unless its manifest digest is
+The MCP image's build pulls the model and fails unless its manifest digest is
 `ac6da0dfba84...`, the digest the packs' indexes were built with
 (build argument `EMBEDDING_MODEL_DIGEST`). A pack build fails when the
 release does not validate or has no matching readiness record, and when a
@@ -78,17 +78,17 @@ check search on the bundled model does not run hybrid, for example with an
 index for another release or another model digest. The check prints each
 query's retrieval mode, latency and top concepts. The sidecar build pulls
 nothing: it copies the Ollama runtime, the model and the start check out of
-the semantic image, starts Ollama once, and fails unless the copied model has
+the MCP image, starts Ollama once, and fails unless the copied model has
 that digest, loads, and the runtime is the named Ollama version. A slim build
 fails like a pack build on the release, and when the semantic index was not
 built for exactly that release; it runs no search, because it has no model.
 
 | Image | Build arguments |
 | --- | --- |
-| basic | `PYTHON_IMAGE`, `SWISSTIP_MCP_VERSION`, `PACKAGE_INDEX` (another index than PyPI to take `swisstip-mcp` from, with PyPI behind it for the dependencies; empty is PyPI) |
-| semantic | `BASE_IMAGE`, `OLLAMA_IMAGE`, `EMBEDDING_MODEL`, `EMBEDDING_MODEL_DIGEST` |
-| slim | `BASE_IMAGE` (the basic image), `PACK` (for the labels), `RELEASE_ID`, `RELEASE_CONTENT_SHA256`, `REVISION` (the release ID and digest, when given, must match `release.json`) |
-| sidecar | `SEMANTIC_IMAGE`, `PYTHON_IMAGE`, and `EMBEDDING_MODEL`, `EMBEDDING_MODEL_DIGEST`, `OLLAMA_VERSION`, which name what the semantic image holds and are checked against it, not applied |
+| slim MCP | `PYTHON_IMAGE`, `SWISSTIP_MCP_VERSION`, `PACKAGE_INDEX` (another index than PyPI to take `swisstip-mcp` from, with PyPI behind it for the dependencies; empty is PyPI) |
+| MCP | `BASE_IMAGE`, `OLLAMA_IMAGE`, `EMBEDDING_MODEL`, `EMBEDDING_MODEL_DIGEST` |
+| slim | `BASE_IMAGE` (the slim MCP image), `PACK` (for the labels), `RELEASE_ID`, `RELEASE_CONTENT_SHA256`, `REVISION` (the release ID and digest, when given, must match `release.json`) |
+| sidecar | `MCP_IMAGE`, `PYTHON_IMAGE`, and `EMBEDDING_MODEL`, `EMBEDDING_MODEL_DIGEST`, `OLLAMA_VERSION`, which name what the MCP image holds and are checked against it, not applied |
 | OpenCode | `PYTHON_IMAGE`, `OPENCODE_VERSION`, `OPENCODE_PACKAGE`, `OPENCODE_SHA256`, `DEMO_MODEL`; a pack's demo image names the same OpenCode release |
 
 ## Build on GitHub
@@ -96,7 +96,7 @@ built for exactly that release; it runs no search, because it has no model.
 Two workflows named "Container images" build the images, each on one
 runner, test them and push them to `ghcr.io/<owner>/`. The one of this
 repository, [container-images.yml](../.github/workflows/container-images.yml),
-builds the images that hold no release: basic, semantic, the sidecar and
+builds the images that hold no release: both MCP images, the sidecar and
 OpenCode. The one of the packs repository builds the images that hold one,
 on the images pushed from here: the pack images, the slim images (with
 [slim/Dockerfile](slim/Dockerfile) and `compose.yaml` of a checkout of this
@@ -105,17 +105,17 @@ images", "Run workflow").
 
 | Input | Values |
 | --- | --- |
-| `images`, here | `all` (basic, semantic, sidecar, OpenCode), `mcp`, `semantic`, `ollama` (the sidecar), `opencode` |
+| `images`, here | `all` (both MCP images, sidecar, OpenCode), `mcp-slim`, `mcp`, `ollama` (the sidecar), `opencode` |
 | `images`, in the packs repository | `all` (every pack, then the demo), `packs`, a pack's name, `demo` |
-| `swisstip_mcp_version` | the `swisstip-mcp` version, which is the tag of the basic and semantic images: built here, pulled there; default `0.3.0` |
+| `swisstip_mcp_version` | the `swisstip-mcp` version, which is the tag of both MCP images: built here, pulled there; default `0.3.0` |
 | `package_index` | `pypi`, or `testpypi` to rehearse a version that is not released yet; in the packs repository it names where the check client comes from |
 | `code_ref`, in the packs repository | the branch, tag or commit of this repository whose slim Dockerfile and `compose.yaml` are used; default `main` |
 | `push` | push the tested images; off builds and tests only |
 
 | Image | Tags in `ghcr.io/<owner>/` |
 | --- | --- |
-| basic | `swiss-tip-mcp:<version>`, and `swiss-tip-mcp:latest` from the default branch, from PyPI, for a final version |
-| semantic | `swiss-tip-semantic:<version>` |
+| slim MCP | `swiss-tip-mcp-slim:<version>`, and `swiss-tip-mcp-slim:latest` from the default branch, from PyPI, for a final version |
+| MCP | `swiss-tip-mcp:<version>` |
 | pack (the release image) | `swiss-tip:<release_id>`, `swiss-tip:content-<first 12 hex digits of the content digest>`, `swiss-tip:<pack>` (the pack's moving tag; no `latest`, so a pull names a release or a pack) |
 | slim (the release image without Ollama) | `swiss-tip:<release_id>-slim`, `swiss-tip:<pack>-slim` (the moving tag `compose.yaml` names), in the package of the pack image |
 | sidecar | `swiss-tip-ollama:qwen3-embedding-0.6b` (the model tag with a hyphen, the tag `compose.yaml` names), `swiss-tip-ollama:qwen3-embedding-0.6b-<first 12 hex digits of the model digest>` |
@@ -125,15 +125,15 @@ images", "Run workflow").
 Within a run, an image built earlier is the base of the next one; an image
 not selected is pulled from `ghcr.io`. So the first run is `all` with `push`
 on here, then `all` in the packs repository, and a later run there naming
-one pack rebuilds only that pack on the pushed semantic image. A new
+one pack rebuilds only that pack on the pushed MCP image. A new
 `swisstip-mcp` version is a run here and then a run there. The packs
 repository's workflow pulls with its own token, so it must be able to read
-`swiss-tip-mcp`, `swiss-tip-semantic` and `swiss-tip-ollama`: the packages
+`swiss-tip-mcp-slim`, `swiss-tip-mcp` and `swiss-tip-ollama`: the packages
 are public, or each names the packs repository under "Manage Actions access"
 in its package settings.
 
 A version that is not on PyPI yet is rehearsed with `package_index:
-testpypi`. The basic image then takes `swisstip-mcp` from TestPyPI, with
+testpypi`. The slim MCP image then takes `swisstip-mcp` from TestPyPI, with
 PyPI as the second index for the dependencies, which are not published on
 TestPyPI; every other image is built on it and installs nothing.
 
@@ -158,11 +158,11 @@ which only tells its check client where to find that version.
 No test here reads a pack. The release served is the synthetic test release
 of `apps/mcp-server/tests/fixtures` with a test readiness record, written by
 [synthetic_pack.py](../scripts/test/container/synthetic_pack.py). Tests
-before the push, here: the basic image with that release mounted must pass
+before the push, here: the slim MCP image with that release mounted must pass
 the round trip of the package build
 ([check_wheel.py](../scripts/test/mcp/check_wheel.py) `--url`), which also
 shows that the image accepted the readiness record, because it serves with
-`--require-ready`; the semantic build pulls the model and checks its digest;
+`--require-ready`; the MCP image's build pulls the model and checks its digest;
 the sidecar on its own must report healthy, which means the model is loaded.
 
 A pack selection in the packs repository builds both release images of the
@@ -200,7 +200,7 @@ are new bytes in the registry; the rest are the pack image's.
 The OpenCode image is a test image too. `all` here builds it last and
 `opencode` alone builds it; it has no base among the other images. It is
 tested as `compose.yaml` runs it, with `docker compose --profile demo up -d
---wait`, with the server replaced by the basic image of the same run or of
+--wait`, with the server replaced by the slim MCP image of the same run or of
 `ghcr.io` on the synthetic release
 ([compose.synthetic.yaml](../scripts/test/container/compose.synthetic.yaml));
 search is lexical there, so the sidecar is left out. The check is the same,
@@ -209,7 +209,7 @@ panel carries none, and the run fails if switching the interface on
 restarted the server's container. Its package `swiss-tip-opencode` starts
 private like every new package.
 
-## Run the basic image
+## Run the slim MCP image
 
 Mount a release directory with `release.json` and `readiness.json`; the
 server refuses a release without a matching readiness record. Arguments
@@ -218,8 +218,8 @@ after the image name are added to the server's command line.
 Lexical search:
 
 ```shell
-docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0
-docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0 --transport stdio
+docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp-slim:0.3.0
+docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp-slim:0.3.0 --transport stdio
 ```
 
 Hybrid search with the embedding sidecar: it joins the server's network
@@ -228,7 +228,7 @@ the packs' indexes were built with.
 
 ```shell
 docker run -d --name swiss-tip -p 8000:8000 \
-  -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0 \
+  -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp-slim:0.3.0 \
   --semantic-index /srv/swiss-tip/semantic-index.json
 docker run -d --name swiss-tip-embeddings --network container:swiss-tip swiss-tip-ollama:qwen3-embedding-0.6b
 ```
@@ -250,8 +250,8 @@ reason.
 
 ## Run a pack image
 
-A pack image is built in the packs repository on the semantic image; its
-entrypoint is this directory's `with-ollama` (docker/semantic).
+A pack image is built in the packs repository on the MCP image; its
+entrypoint is this directory's `with-ollama` (docker/mcp).
 
 ```shell
 docker run --rm -p 8000:8000 swiss-tip:<pack>       # MCP on http://127.0.0.1:8000/mcp, /health beside it
@@ -435,14 +435,14 @@ Docker Desktop, no GPU in the containers). Image sizes are those
 
 | Measure | Value |
 | --- | --- |
-| Image size: basic | 248 MB |
-| Image size: semantic and each pack image | 1.6 GB |
+| Image size: slim MCP | 248 MB |
+| Image size: MCP and each pack image | 1.6 GB |
 | Image size: slim release image | 254 MB (`mvp-zurich`), 251 MB (`mvp-wallisellen`) |
 | Image size: embedding sidecar | 1.54 GB |
 | Image size: OpenCode | 600 MB |
 | Memory of a running pack container | 1.2 GiB |
 | Memory of the two containers: slim server, sidecar | 63 MiB, 1.2 GiB |
-| Time from `docker run` to a healthy `/health`: basic, pack | about 1 s, about 4 s |
+| Time from `docker run` to a healthy `/health`: slim MCP, pack | about 1 s, about 4 s |
 | Time of `docker compose up -d --wait` until the server answers and the model is loaded, images present | about 7 s |
 | Time of `docker compose --profile demo up -d --wait` on the running server until the web interface is healthy | about 20 s |
 | `search` latency, lexical | 22 to 43 ms per query, through MCP |
@@ -457,13 +457,13 @@ These numbers come from one machine and do not predict a hosted instance.
 ## Tests run against the images
 
 - `scripts/test/mcp/check_server.py --url`, the Zurich round trip, with
-  0 failures against: the Zurich pack image (hybrid), the basic image with
-  the Zurich release mounted (lexical), and the basic image joined to a
+  0 failures against: the Zurich pack image (hybrid), the slim MCP image with
+  the Zurich release mounted (lexical), and the slim MCP image joined to a
   separate `ollama/ollama:0.34.0` container (hybrid).
 - `search` through MCP over Streamable HTTP and over stdio on both packs, in
   German, English, French, Italian and Chinese; the pack images and the
-  lexical basic image with `--network none`.
-- The basic image with `--semantic-index` and no Ollama: `lexical-fallback`
+  lexical slim MCP image with `--network none`.
+- The slim MCP image with `--semantic-index` and no Ollama: `lexical-fallback`
   with its reason. Without a mounted release: exits with an error naming
   the missing file.
 - `scripts/test/mcp/check_wallisellen.py --url`, the Wallisellen round trip,
@@ -473,14 +473,14 @@ These numbers come from one machine and do not predict a hosted instance.
   the embedding model ranks every concept of the pack near that name).
 - The two-container setup on 17 September 2026, on local builds: the slim
   images of `mvp-zurich-2026-09-16-v3` and `mvp-wallisellen-2026-09-16-v3`
-  on `ghcr.io/bobrovsky420/swiss-tip-mcp:0.2.1`, and the sidecar out of
-  `ghcr.io/bobrovsky420/swiss-tip-semantic:0.2.1`. With
+  on `ghcr.io/bobrovsky420/swiss-tip-mcp-slim:0.2.1`, and the sidecar out of
+  `ghcr.io/bobrovsky420/swiss-tip-mcp:0.2.1`. With
   `docker compose up -d --wait` on `compose.yaml`:
   `check_server.py --url --require-hybrid` with 0 failures and all 19
   searches hybrid, and with `SWISSTIP_PACK=mvp-wallisellen`
   `check_wallisellen.py --url` with 0 failures. The same Zurich round trip
   with 0 failures against the two `docker run` commands and against the
-  basic image with the release mounted and the sidecar joined. The Zurich
+  slim MCP image with the release mounted and the sidecar joined. The Zurich
   slim image alone: `search.configured_mode: lexical`, the round trip with 0
   failures, and `--require-hybrid` failing, as it must. With the sidecar
   stopped a search reported `lexical-fallback` with the reason and was
@@ -538,7 +538,7 @@ These numbers come from one machine and do not predict a hosted instance.
   pull of `swiss-tip-opencode` from `ghcr.io`, where it exists only after a
   workflow run, and the web interface of this image in a browser.
 
-- The `package_index` path on 21 September 2026, locally: the basic image
+- The `package_index` path on 21 September 2026, locally: the slim MCP image
   built with `SWISSTIP_MCP_VERSION=0.3.0rc1` and
   `PACKAGE_INDEX=https://test.pypi.org/simple/` carried `swisstip-mcp` and
   `swisstip-core` 0.3.0rc1, reported the synthetic release as ready and
@@ -551,24 +551,24 @@ These numbers come from one machine and do not predict a hosted instance.
   GitHub, and a pack image built on a rehearsed base.
 - The tests of this repository's workflow on 21 September 2026, as a local
   run of the same commands on local builds with `swisstip-mcp` 0.2.5: the
-  basic image with the synthetic pack mounted reported the release `ready`
+  slim MCP image with the synthetic pack mounted reported the release `ready`
   and passed `check_wheel.py --url` with 0 failures; the OpenCode image,
   started by `docker compose --profile demo up -d --wait swiss-tip demo`
   with `compose.synthetic.yaml`, passed `check_interface.py --questions
   none` without a password and, recreated with one, with it (401 without
   credentials), the server's container kept its start time, and the sidecar
   was not started. Not tested: either workflow on GitHub after the split,
-  and the packs repository's pulls of the basic image, the semantic image
+  and the packs repository's pulls of the slim MCP image, the MCP image
   and the sidecar from `ghcr.io` with its own token.
 
 ## Rebuilding an index
 
 A semantic index must be rebuilt when the release changes or the model
-digest changes. Build it with the semantic image, so that it matches the
+digest changes. Build it with the MCP image, so that it matches the
 model it is served with:
 
 ```shell
-docker run --rm -v "$PWD/releases/<pack>:/kb" swiss-tip-semantic:0.3.0 \
+docker run --rm -v "$PWD/releases/<pack>:/kb" swiss-tip-mcp:0.3.0 \
   python -m swisstip.runtime.search_cli index \
   --release /kb/release.json --output /kb/semantic-index.json --timeout 600
 ```

@@ -94,9 +94,9 @@ docker build -f docker/opencode/Dockerfile -t swiss-tip-opencode .
 
 The build context is the repository root, for `LICENSE` and `NOTICE`; the
 [ignore file](Dockerfile.dockerignore) admits them and the files of this
-directory. The base is `python:3.14-slim`, the base of the basic
+directory. The base is `python:3.14-slim`, the base of the slim MCP
 image and of the sidecar, with the three libraries the proxy imports at the
-versions the basic image resolves. The build fails unless `swiss_tip` is the
+versions the slim MCP image resolves. The build fails unless `swiss_tip` is the
 configuration's only MCP server and the plugin is loaded, and when a
 `swisstip-mcp` or an `ollama` is found in the image.
 
@@ -110,7 +110,7 @@ On GitHub, the workflow
 [Container images](../../.github/workflows/container-images.yml) builds,
 tests and pushes it with the input `images: all` or `images: opencode`, as
 `ghcr.io/<owner>/swiss-tip-opencode:<OpenCode version>` and `:latest`. Its
-test needs no pack: the server beside it is the basic image on the
+test needs no pack: the server beside it is the slim MCP image on the
 synthetic test release ([docker README](../README.md#build-on-github)). It
 is tagged with the OpenCode version, not with a release: a new knowledge
 release does not change it.

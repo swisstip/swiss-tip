@@ -140,7 +140,7 @@ the image); arguments after the image name are appended, so the last two
 lines serve stdio to a local client and print the health report. The image
 declares a `HEALTHCHECK` on `/health`. The release image published on GitHub
 is built by the manual workflow "Container images" of the packs repository
-from the semantic base image of [docker/](../../docker/README.md): it runs
+from the MCP image of [docker/](../../docker/README.md): it runs
 the round-trip check against the running container and pushes the tested
 tags to `ghcr.io/<owner>/swiss-tip` (`<release_id>`, `content-<digest>`,
 `<pack>`). The same workflow builds a slim release image without Ollama

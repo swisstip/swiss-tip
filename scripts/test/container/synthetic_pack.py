@@ -6,7 +6,7 @@ repository are tested on it, so that their build depends on no knowledge base.
 The directory gets the release of apps/mcp-server/tests/fixtures, copied byte for byte, and a readiness record that
 names exactly that file, because the images serve with --require-ready. The record is a test record: it says so in
 attested_by, its one gate is no gate of the acceptance gate, and it attests nothing about a published pack. The
-directory is mounted on /srv/swiss-tip of the basic image. There is no semantic index in it, so search is lexical.
+directory is mounted on /srv/swiss-tip of the slim MCP image. There is no semantic index in it, so search is lexical.
 """
 
 import argparse

@@ -1,68 +1,82 @@
 # syntax=docker/dockerfile:1
 #
-# The basic Swiss TIP MCP server image: swisstip-mcp from PyPI and nothing
-# else, no knowledge release and no Ollama. Mount a release directory
-# (release.json and readiness.json, optionally semantic-index.json) on
-# /srv/swiss-tip; the slim release images (docker/slim) carry one instead.
+# The Swiss TIP MCP server with local semantic search: the slim MCP image
+# (docker/mcp-slim, swisstip-mcp from PyPI) plus a CPU-only Ollama bound to
+# loopback inside the container and the qwen3-embedding:0.6b model. It holds
+# no knowledge release; the pack images of the packs repository
+# (swiss-tip-mvp) add one with its semantic index.
 #
-#   docker build -f docker/mcp/Dockerfile -t swiss-tip-mcp:0.3.0 .
-#   docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0
-#   docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0 --transport stdio
+#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp-slim:0.3.0 .
+#   docker build -t swiss-tip-mcp:0.3.0 docker/mcp
 #
-# The build context is the repository root, for LICENSE and NOTICE; the
-# Dockerfile.dockerignore next to this file admits those two files only.
+# The server only talks to a loopback Ollama, so both run in this container:
+# the entrypoint with-ollama starts Ollama, checks that the model has the
+# digest the semantic indexes were built with, loads it, and starts the
+# server. When Ollama fails, the server still serves lexical search.
 #
-# PACKAGE_INDEX names another index than PyPI to take swisstip-mcp from, for
-# a rehearsal on a version that is not released yet:
+# The same image builds a semantic index for a release, with exactly the
+# model it will be served with:
 #
-#   docker build -f docker/mcp/Dockerfile --build-arg SWISSTIP_MCP_VERSION=0.3.0rc1 \
-#     --build-arg PACKAGE_INDEX=https://test.pypi.org/simple/ -t swiss-tip-mcp:0.3.0rc1 .
-#
-# PyPI stays the second index, because the dependencies are published there
-# and not on TestPyPI. An image built this way is a rehearsal, not a release:
-# the workflow gives it no latest tag.
-#
-# Search is lexical. For hybrid search, add --semantic-index
-# /srv/swiss-tip/semantic-index.json and provide Ollama with the index's
-# model on the container's loopback: the server accepts no other Ollama
-# address, so Ollama shares this container's network namespace. The
-# embedding sidecar (docker/ollama) joins it with
-# --network container:<this container>. See docker/README.md.
+#   docker run --rm -v "$PWD/releases/<pack>:/kb" swiss-tip-mcp:0.3.0 \
+#     python -m swisstip.runtime.search_cli index --release /kb/release.json --output /kb/semantic-index.json --timeout 600
 
-ARG PYTHON_IMAGE=python:3.14-slim
-FROM ${PYTHON_IMAGE}
-ARG SWISSTIP_MCP_VERSION=0.3.0
-# Empty is PyPI. Another index is used with PyPI behind it, for the dependencies.
-ARG PACKAGE_INDEX=""
+ARG BASE_IMAGE=swiss-tip-mcp-slim:0.3.0
+ARG OLLAMA_IMAGE=ollama/ollama:0.34.0
 
-LABEL org.opencontainers.image.title="Swiss TIP MCP server" \
-      org.opencontainers.image.description="Swiss TIP MCP server (swisstip-mcp ${SWISSTIP_MCP_VERSION}) without a knowledge release: mount release.json and readiness.json on /srv/swiss-tip. Streamable HTTP on port 8000 at /mcp, or stdio with --transport stdio; optional semantic search with a loopback Ollama." \
-      org.opencontainers.image.licenses="Apache-2.0" \
-      org.opencontainers.image.version="${SWISSTIP_MCP_VERSION}"
+# Ollama's CPU runtime only: its binary, the ggml and llama libraries with a
+# CPU backend per x86 generation, and the licences. The CUDA, MLX and Vulkan
+# libraries (4.6 GB) stay out.
+FROM ${OLLAMA_IMAGE} AS ollama
+RUN mkdir -p /out/bin /out/lib/ollama \
+ && cp -a /usr/bin/ollama /out/bin/ \
+ && cp -a /usr/lib/ollama/lib* /usr/lib/ollama/llama-server /usr/lib/ollama/*LICENSE* /usr/lib/ollama/*NOTICE* /out/lib/ollama/
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONUTF8=1 \
-    PYTHONIOENCODING=utf-8 \
-    PORT=8000
+FROM ${BASE_IMAGE}
+ARG OLLAMA_IMAGE
+ARG EMBEDDING_MODEL=qwen3-embedding:0.6b
+# The manifest digest recorded in the packs' semantic-index.json files. A
+# model pulled with another digest fails the build: the published indexes
+# would not be used with it. Build with --build-arg EMBEDDING_MODEL_DIGEST=
+# to accept the current model, then rebuild every index with this image.
+ARG EMBEDDING_MODEL_DIGEST=ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d
 
-RUN pip install --no-cache-dir \
-      ${PACKAGE_INDEX:+--index-url "${PACKAGE_INDEX}" --extra-index-url https://pypi.org/simple/} \
-      "swisstip-mcp==${SWISSTIP_MCP_VERSION}" \
- && useradd --uid 10001 --create-home --home-dir /home/swisstip --shell /usr/sbin/nologin swisstip \
- && mkdir -p /srv/swiss-tip /usr/share/doc/swiss-tip
+LABEL org.opencontainers.image.title="Swiss TIP MCP server with semantic search" \
+      org.opencontainers.image.description="Swiss TIP MCP server with a loopback CPU Ollama and ${EMBEDDING_MODEL} for hybrid concept search. Base image without a knowledge release." \
+      swiss-tip.ollama.image="${OLLAMA_IMAGE}" \
+      swiss-tip.embedding.model="${EMBEDDING_MODEL}" \
+      swiss-tip.embedding.model-digest="${EMBEDDING_MODEL_DIGEST}"
 
-# Outside /srv/swiss-tip, which a release mount replaces: every image built on
-# this one carries the licence of the server and the notices of its sources.
-# The directory is made above, because COPY would create it unreadable (0644).
-COPY --chmod=644 LICENSE NOTICE /usr/share/doc/swiss-tip/
+ENV HOME=/home/swisstip \
+    OLLAMA_HOST=127.0.0.1:11434 \
+    OLLAMA_MODELS=/opt/ollama/models \
+    OLLAMA_KEEP_ALIVE=-1 \
+    OLLAMA_NOPRUNE=1 \
+    OLLAMA_NO_CLOUD=1 \
+    SWISSTIP_EMBEDDING_MODEL=${EMBEDDING_MODEL} \
+    SWISSTIP_EMBEDDING_MODEL_DIGEST=${EMBEDDING_MODEL_DIGEST}
+
+USER root
+# tini reaps Ollama's runner processes and forwards signals to the server.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /opt/ollama/models \
+ && chown swisstip /opt/ollama/models
+
+COPY --from=ollama /out/bin/ollama /usr/bin/ollama
+COPY --from=ollama /out/lib/ollama /usr/lib/ollama
+COPY --chmod=755 with-ollama.sh /usr/local/bin/with-ollama
+COPY ollama_ready.py check_semantic.py /usr/local/lib/swiss-tip/
 
 USER 10001
-WORKDIR /srv/swiss-tip
-EXPOSE 8000
+# Pull the model as the runtime user, check its digest and load it once.
+RUN ollama serve > /tmp/ollama-pull.log 2>&1 & \
+    python /usr/local/lib/swiss-tip/ollama_ready.py --pull || { cat /tmp/ollama-pull.log; exit 1; }; \
+    rm -f /tmp/ollama-pull.log
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+# Model loading at start takes a few seconds on CPU, hence the longer start period.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('PORT', '8000'), timeout=4)"
 
-# Arguments given to docker run are appended; a later --transport or --host wins.
-ENTRYPOINT ["swisstip-mcp", "--release", "/srv/swiss-tip/release.json", "--require-ready", "--transport", "streamable-http", "--host", "0.0.0.0"]
+ENTRYPOINT ["tini", "--", "with-ollama"]
+CMD ["swisstip-mcp", "--help"]

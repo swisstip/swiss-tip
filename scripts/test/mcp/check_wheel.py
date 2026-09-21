@@ -1,5 +1,5 @@
 """Round trip against any release, with no knowledge of its content: what the package build runs on the installed
-wheel, and the image build on the basic image, with a synthetic release, so that neither depends on a knowledge base.
+wheel, and the image build on the slim MCP image, with a synthetic release, so that neither depends on a knowledge base.
 
     ./.venv/Scripts/python.exe scripts/test/mcp/check_wheel.py
     ./.venv/Scripts/python.exe scripts/test/mcp/check_wheel.py --release releases/<pack>/release.json

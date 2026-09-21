@@ -253,7 +253,7 @@ reports (`release.json`, `build-report.json`, `acceptance-report.json`,
 - Run the workflow `container-images.yml` of the packs repository on GitHub
   (manual, selection `mvp-zurich`, `mvp-wallisellen`, `packs` or `all`, with
   push). It builds and tests the pack image and the slim image, on the
-  basic and semantic images this repository's workflow of the same name
+  both MCP images this repository's workflow of the same name
   pushed before, and pushes them to `ghcr.io/<owner>/swiss-tip` under the
   release ID and pack tags.
   [scripts/container/build_image.py](../../scripts/container/build_image.py)

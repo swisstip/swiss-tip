@@ -47,7 +47,7 @@ RUN echo "${OPENCODE_SHA256}  /tmp/opencode.tgz" | sha256sum -c - \
  && tar -xzf /tmp/opencode.tgz -C /out --strip-components=2 package/bin/opencode \
  && chmod 755 /out/opencode
 
-# The Python base of the basic image and of the embedding sidecar, so a host
+# The Python base of the slim MCP image and of the embedding sidecar, so a host
 # that runs them shares these layers.
 FROM ${PYTHON_IMAGE}
 ARG OPENCODE_VERSION

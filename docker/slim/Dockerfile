@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# A slim release image of the Swiss TIP MCP server: the basic image
-# (docker/mcp, swisstip-mcp from PyPI) plus one pack's release, its readiness
+# A slim release image of the Swiss TIP MCP server: the slim MCP image
+# (docker/mcp-slim, swisstip-mcp from PyPI) plus one pack's release, its readiness
 # record and its semantic index, and no Ollama and no model. One Dockerfile
 # serves every pack; the build context is the pack directory, a checkout's
 # releases/<pack> in the packs repository (swiss-tip-mvp) or the same files
@@ -9,7 +9,7 @@
 # ghcr.io/<owner>/swiss-tip:<release_id>-slim by the workflow of the packs
 # repository.
 #
-#   docker build -f docker/mcp/Dockerfile -t swiss-tip-mcp:0.3.0 .
+#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp-slim:0.3.0 .
 #   docker build -f docker/slim/Dockerfile --build-arg PACK=<pack> -t swiss-tip:<pack>-slim <packs>/releases/<pack>
 #   docker run --rm -p 8000:8000 swiss-tip:<pack>-slim          MCP on http://127.0.0.1:8000/mcp
 #   docker run --rm -i swiss-tip:<pack>-slim --transport stdio
@@ -25,7 +25,7 @@
 # when the release does not validate or is not ready, and when the semantic
 # index was not built for exactly this release.
 
-ARG BASE_IMAGE=swiss-tip-mcp:0.3.0
+ARG BASE_IMAGE=swiss-tip-mcp-slim:0.3.0
 FROM ${BASE_IMAGE}
 ARG PACK=""
 ARG RELEASE_ID=""
@@ -50,7 +50,7 @@ RUN swisstip-mcp --release /srv/swiss-tip/release.json --require-ready --health 
  && python -c "import sys; from pathlib import Path; from swisstip.runtime.semantic import load_index; from swisstip.runtime.service import ReleaseService; index = load_index(Path(sys.argv[2]), ReleaseService.from_file(Path(sys.argv[1])).release); print('semantic index %s for %s, model %s (%s), %d concepts' % (index.content_sha256[:12], index.release_id, index.model, index.model_digest[:12], len(index.concepts)))" \
       /srv/swiss-tip/release.json /srv/swiss-tip/semantic-index.json
 
-# The basic image's check, reported as soon as the server answers (Docker
+# The slim MCP image's check, reported as soon as the server answers (Docker
 # Engine 25 or newer), so that "docker compose up --wait" returns in seconds.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --start-interval=2s --retries=3 \
   CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('PORT', '8000'), timeout=4)"
