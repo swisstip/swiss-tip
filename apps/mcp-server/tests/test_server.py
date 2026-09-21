@@ -130,7 +130,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual([t.name for t in listed], ["get_coverage", "search", "resolve", "get_evidence"])
         # The release's query languages reach the caller before its first search: in the instructions, in the search
         # description and in the query field, and on the coverage root.
-        note = "Write search queries in English"
+        note = "Write the search query in English"
         self.assertIn(note, init.instructions)
         search = next(t for t in listed if t.name == "search")
         self.assertIn(note, search.description)

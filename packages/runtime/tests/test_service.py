@@ -366,8 +366,13 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(languages[0].indexed, "4 search terms copied from the cited pages, on 3 of 5 concepts")
         self.assertEqual(languages[1].indexed, "the concept labels, sample questions and statements")
         self.assertFalse(any("not advertised" in item for item in service.limitations))
-        note = "Write search queries in German (preferred) or English"
+        # One search, in either language, and the rule comes first: callers sent an English question in German as well.
+        note = ("Search ONCE per question, in German or English, never in more than one of them: a second search in "
+                "another language rarely finds other concepts. Write the search query in German or English: lexical "
+                "search matches only these languages. Send a question in one of them as asked, without translating "
+                "it; translate the key terms of a question in any other language into German before searching")
         self.assertIn(note, service.instructions)
+        self.assertNotIn("preferred", service.tool_description("search").split("This server:")[1])
         self.assertIn("Residence permits and registration.", service.instructions)
         self.assertIn(note, service.tool_description("search"))
         self.assertNotIn(note, service.tool_description("resolve"))
@@ -386,7 +391,10 @@ class ServiceTests(unittest.TestCase):
         # the query languages and named in the limitations; English, the statements' language, stays.
         service = ReleaseService(with_aliases({"city-arrival": ["Personenmeldeamt", "Termin"]}))
         self.assertEqual([q.code for q in service.query_languages], ["en"])
-        self.assertIn("Write search queries in English:", service.instructions)
+        # A single query language needs no "one search" reminder: there is no other language to repeat the search in.
+        self.assertIn("Write the search query in English: lexical search matches only this language. Send a question "
+                      "in it as asked, without translating it; translate", service.instructions)
+        self.assertNotIn("Search ONCE", service.tool_description("search").split("This server:")[1])
         self.assertNotIn("German", service.tool_description("search").split("This server:")[1])
         self.assertIn("Search is not advertised in German (2 search terms on 1 of 5 concepts)", service.limitations[-1])
         self.assertIn(service.limitations[-1], service.get_coverage(GetCoverageRequest()).limitations)

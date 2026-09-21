@@ -137,9 +137,17 @@ RESULT_LIMITATIONS_NOTE = ("Not a legal review: English paraphrases of the cited
 SEARCH_LANGUAGE_RETRY = (" One exception: if the question is in a language other than {languages} and this query was "
                          "not already translated, search once more with its key terms translated into {preferred} "
                          "before declining.")
-QUERY_LANGUAGE_NOTE = ("Write search queries in {languages}: lexical search matches only {these}. Send a question in "
-                       "{one_of} as asked, without translating it; translate the key terms of a question in any other "
-                       "language into {preferred} before searching, and still answer in the user's language.")
+# With several query languages the note opens with the rule of one search: callers sent an English question in English
+# and in German, side by side, and both searches found the same concepts (mvp-zurich-2026-09-19-v15, lexical and
+# hybrid). The better-indexed language is named only as the target of a translation, no longer as "preferred". The
+# wording alone does not stop a caller that opens with two parallel calls; the caller's own prompt does
+# (docs/architecture/tool-contracts.md, section 4.2).
+QUERY_LANGUAGE_NOTE = ("{one_search}Write the search query in {languages}: lexical search matches only {these}. Send a "
+                       "question in {one_of} as asked, without translating it; translate the key terms of a "
+                       "question in any other language into {preferred} before searching, and still answer in the "
+                       "user's language.")
+QUERY_LANGUAGE_ONE_SEARCH = ("Search ONCE per question, in {languages}, never in more than one of them: a second "
+                             "search in another language rarely finds other concepts. ")
 INSTRUCTIONS = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. Scope: "
                 "{scope} A question normally takes two calls: search with the question and, when known, the user's "
                 "canton or municipality as jurisdiction, then resolve the relevant "
@@ -334,11 +342,11 @@ class ReleaseService:
             self.search_limitations.append(unadvertised)
         codes = [item.code for item in self.query_languages]
         if codes:
-            preferred = language_name(codes[0]) if len(codes) == 1 else f"{language_name(codes[0])} (preferred)"
-            listed = preferred if len(codes) == 1 else f"{preferred} or {language_list(codes[1:])}"
+            several = len(codes) > 1
             self.query_language_note = QUERY_LANGUAGE_NOTE.format(
-                languages=listed, these="this language" if len(codes) == 1 else "these languages",
-                one_of="it" if len(codes) == 1 else "one of them", preferred=language_name(codes[0]))
+                languages=language_list(codes), these="these languages" if several else "this language",
+                one_search=QUERY_LANGUAGE_ONE_SEARCH.format(languages=language_list(codes)) if several else "",
+                one_of="one of them" if several else "it", preferred=language_name(codes[0]))
             retry = SEARCH_LANGUAGE_RETRY.format(languages=language_list(codes), preferred=language_name(codes[0]))
         else:
             self.query_language_note, retry = "", ""

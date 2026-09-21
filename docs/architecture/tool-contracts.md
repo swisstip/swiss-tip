@@ -391,12 +391,14 @@ Italian excerpt, so nothing is left out yet. The server names the result in
 four places:
 
 1. the MCP `instructions` of the `initialize` result, with the scope
-   statement and the two-call pattern ("Write search queries in German
-   (preferred) or English: lexical search matches only these languages. Send
-   a question in one of them as asked, without translating it; translate the
-   key terms of a question in any other language into German before
-   searching, and still answer in the user's language."); clients that do
-   not pass instructions to the model miss this one;
+   statement and the two-call pattern ("Search ONCE per question, in German
+   or English, never in more than one of them: a second search in another
+   language rarely finds other concepts. Write the search query in German or
+   English: lexical search matches only these languages. Send a question in
+   one of them as asked, without translating it; translate the key terms of
+   a question in any other language into German before searching, and still
+   answer in the user's language."); clients that do not pass instructions
+   to the model miss this one;
 2. the same sentence appended to the `search` description;
 3. the same sentence as the description of the `query` field;
 4. `query_languages` on the coverage root.
@@ -411,6 +413,37 @@ hits, and its key terms in German ("Tschechischer Staatsangehöriger
 Stellenantritt Zürich Anmeldefrist Gemeinde Ankunft") read `strong` with the
 registration concepts; `scripts/test/packs/test_match_strength.py` replays both. Whether live
 callers follow the instruction was not yet measured.
+
+Until 2026-09-21 the sentence read "German (preferred) or English" and did
+not ask for one search. An OpenCode caller then sent an English question
+about a dog in the City of Zurich twice, in English and in German. On
+`mvp-zurich-2026-09-19-v15` both queries, and the question as asked, put the
+same two concepts first, lexical and hybrid, so the second search only spent
+a call. The first language is now named only as the target of a translation,
+the rule of one search opens the sentence and the generic `search`
+description, and a release with a single query language gets no such rule.
+
+What the wording achieves was measured on 2026-09-21 with that question,
+OpenCode 1.18.31 and the working-tree server in hybrid mode; the samples are
+small:
+
+| Caller and wording | Sessions with one search |
+| --- | --- |
+| `deepseek/deepseek-v4-flash`, rule at the end of the sentence | 1 of 1 |
+| `opencode/ling-3.0-flash-fin-free`, rule at the end of the sentence | 0 of 3 |
+| the same model, rule also first in the `search` description | 2 of 4 |
+| the same model, rule also first in the sentence | 2 of 6 |
+| the same model, and one sentence in the agent's own prompt | 5 of 6 |
+
+The free model opens with two tool calls side by side, decided before it
+reads a result: a German search next to the English one, a second English
+wording, or, when it follows the rule, `get_coverage` in the second place.
+No wording of the server stopped that. The sentence that did is the
+caller's: "Make one tool call at a time, never several in parallel: one
+search for the question, then one resolve for the concepts it found.", now
+in the agent prompt of the OpenCode image (`docker/opencode/opencode.json`).
+Every session, with one search or two, resolved the same two concepts and
+answered from them; the second search costs a call, not the answer.
 
 ### 4.3 Hybrid search
 

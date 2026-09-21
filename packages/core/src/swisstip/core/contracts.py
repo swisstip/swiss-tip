@@ -220,7 +220,8 @@ class SearchRequest(Placed):
     query: str = Field(min_length=1, description=(
         "Question or key terms to find published concepts, in one of the server's query languages (get_coverage "
         "query_languages; English and German unless the server names others). Send a question in one of them as "
-        "asked; translate the key terms of a question in any other language into the preferred one first. Optional "
+        "asked, in one search; translate the key terms of a question in any other language into the first one named "
+        "before searching. Optional "
         "local semantic search also accepts other languages, less reliably."))
     limit: int = Field(default=3, ge=1, le=10, description=(
         "Maximum hits. Three is enough for a question about one subject; raise it only to explore, at most ten."))
@@ -509,10 +510,13 @@ TOOL_DESCRIPTIONS = {
         "make no further calls. With parent_id set to a topic_id it lists that topic's concepts with their "
         "jurisdictions and required context fields; search is the shorter way to the same concept_ids."),
     "search": (
-        "Find ranked published concepts for a question or key terms. Lexical search matches only the server's query "
+        "Find ranked published concepts for a question or key terms, in ONE call per user question: send one query, "
+        "never two searches side by side and never the same question again in another language or wording, which "
+        "rarely finds other concepts. Lexical search matches only the server's query "
         "languages (named in the server instructions and in get_coverage query_languages; English and German unless "
-        "named otherwise): send a question in one of them as asked, and translate the key terms of a question "
-        "in any other language into the preferred one before searching. Optional local semantic search can also find "
+        "named otherwise): send a question in one of them as asked, in one search and not again in another query "
+        "language, and translate the key terms of a question in any other language into the first one named before "
+        "searching. Optional local semantic search can also find "
         "concepts in other languages, less reliably. When the user's canton or municipality is known, give it as "
         "jurisdiction, as for resolve: the hits are then the concepts that can apply there, and a concept published "
         "for other places only is named in published_elsewhere instead (do not resolve it; if no hit answers the "
