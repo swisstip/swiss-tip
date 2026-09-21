@@ -741,6 +741,40 @@ class ServiceTests(unittest.TestCase):
         self.assertIsInstance(self.service.dispatch("get_evidence", {"evidence_ids": []}), ToolError)
         self.assertIsInstance(self.service.dispatch("unknown_tool", {}), ToolError)
 
+    def test_the_context_vocabulary_reaches_the_caller_before_its_first_call(self):
+        # Knowing the fields and their published values, a caller maps what the user said ("a Czech citizen") to a
+        # value on its first resolve instead of learning the field from a NEEDS_CONTEXT round trip. It is sent in the
+        # instructions and on the resolve schema because a client may drop either.
+        entry = "- population (eu_efta, third_country): Citizenship group."
+        self.assertIn("Context fields of this release", self.service.instructions)
+        self.assertIn(entry, self.service.instructions)
+        context = self.service.tool_input_schema("resolve")["properties"]["context"]
+        self.assertIn("Values for the concept's context_schema fields.", context["description"])
+        self.assertIn(entry, context["description"])
+        # Only resolve takes a context; the search schema is unchanged.
+        self.assertNotIn("Context fields", str(self.service.tool_input_schema("search")))
+
+    def test_a_release_without_context_fields_sends_no_vocabulary(self):
+        release = sample_release()
+        for concept in release.concepts:
+            concept.required_context, concept.context_schema = [], {}
+        service = ReleaseService(release)
+        self.assertEqual(service.context_note, "")
+        self.assertNotIn("Context fields", service.instructions)
+        self.assertFalse(service.instructions.endswith("\n"))
+
+    def test_a_vocabulary_over_the_budget_falls_back_to_the_field_names(self):
+        # The list is a session-once cost, so it is sent in full; a pack with far more fields than a question can
+        # plausibly need sends the names, and each search hit still carries its own concept's values.
+        release = sample_release()
+        release.concepts[0].context_schema |= {f"field_{n:03}": ContextFieldSpec(enum=["yes", "no"],
+                                                                                 description="Long description. " * 5)
+                                               for n in range(60)}
+        service = ReleaseService(release)
+        self.assertIn("This release has 61 context fields, too many to list here", service.context_note)
+        self.assertIn("field_000, field_001", service.context_note)
+        self.assertNotIn("Long description", service.context_note)
+
 
 class JurisdictionNameTests(unittest.TestCase):
     """A jurisdiction in names, read with the release's place register."""

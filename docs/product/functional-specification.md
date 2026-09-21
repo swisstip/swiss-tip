@@ -217,6 +217,19 @@ status with a named reason and the values that are published:
 | `context_not_covered` | An unknown context field, or a value with no published facts |
 | `review_status_not_met` | Only unreviewed facts exist and the caller asked for reviewed ones |
 
+#### Context
+
+Context fields belong to the release, not to a concept: a concept names the
+ones it requires, and the same field means the same thing everywhere. The
+server sends the whole vocabulary before the first call - each field with
+its published values and what each one means - in its connect-time
+instructions and in the `resolve` schema, so a caller can fill the context
+on its first `resolve` instead of learning the field from a `NEEDS_CONTEXT`
+round trip. Fields a concept does not use are ignored, so a caller need not
+know which concept uses which. Turning what the user said into a published
+value stays the caller's work: the release publishes the categories and
+their meaning, never a list of nationalities or states that would go stale.
+
 #### Search behaviour
 
 Search never widens scope: a hit says that a concept exists, and `resolve`
@@ -386,8 +399,8 @@ were produced on, and feed gate G5.
   HTTPS for evaluation or internal use.
 - **Client setup.** The server prints ready-made client configurations and
   sends its caller rules - scope statement, query languages, the two-call
-  pattern - as MCP instructions at connect time, for clients that pass them
-  to the model.
+  pattern, the context vocabulary - as MCP instructions at connect time, for
+  clients that pass them to the model.
 - **Refresh.** Sources are re-fetched deliberately, not continuously: a new
   snapshot is a new run, a new build and a new release identifier, through
   the same acceptance and readiness gates. The freshness policy makes an

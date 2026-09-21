@@ -151,9 +151,22 @@ QUERY_LANGUAGE_ONE_SEARCH = ("Search ONCE per question, in {languages}, never in
 INSTRUCTIONS = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. Scope: "
                 "{scope} A question normally takes two calls: search with the question and, when known, the user's "
                 "canton or municipality as jurisdiction, then resolve the relevant "
-                "concept_ids with the user's jurisdiction, today's date and the context fields the search hits name. "
+                "concept_ids with the user's jurisdiction, today's date and the context the question implies. "
                 "Call get_coverage only when unsure whether the question is in scope, and get_evidence only for a "
                 "verbatim quote. {languages} Follow guidance_for_caller in every result.")
+# The release's context vocabulary, sent once per session with the instructions and again on the resolve schema,
+# because a client may drop either. A caller that knows the fields and their published values before its first call
+# fills the context on the first resolve instead of learning it from a NEEDS_CONTEXT round trip. The mapping from
+# what the user said ("a Czech citizen") to a published value (population eu_efta) stays the caller's: the release
+# publishes the categories and what each one means, never a table of nationalities that would go stale.
+CONTEXT_NOTE = ("Context fields of this release, with the values its facts are published for. Derive them from what "
+                "the user said and send them on the first resolve; a field a concept does not use is ignored, and "
+                "each search hit names the fields its own concept requires.")
+CONTEXT_NOTE_BRIEF = ("This release has {count} context fields, too many to list here; a search hit names the fields "
+                      "its concept requires, with their values: {names}.")
+# The list is a session-once cost, not a per-call one, so the whole vocabulary is worth its bytes; a pack with far
+# more fields than the ones a question can plausibly need falls back to the names alone.
+CONTEXT_NOTE_BUDGET = 4000
 GUIDANCE_SUPPORTED = ("These facts and citations are everything this release holds for the requested concepts. Answer "
                       "now from the statements only, cite only the returned URLs, and collect the required_user_facts "
                       "before computing any date. Do not add documents, fees, deadlines, contacts, links or procedures that "
@@ -220,6 +233,18 @@ def language_list(codes: list[str], conjunction: str = "or") -> str:
 
 def search_terms(count: int) -> str:
     return f"{count} search term" if count == 1 else f"{count} search terms"
+
+
+def context_vocabulary(fields: dict[str, ContextField]) -> str:
+    """The release's context fields with their published values, for the instructions and the resolve schema."""
+    if not fields:
+        return ""
+    lines = [f"- {name} ({', '.join(spec.enum) if spec.enum else 'any value'}): {' '.join(spec.description.split())}"
+             for name, spec in sorted(fields.items())]
+    block = "\n".join([CONTEXT_NOTE, *lines])
+    if len(block) <= CONTEXT_NOTE_BUDGET:
+        return block
+    return CONTEXT_NOTE_BRIEF.format(count=len(fields), names=", ".join(sorted(fields)))
 
 
 def query_languages(release: Release) -> tuple[list[QueryLanguage], list[str]]:
@@ -306,6 +331,7 @@ class ReleaseService:
         self.concept_authority = {c.concept_id: concept_authority([self.fact_weights[f] for f in c.fact_ids], self.policy)
                                   for c in release.concepts}
         self.context_fields = {name: spec for concept in release.concepts for name, spec in concept.context_schema.items()}
+        self.context_note = context_vocabulary(self.context_fields)
         # The levels each topic publishes, to tell a user elsewhere that a narrower level exists for another place only.
         self.topic_jurisdictions: dict[str, set[str]] = {}
         for concept in release.concepts:
@@ -353,6 +379,8 @@ class ReleaseService:
         self.search_notes = {"strong": SEARCH_MATCH_NOTE, "weak": SEARCH_WEAK_NOTE + retry, "none": SEARCH_EMPTY_NOTE + retry}
         self.instructions = " ".join(INSTRUCTIONS.format(scope=manifest.scope_statement.strip(),
                                                          languages=self.query_language_note).split())
+        if self.context_note:
+            self.instructions += "\n" + self.context_note
 
     def tool_description(self, name: str) -> str:
         """The contract's description, with this release's query languages on search."""
@@ -366,6 +394,9 @@ class ReleaseService:
         if name == "search" and self.query_language_note:
             query = schema["properties"]["query"]
             query["description"] = "Question or key terms to find published concepts. " + self.query_language_note
+        if name == "resolve" and self.context_note:
+            context = schema["properties"]["context"]
+            context["description"] = " ".join(context["description"].split()) + "\n" + self.context_note
         if name in ("search", "resolve"):
             jurisdiction = schema["properties"]["jurisdiction"]
             jurisdiction["description"] = " ".join(jurisdiction["description"].split()) + " " + self.jurisdiction_note()

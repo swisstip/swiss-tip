@@ -584,8 +584,34 @@ in one call, for one jurisdiction, one date and one context.
 | `concept_ids` | list of string, 1 to 5, unique | yes | From `get_coverage` or `search` |
 | `jurisdiction` | Jurisdiction | no, default the country the release serves | Where the user lives, in names or codes, at the most specific level known |
 | `as_of` | date | no, default today | Applicability date |
-| `context` | map of string to string | no, default empty | Values for the concepts' context fields |
+| `context` | map of string to string | no, default empty | Values for the release's context fields (see below). A field the requested concepts do not use is ignored; a field the release does not publish is a `context_not_covered` gap |
 | `reviewed_only` | boolean | no, default `false` | Serve only facts a person has confirmed; a concept whose facts are all unreviewed then resolves `OUT_OF_COVERAGE` with a `review_status_not_met` gap |
+
+#### The context vocabulary
+
+The context fields are of the release, not of a concept: a concept names the
+ones it requires, and every concept that names a field means the same field.
+The server therefore sends the whole vocabulary before the first call, each
+field with its published values and what each value means, in two places a
+client may drop independently: the MCP `instructions` of `initialize`, and
+the description of the `context` field in the `resolve` schema. On
+`mvp-zurich` that is eight fields and about 2 KB, paid once per session, not
+per call; a release with far more fields sends the field names alone.
+
+A caller that has read it fills the context on its **first** `resolve`
+instead of learning the field from a `NEEDS_CONTEXT` round trip, and it may
+send any field of the vocabulary without knowing which concept uses which:
+only the fields a fact's condition names are compared. The mapping from what
+the user said to a published value stays the caller's work - a Czech citizen
+is `population` `eu_efta` - because the release publishes the categories and
+what they mean, never a list of nationalities that would go stale. A value
+outside a field's published set returns a `context_not_covered` gap, not a
+guess; a wrong value that *is* published cannot be detected, which is why
+every field's description has to make its categories decidable.
+
+`search` hits keep carrying `context_schema`, the fields of that one
+concept, and `NEEDS_CONTEXT` keeps naming what is missing: the vocabulary
+shortens the ordinary path, it does not replace either.
 
 ### Result: ResolveResult
 
@@ -903,7 +929,8 @@ For the standing Czech-citizen question the intended sequence is two calls:
 2. `resolve` with those concept IDs, the place the user named (`city`
    `Zurich`, which the server turns into `CH-ZH` and `CH-ZH-261`), today's
    date, and `population` `eu_efta` derived from "Czech citizen" with the
-   schema.
+   hits' `context_schema`, or with the context vocabulary the server sent at
+   connect time, which lets the first `resolve` already carry it.
 
 The result carries the facts, the citations, the two required user facts
 (arrival date, first working day) and the decision rule. The caller asks the
