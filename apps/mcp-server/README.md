@@ -74,7 +74,7 @@ published on the host's loopback address only:
 
 ```shell
 docker run -d --rm --name swiss-tip-embeddings -p 127.0.0.1:11434:11434 -e OLLAMA_HOST=0.0.0.0:11434 \
-  ghcr.io/bobrovsky420/swiss-tip-ollama:qwen3-embedding-0.6b
+  ghcr.io/swisstip/swiss-tip-ollama:qwen3-embedding-0.6b
 uvx swisstip-mcp --release releases/<pack>/release.json --require-ready \
   --semantic-index releases/<pack>/semantic-index.json --transport streamable-http
 ```
@@ -154,7 +154,8 @@ together. The lexical image of the root Dockerfile is built locally with
 `docker login ghcr.io`, must name another image with `--image`, because the
 default name is the release image's. A new
 package on GitHub Container Registry is private until its visibility is
-changed in the package settings; `ghcr.io/bobrovsky420/swiss-tip` is public.
+changed in the package settings, so each package under `ghcr.io/swisstip`
+is made public after its first push.
 The package page on GitHub shows the image's
 `org.opencontainers.image.description` label (plain text, at most 512
 characters) under the package name. A container package has no README of its
@@ -176,8 +177,8 @@ source"). The image README is `/srv/swiss-tip/README.md` inside the image.
 [run_image_test.py](../../scripts/test/container/run_image_test.py) tests the
 image as a registry serves it, not the checkout's server: it checks whether
 the tag can be pulled without a login, pulls
-`ghcr.io/bobrovsky420/swiss-tip:mvp-zurich-2026-09-18-v10` (`--image` for
-another tag), starts it on a free loopback port and then uses the checkout
+`ghcr.io/swisstip/swiss-tip:mvp-zurich`, the pack's moving tag (`--image` for
+a release's tag), starts it on a free loopback port and then uses the checkout
 only for its clients. It checks the release labels against `/health`, runs
 the checks of `check_server.py --url`, confirms from the container's own
 log that the calls reached it, and connects OpenCode to the endpoint; `--live`
