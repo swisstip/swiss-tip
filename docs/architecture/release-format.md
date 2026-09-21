@@ -1,13 +1,11 @@
 # Knowledge release and curation file
 
-**Last update:** 19 September 2026
+**Last update:** 21 September 2026
 
 **Status:** implemented in `packages/core` (release
 models, basis labels and validator) and `packages/build` (curation file and
-release build); the MVP release `releases/mvp-zurich/release.json` is built
-from the migrated predecessor curation (section 6) and, since 16 September
-2026, names the institution of every page and the basis of every excerpt
-(section 2, "Institutions and basis")<br>
+release build); the served releases name the institution of every page and
+the basis of every excerpt (section 2, "Institutions and basis")<br>
 **Schema versions:** `swiss-tip-release/v1`, `swiss-tip-curation/v1`<br>
 **Relation to the tool contracts:** the server maps release records onto the
 tool results of [tool-contracts.md](tool-contracts.md); the release carries
@@ -16,7 +14,7 @@ more (hashes, provenance, block IDs) than any tool returns.
 ## 1. Position in the pipeline
 
 ```text
-releases/<pack>/curation.yaml     what the expert (or a migration) writes
+releases/<pack>/curation.yaml     what the expert writes
 <run>/text/                        text dataset of the pack's run (extraction package);
                                   <run> is releases/<pack>/ when committed, else .local/<pack>/
         |  swisstip-build-release
@@ -91,9 +89,9 @@ design and its measurement are in
 [institutions-and-provenance-weights.md](institutions-and-provenance-weights.md).
 
 All of these fields are optional and left out of the dump when absent, so a
-release built before 16 September 2026 loads, validates and keeps its
-content digest; a release with a registry must name an institution and a
-basis for every document and excerpt.
+release without a registry loads, validates and keeps its content digest; a
+release with one must name an institution and a basis for every document and
+excerpt.
 
 ### Place register
 
@@ -133,8 +131,8 @@ them that its facts are not theirs. Municipalities merge, mostly on
 1 January, and their numbers retire: the register is dated data, fetched
 again and rebuilt like any other source, and an alias for a code the new
 register no longer lists fails the build. The field is optional and left
-out of the dump when absent, so a release built before 18 September 2026
-loads, validates, keeps its content digest and accepts codes only.
+out of the dump when absent, so a release without a register loads,
+validates, keeps its content digest and accepts codes only.
 
 ### Provenance and review status
 
@@ -313,7 +311,7 @@ under; a page matching no rule takes its catalogue entry from the record's
 become an institution named `catalogue-<source_id>`, with the `publishers`
 name for its host when there is one); a page matching neither stops the
 build when the pack declares a registry, and otherwise keeps a publisher
-name only, from the `publishers` map or the catalogue, as before. The
+name only, from the `publishers` map or the catalogue. The
 served `publisher` is the institution's name. The basis of an excerpt is the
 citation's own `basis`, else the `page_basis` rule with the longest prefix,
 else guidance at the institution's level; a page without an institution
@@ -370,32 +368,13 @@ do not fit). All run on synthetic runs without network
 (`./.venv/Scripts/python.exe -m unittest discover -s packages/core/tests`,
 likewise `packages/build/tests`).
 
-## 6. The migrated MVP release
+## 6. The MVP release
 
-KB1 was migrated from the predecessor without human review steps. The
-one-time script `.local/scripts/migrate_kb1_curation.py` (outside Git) read
-the predecessor's curated selections
-(`scripts/corpora/residence_mvp_curated.py`: 35 concepts, 84 facts including
-26 cantonal contacts, all authored by an assistant), built an anchor for every
-block range from the predecessor's 10 September text records, relocated it
-onto the MVP text dataset of this repository and wrote
-`releases/mvp-zurich/curation.yaml`; `kb1-migration-report.json` next to it
-lists every citation.
-
-| Result | Count |
-| --- | ---: |
-| Concepts migrated | 35 of 35 |
-| Facts migrated | 84 of 84 |
-| Citations relocated as `same-text` | 76 |
-| Citations relocated as `moved` | 8, all citing the SEM notification-procedure page (`ch-sem-notification-procedure`), relocated by `.local/scripts/add_notification_concepts.py` onto the same block numbers of its 11 September record (`kb1-migration-report.json`, `amendments`) |
-
-Every fact is a `curated-statement`. The predecessor had no concept
-descriptions and no aliases beyond the contact concept; the descriptions,
-the authored aliases and questions (including everyday German words a user
-writes, such as `Trennung`, `Scheidung`, `Sozialhilfe beziehen`, and Zurich
-German spellings that the cited pages do not use) and the source terms
-(section 3) were added in this repository. The contents of the current
-release are listed in [COVERAGE.md](../../COVERAGE.md), its review status in
-[LIMITATIONS.md](../../LIMITATIONS.md).
-
-Earlier states of this document: [history](../history/release-format-history.md).
+Every fact of `mvp-zurich` is a `curated-statement`, written by a person or
+an assistant reading the cited page. The concept descriptions, the aliases
+(including the everyday German words a user writes, such as `Trennung`,
+`Scheidung`, `Sozialhilfe beziehen`, and Zurich German spellings the cited
+pages do not use), the sample questions and the source terms (section 3) are
+authored next to the curation file. What the current release contains, and
+how much of it a person has reviewed, is in the `COVERAGE.md` and
+`LIMITATIONS.md` of the packs repository.

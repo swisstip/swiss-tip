@@ -1,6 +1,6 @@
 # Admin console - technical design
 
-**Last update:** 16 September 2026
+**Last update:** 21 September 2026
 
 **Status:** implemented, except the assistant draft of section 4.5, which
 waits for the concept-extraction provider port of `TODO.md`, and the live
@@ -38,8 +38,8 @@ releases/<pack>/curation.yaml       read, written (screens 5, 6, 7)
 releases/<pack>/release.json        read (screens 7, 8); written only by the build stage
 releases/<pack>/build-report.json   read (screens 3, 5)
 releases/<pack>/pipeline-report.json read (screens 1, 3)
-releases/<pack>/checks.yaml         new: stored tool checks, read and written (screen 8)
-.local/<pack>/console/              new: job logs and the call-log aggregate (screens 3, 9)
+releases/<pack>/checks.yaml         stored tool checks, read and written (screen 8)
+.local/<pack>/console/              job logs and the call-log aggregate (screens 3, 9)
 ```
 
 `<run>` is `.local/<pack>/`, outside Git for every pack (`releases/<pack>/`
@@ -79,7 +79,7 @@ mode is displayed in the page header.
    console never commits. The lead commits from Git after reading the diff
    on the release screen.
 4. **The build never edits a statement, and neither does the console on its
-   own.** The assistant draft of section 5.5 is an explicit action whose
+   own.** The assistant draft of section 4.5 is an explicit action whose
    result carries the provenance the release format defines for
    assistant-authored text.
 5. **A person confirms; a machine never does.** Only the review action of
@@ -377,7 +377,7 @@ next and previous, `x` select the card for a bulk action):
 | --- | --- |
 | Confirm | `review_status: human-reviewed`, `reviewed_on: today`, `reviewed_by: <reviewer>` (an additive field on `Provenance`, section 6.3); the anchor is refreshed from the current record so the confirmation is bound to the exact bytes reviewed |
 | Edit | Opens the fact form (screen 5) in place; saving an edited statement keeps the status unreviewed, so an edit is followed by a confirm |
-| Reject | Removes the fact from the concept (and the concept, when it was the last fact), with a required note stored under `.local/<pack>/console/rejected.jsonl` with the fact as it was, the reviewer and the reason; the curation file records nothing about rejected facts, as today |
+| Reject | Removes the fact from the concept (and the concept, when it was the last fact), with a required note stored under `.local/<pack>/console/rejected.jsonl` with the fact as it was, the reviewer and the reason; the curation file records nothing about rejected facts |
 | Flag | Adds a note to `provenance.notes` prefixed with `flag:` and the reviewer, and leaves the status unchanged; flagged facts sort to the top for the lead |
 | Accept candidate | For a `model-candidate`: sets `kind: curated-statement` and `review_status: human-reviewed` with the reviewer, after the statement has been shown editable; the model's authorship stays in `author` and `source` |
 | Bulk | Confirm, flag or reject several facts at once: the facts ticked in the side list (select all on the page, `x` on a card) or every card matching the current filter on every page. Flag and reject need a comment, confirm takes an optional one as a `review:` note. One write, one dry build and one audit entry listing every fact, so it is all or nothing; a reject asks first. Each fact is changed exactly as its single action would change it, anchors refreshed; a fact confirmed with others also gets `review: confirmed in a bulk review of N facts`, because a group confirmation is weaker evidence of reading than a card-by-card one and the lead should be able to tell them apart. Not offered in sample mode |
@@ -691,24 +691,15 @@ concepts, four facts and one stored check, built by the existing pipeline in
 | Modes | Read-only registers no write or job route; hosted mode requires authentication for writes |
 | Calls | Log-line parser, percentiles, gap feed |
 
-## 11. Build order
+## 11. What remains
 
-Steps 1 to 6 are built. Step 7 renders the sandbox's own call log, and a
-saved server log when the console is pointed at one (section 4.9); the gap
-feed waits for the additive log keys.
-
-| Step | Delivers | Closes |
-| --- | --- | --- |
-| 1 | Skeleton, packs overview, data layer, read-only reading view | A shared way to read the text dataset |
-| 2 | Review queue with confirm, edit, flag, reject; `reviewed_by` field | The review of every KB1 fact |
-| 3 | Curation workbench, range selection to citation | Descriptions and aliases for concepts without them; new facts without hand-editing YAML |
-| 4 | Tool sandbox with stored checks | The expert verifies a change before the harness runs |
-| 5 | Sources table, promote, coverage matrix | KB2 progress; soft error pages; pages missing from a catalogue |
-| 6 | Pipeline runs with the relocation review, release diff and caller preview | A refresh becomes a reviewed event rather than a report to read |
-| 7 | Operations, once the HTTP transport writes a log | The gap feed as the curation backlog |
-
-Steps 1 to 4 are the expert's tool; steps 5 to 7 are the KB2 and operations
-tooling.
+Screens 1 to 8 are built: the packs overview and the data layer, the review
+queue, the curation workbench, the tool sandbox with its stored checks, the
+sources table with the coverage matrix, and the pipeline runs with the
+relocation review, the release diff and the caller preview. The operations
+screen (section 4.9) renders the sandbox's own call log, and a saved server
+log when the console is pointed at one; its gap feed waits for the additive
+log keys of the HTTP transport.
 
 ## 12. Out of scope
 

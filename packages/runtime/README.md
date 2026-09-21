@@ -39,7 +39,7 @@ release without bases whose statements are reviewed ranks exactly as
 before. In hybrid mode the same prior is applied to the semantic candidates'
 similarity before rank fusion. The publisher's level never weighs. On the
 release of 15 September the prior changed the top three of 3 of 35 fixture
-queries and no acceptance case (design record: [institutions-and-provenance-weights.md](../../docs/architecture/institutions-and-provenance-weights.md), section 7).
+queries and no acceptance case (design record: [institutions-and-provenance-weights.md](../../docs/architecture/institutions-and-provenance-weights.md), section 6).
 
 ## Match strength
 

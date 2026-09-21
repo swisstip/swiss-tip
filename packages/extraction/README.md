@@ -105,7 +105,7 @@ last_block)` stores block hashes, heading path, offsets and text;
 `relocate(anchor, new_record, old_record)` returns `same-text`, `moved`,
 `ambiguous` or `changed`, with `context-changed` and
 `neighbourhood-changed` warnings and, for changed text, the closest new
-blocks. See section 7 of the design document.
+blocks. See section 6 of the design document.
 
 ## Adopted records
 

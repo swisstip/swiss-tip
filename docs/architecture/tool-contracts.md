@@ -1,81 +1,26 @@
 # Tool contracts
 
-**Last update:** 19 September 2026
+**Last update:** 21 September 2026
 
 **Schema version:** `swiss-tip/v4`<br>
 **Source of truth:** [`packages/core/src/swisstip/core/contracts.py`](../../packages/core/src/swisstip/core/contracts.py)
 (Pydantic models, served by the mock and by the real server;
 `scripts/test/mock-mcp/contracts.py` re-exports them); the exported JSON
 Schema bundle is [`tool-contracts.schema.json`](tool-contracts.schema.json)<br>
-**Status:** the committed bundle is the frozen contract from the first hour
-of the event (24 September); the reproduced models must export an identical
-bundle (specification, section 5.2), and during the event only additive
-changes are allowed, decided by the lead. Before the event the lead may
-still change it, and did so on 16 September 2026, not additively: `resolve`
-lists each cited page once per concept with the `evidence_ids` resting on
-it, instead of one citation per evidence ID, and a concept states the review
-fields once when all its facts share them, instead of every fact repeating
-them. The version dropped `-draft` with that change. A caller that reads
-`citations[].evidence_id` or expects `review_status` on every fact must be
-updated; the reason for the change and what it saves are in the
-caller-efficiency item of [TODO.md](../../TODO.md). Later on
-16 September 2026 `search` gained `match_strength`, `match_signals` and
-`scope_statement`, additively: a caller that ignores them sees the result
-it saw before. On 17 September 2026 the `search` limit went from a default
-of 5 and a cap of 20 to 3 and 10, and `search`, `resolve` and
-`get_evidence` began to carry a two-line `limitations` list in place of the
-manifest's full one (section 1, rule 6); no field changed shape. Later on 16 September
-the contract gained, additively, the publisher's `level` and `jurisdiction`
-on citations and evidence, the `basis` of every served fact (what the cited
-excerpt is) and the document and basis counts on the coverage root; see
-[institutions-and-provenance-weights.md](institutions-and-provenance-weights.md).
-Later on 16 September the coverage root gained, additively, `query_languages`:
-the languages lexical search matches, best first, which the server also names
-in its MCP instructions, in the `search` description and in the `query`
-field (section 4.2). On 17 September 2026 the version went from
-`swiss-tip/v1` to `swiss-tip/v2`, not additively: the concepts of a
-`get_coverage` topic page no longer carry `aliases` and `context_schema`
-(section 3, ConceptSummary). A caller that read the allowed context values
-from the topic page takes them from a search hit or from `missing_context`.
-Later on 17 September 2026 `resolve` gained, additively, the gap dimension
-`more_specific_jurisdiction_not_published`: a concept answered for a place
-whose own cantonal or municipal level the release publishes for another
-place only says so (section 5, CoverageGap), and `guidance_for_caller` adds
-one sentence. A caller that ignores gaps on a `SUPPORTED` result sees the
-result it saw before. Later that day the version went from `swiss-tip/v2` to
-`swiss-tip/v3`, not additively: a topic on the `get_coverage` root no longer
-carries `jurisdictions` (section 3, TopicSummary). The root's own
-`jurisdictions` lists every one of them and the topic page carries them per
-concept; the entry-and-visa topic had pushed the root over the 6,000 bytes
-one call may cost, and the `contacts` topic alone repeated all 26 canton
-codes. Packages 0.2.3 serve v3; 0.2.2 on PyPI serves v2 with the field.
-On 18 September 2026 the version went from `swiss-tip/v3` to `swiss-tip/v4`:
-the `jurisdiction` of `resolve` is given in the parts `country`, `canton` and
-`city`, each a name or a code, and the server turns them into codes with the
-release's place register (section 2, Jurisdiction). The field names of v3
-(`country_code`, `canton_code`, `municipality_id`) are still accepted on
-input, so a v3 request keeps working. Not additive on the result:
-`executed_scope` is an ExecutedScope, which keeps the three code fields and
-adds the register's names and `not_recognised`; a gap message and
-`answering_jurisdiction` name a place next to its code (`CH-ZH-261
-(municipality of Zürich)`); and a bare municipality number is read only next
-to its canton. Packages 0.2.4 serve v4. On 19 September 2026 `search`
-gained, additively, the optional request field `jurisdiction` and the result
-fields `executed_scope` and `published_elsewhere` (section 4.4): a caller
-that sends no jurisdiction sees the result it saw before. Packages 0.2.5
-carry the field; 0.2.4 on PyPI does not know it and rejects a request that
-carries it. On 21 September 2026 `search` and `resolve` began
-folding a place part sent next to the other arguments into `jurisdiction`
-(section 2, Jurisdiction); the request schema is unchanged, so the version
-stays `swiss-tip/v4`.
+**Status:** the contract is `swiss-tip/v4`; packages 0.2.5, the latest on
+PyPI, serve it in full. The committed bundle is the frozen contract of the
+first hour of the event (24 September): the reproduced models must export an
+identical bundle (specification, section 5.2), and during the event only
+additive changes are allowed, decided by the lead. Until the event starts
+the lead may still change it, additively or not.
 
 This document defines what a caller sends to and receives from the four MCP
 tools. The mock server serves exactly these shapes; the real server must too.
 Field tables are normative; the examples are real responses captured from
 the mock on 12 September 2026, except where an example names another
 source. Those of section 5 send the jurisdiction under the field names of
-v3, which are still accepted, and show `executed_scope` as it was then: the
-codes, without the names v4 adds.
+v3, which are still accepted, and show `executed_scope` with the codes
+alone, without the names v4 adds.
 
 Regenerate or verify the schema bundle:
 
@@ -164,9 +109,9 @@ requires it. The rules:
   (`Buchs` in ZH, SG and AG), a name two cantons share (`Basel`,
   `Appenzell`) and a city that lies in another canton than the one given
   are `INVALID_ARGUMENT` errors that list the candidates with their codes.
-- **Without a register.** A release built before 18 September 2026
-  carries none and reads codes only; the `jurisdiction` description the
-  server sends with `tools/list` says so, and names the default country.
+- **Without a register.** A release that embeds no place register reads
+  codes only; the `jurisdiction` description the server sends with
+  `tools/list` says so, and names the default country.
 - **A flattened place is folded.** A small model that sends a part next to
   the other arguments (`{"concept_ids": [...], "city": "Wallisellen"}`)
   instead of inside `jurisdiction` is served rather than sent round again:
@@ -177,7 +122,7 @@ requires it. The rules:
   `INVALID_ARGUMENT` error. `search` and `resolve` fold; no other tool takes
   a place.
 
-Short codes are normalized as before: `ZH` becomes `CH-ZH`, `261` with a
+Short codes are normalized: `ZH` becomes `CH-ZH`, `261` with a
 canton becomes `CH-ZH-261`, a full municipality code supplies a missing
 canton, and case is ignored.
 
@@ -277,10 +222,9 @@ ConceptSummary:
 | `jurisdictions` | list of string | The one jurisdiction the concept is published for |
 | `required_context` | list of string | Context fields `resolve` needs for this concept |
 
-The listing carries what a caller needs to pick a concept and no more. Until
-17 September 2026 it also carried `aliases` (the terms `search` matches) and
-`context_schema`; together they were 60% of the largest topic page (48,000
-characters for 56 concepts). The allowed values of a context field reach the
+The listing carries what a caller needs to pick a concept and no more: it
+carries neither `aliases` (the terms `search` matches) nor `context_schema`,
+which together were 60% of the largest topic page. The allowed values of a context field reach the
 caller on a search hit (`context_schema`) and on a `NEEDS_CONTEXT` resolution
 (`missing_context` with `options` and `hint`).
 
@@ -322,7 +266,7 @@ them (section 4.4).
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `query` | string, non-empty | yes | The user's question or key terms in one of the query languages (section 4.2); a question already in one of them is sent as asked, a question in another language is sent with its key terms translated into the preferred one |
-| `limit` | integer 1 to 10 | no, default 3 | Maximum hits. Three is enough for a question about one subject; a caller raises it only to explore. Until 17 September 2026 the default was 5 and the cap 20; a recorded caller set 10 on every search on its own |
+| `limit` | integer 1 to 10 | no, default 3 | Maximum hits. Three is enough for a question about one subject; a caller raises it only to explore |
 | `jurisdiction` | Jurisdiction (section 2) | no | Where the user lives, when the question or the conversation says so, in the same parts and spellings as for `resolve`. Empty, or the country alone, is a search without a place (section 4.4) |
 
 ### Result: SearchResult
@@ -945,5 +889,3 @@ gap dimension) keep the schema version. A change that removes or renames a
 field, or makes an optional field required, bumps the version and needs the
 lead's decision. The `--check` command above runs in the test suite so that
 the committed bundle and the models cannot drift apart.
-
-Earlier states of this document: [history](../history/tool-contracts-history.md).

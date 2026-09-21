@@ -5,8 +5,8 @@
 How a knowledge base (a pack under `releases/<pack>/`) goes from an idea to
 a published release, and how an existing pack is extended. Each step names
 the command and the document that describes it in detail; this page only
-orders them. It describes the route the `mvp-zurich` and `mvp-wallisellen`
-releases and their extensions actually took.
+orders them. It is the route the `mvp-zurich` and `mvp-wallisellen`
+packs and their extensions follow.
 
 | Step | Name | Output |
 | ---: | --- | --- |
@@ -83,8 +83,8 @@ the Windows virtual environment path; on macOS or Linux replace
   code-point offsets and hashes, and a Markdown reading view per record.
   No model is involved.
 - When a publisher puts content in page components the extractor does not
-  read yet (the City of Zurich's `stzh-contact` and `stzh-datatable` were
-  such cases), extend the extractor with tests and raise
+  read yet (the City of Zurich's `stzh-contact` and `stzh-datatable` are
+  such components), extend the extractor with tests and raise
   `EXTRACTOR_VERSION`.
 - A PDF whose page is an image has no text (no OCR); a PDF without a
   declared language needs a `page_languages` rule in step 5.
