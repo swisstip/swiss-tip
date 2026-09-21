@@ -2,19 +2,28 @@
 # swisstip-builder) from the component source trees, test them, and publish
 # them with PyPI trusted publishing, so no token is stored anywhere.
 #
-#   push a tag v<version>, e.g. v0.2.0     build, test, publish to PyPI
-#   run the workflow by hand with a version build, test, publish to TestPyPI
+#   push a tag v<version>, e.g. v0.3.0      build, test, publish to PyPI
+#   run the workflow by hand with a version  build, test, publish to TestPyPI
+#   push to any branch                       build and test only, nothing is published
+#
+# A branch push is how the build is verified before a release tag exists: the
+# publish jobs below run for a tag and for a manual run only, so a branch push
+# stops after the artifact. Its version is the one the component files state
+# with a .dev0 suffix, which names no release even by accident. A manual run
+# needs this file on the default branch, because that is where GitHub looks
+# for the "Run workflow" button; a branch push needs nothing.
 #
 # The one-time setup on PyPI, TestPyPI and GitHub is in scripts/pypi/README.md.
 name: PyPI packages
 
 on:
   push:
+    branches: ["**"]
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish to TestPyPI, PEP 440 normalised, e.g. 0.2.0rc1
+        description: Version to publish to TestPyPI, PEP 440 normalised, e.g. 0.3.0rc1
         required: true
         type: string
 
@@ -39,9 +48,22 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = push ]; then version="${GITHUB_REF_NAME#v}"; else version="$INPUT_VERSION"; fi
+          if [ "$GITHUB_EVENT_NAME" != push ]; then
+            version="$INPUT_VERSION"
+          elif [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            # A branch push verifies the build; the version is the committed one, marked as a development build.
+            version="$(python scripts/pypi/check_versions.py).dev0"
+          fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "Building version $version"
+
+      # The distributions take their version from the command line of build_distributions.py, not from the
+      # component files, so a file left at the previous version would be published under the tag's version
+      # without anything noticing. This is the guard; it also fails a tag that names another version.
+      - name: Check that every component states this version
+        run: python scripts/pypi/check_versions.py --expect "$VERSION"
 
       - name: Install the components and the build tools
         run: |
