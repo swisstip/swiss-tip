@@ -16,7 +16,7 @@ from enum import Enum
 import json
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 SCHEMA_VERSION = "swiss-tip/v4"
 
@@ -79,6 +79,42 @@ class Jurisdiction(Strict):
             "The municipality (political commune) the user lives in, not a district, a quarter or a postcode: its "
             "name, for example Wallisellen or Zurich, or its code, the canton code plus the BFS number (CH-ZH-261; "
             "the number alone only next to the canton)."))
+
+
+PLACE_ALIASES = {str(alias): name for name, field in Jurisdiction.model_fields.items()
+                 for alias in (field.validation_alias.choices if isinstance(field.validation_alias, AliasChoices)
+                               else [name])}
+
+
+class Placed(Strict):
+    """A request that takes a jurisdiction.
+
+    Small models flatten the nested argument and send {"city": "Wallisellen"} next to the other arguments; the
+    rejection then costs a call or two before the same question is asked again. A place part sent at the top level
+    is folded into `jurisdiction` instead, under every name that field accepts. The schema is unchanged: it
+    advertises the nested object, which is what a caller should send, and executed_scope echoes what was understood.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def fold_place_parts(cls, data):
+        if not isinstance(data, dict) or not data.keys() & PLACE_ALIASES.keys():
+            return data
+        jurisdiction = data.get("jurisdiction") or {}
+        if not isinstance(jurisdiction, dict):
+            return data
+        given = {PLACE_ALIASES[key]: value for key, value in jurisdiction.items() if key in PLACE_ALIASES}
+        folded, rest = dict(jurisdiction), {}
+        for key, value in data.items():
+            part = None if key in cls.model_fields else PLACE_ALIASES.get(key)
+            if part is None:
+                rest[key] = value
+            elif part not in given:
+                folded[key] = given[part] = value
+            elif given[part] != value:
+                raise ValueError(f"The {part} is given twice, as {value!r} next to jurisdiction and as "
+                                 f"{given[part]!r} inside it; give the place once, inside jurisdiction.")
+        return {**rest, "jurisdiction": folded}
 
 
 class ExecutedScope(Strict):
@@ -180,7 +216,7 @@ class CoverageTopic(Strict):
 # --- search -----------------------------------------------------------------
 
 
-class SearchRequest(Strict):
+class SearchRequest(Placed):
     query: str = Field(min_length=1, description=(
         "Question or key terms to find published concepts, in one of the server's query languages (get_coverage "
         "query_languages; English and German unless the server names others). Send a question in one of them as "
@@ -259,7 +295,7 @@ class SearchResult(Strict):
 # --- resolve ----------------------------------------------------------------
 
 
-class ResolveRequest(Strict):
+class ResolveRequest(Placed):
     concept_ids: list[str] = Field(min_length=1, max_length=5, description="Concept IDs from get_coverage or search.")
     jurisdiction: Jurisdiction = Field(default_factory=Jurisdiction)
     as_of: date | None = Field(default=None, description="Applicability date; omit for today.")
@@ -495,9 +531,9 @@ TOOL_DESCRIPTIONS = {
         "calling get_coverage, unless a hit is clearly the question's subject."),
     "resolve": (
         "Return the published facts, evidence citations and, where published, the user facts still needed and a "
-        "decision rule for up to five concept_ids in ONE call. Give where the user lives as jurisdiction, at the "
-        "most specific level you know, in the words the user used: {\"canton\": \"Zurich\", \"city\": "
-        "\"Wallisellen\"}. Names in English or the local language and codes are both accepted; the server turns "
+        "decision rule for up to five concept_ids in ONE call. Give where the user lives inside the jurisdiction "
+        "argument, at the most specific level you know, in the words the user used: {\"concept_ids\": [...], "
+        "\"jurisdiction\": {\"canton\": \"Zurich\", \"city\": \"Wallisellen\"}}. Names in English or the local language and codes are both accepted; the server turns "
         "them into codes and echoes what it understood in executed_scope, where not_recognised names a part it "
         "could not place (the request then ran for the broader place). A federal concept "
         "answers for any canton, a cantonal concept for its municipalities, never upward or sideways. Give as_of "

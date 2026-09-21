@@ -837,6 +837,27 @@ class JurisdictionNameTests(unittest.TestCase):
         self.assertIsInstance(self.resolve({"canton": "BE", "city": "CH-ZH-261"}), ToolError)
         self.assertIsInstance(self.resolve({"canton": "Zurich", "kanton": "ZH"}), ToolError)
 
+    def test_a_flattened_place_is_folded_into_the_jurisdiction(self):
+        """A small model that sends the place next to the other arguments is served, not sent round again."""
+        wallisellen = self.scope({"city": "Wallisellen"})
+        flat = self.service.dispatch("resolve", {"concept_ids": ["zh-registration"], "city": "Wallisellen"})
+        self.assertEqual(flat.executed_scope.model_dump(exclude_none=True), wallisellen)
+        self.assertEqual(flat.results[0].status, Status.SUPPORTED)
+        # Every name the field accepts is folded, next to a jurisdiction that carries the other parts.
+        mixed = self.service.dispatch("resolve", {"concept_ids": ["zh-registration"], "municipality_id": "CH-ZH-69",
+                                                  "jurisdiction": {"canton": "Zurich"}})
+        self.assertEqual(mixed.executed_scope.model_dump(exclude_none=True), wallisellen)
+        found = self.service.dispatch("search", {"query": "registration", "canton": "Zurich"})
+        self.assertEqual(found.executed_scope.canton_code, "CH-ZH")
+        # The same part given twice is a caller error, and an unknown argument is still rejected.
+        twice = self.service.dispatch("resolve", {"concept_ids": ["zh-registration"], "city": "Bern",
+                                                  "jurisdiction": {"city": "Wallisellen"}})
+        self.assertIsInstance(twice, ToolError)
+        self.assertIn("The city is given twice", twice.error.issues[0].message)
+        self.assertIsInstance(self.service.dispatch("resolve", {"concept_ids": ["zh-registration"], "citty": "Bern"}),
+                              ToolError)
+
+
     def test_the_input_schema_names_the_default_country(self):
         description = self.service.tool_input_schema("resolve")["properties"]["jurisdiction"]["description"]
         self.assertIn("This server covers Switzerland (CH); omit country.", description)

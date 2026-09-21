@@ -64,7 +64,10 @@ gained, additively, the optional request field `jurisdiction` and the result
 fields `executed_scope` and `published_elsewhere` (section 4.4): a caller
 that sends no jurisdiction sees the result it saw before. Packages 0.2.5
 carry the field; 0.2.4 on PyPI does not know it and rejects a request that
-carries it.
+carries it. On 21 September 2026 `search` and `resolve` began
+folding a place part sent next to the other arguments into `jurisdiction`
+(section 2, Jurisdiction); the request schema is unchanged, so the version
+stays `swiss-tip/v4`.
 
 This document defines what a caller sends to and receives from the four MCP
 tools. The mock server serves exactly these shapes; the real server must too.
@@ -164,6 +167,15 @@ requires it. The rules:
 - **Without a register.** A release built before 18 September 2026
   carries none and reads codes only; the `jurisdiction` description the
   server sends with `tools/list` says so, and names the default country.
+- **A flattened place is folded.** A small model that sends a part next to
+  the other arguments (`{"concept_ids": [...], "city": "Wallisellen"}`)
+  instead of inside `jurisdiction` is served rather than sent round again:
+  every name the field accepts is folded into `jurisdiction`. The schema
+  keeps advertising the nested object, which is what a caller should send,
+  and `executed_scope` echoes what was understood. The same part given
+  twice, once next to `jurisdiction` and once inside it, is an
+  `INVALID_ARGUMENT` error. `search` and `resolve` fold; no other tool takes
+  a place.
 
 Short codes are normalized as before: `ZH` becomes `CH-ZH`, `261` with a
 canton becomes `CH-ZH-261`, a full municipality code supplies a missing
