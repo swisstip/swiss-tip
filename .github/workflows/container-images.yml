@@ -37,8 +37,26 @@
 # ghcr.io and must have been pushed before. Every image is pushed only after
 # all of them are built and tested.
 #
+# A version that is not on PyPI yet is rehearsed with package_index:
+# testpypi, which takes swisstip-mcp from TestPyPI with PyPI behind it for
+# the dependencies. The packs repository then builds on the rehearsed tag by
+# naming the same version.
+#
+# Two rules keep a rehearsal away from what a plain pull gets, both decided
+# by the branch the run was started from ("Use workflow from"):
+#
+#   - the default branch builds from PyPI only. package_index: testpypi ends
+#     the run there with an error, so nothing on it is ever built from a
+#     package that no tag published;
+#   - latest is pushed from the default branch only, and then only from PyPI
+#     and for a final version (digits and dots, so not 0.3.0rc1). Every other
+#     run pushes its version tags and leaves latest where it is. The
+#     OpenCode image's latest tag is still made locally, because
+#     compose.yaml names it in the test below; it is just not pushed.
+#
 # The basic image is pushed as ghcr.io/<owner>/swiss-tip-mcp with the tags
-# <version> and latest, the semantic image as swiss-tip-semantic:<version>.
+# <version> and, under the rule above, latest; the semantic image as
+# swiss-tip-semantic:<version>.
 # The sidecar is pushed as ghcr.io/<owner>/swiss-tip-ollama with the tags
 # <model> and <model>-<first 12 hex digits of the model digest>, the model
 # tag written with a hyphen (qwen3-embedding-0.6b). Every image carries this
@@ -54,9 +72,14 @@ on:
         options: [all, mcp, semantic, ollama, opencode]
         default: all
       swisstip_mcp_version:
-        description: swisstip-mcp version from PyPI (the basic and semantic image tag)
+        description: swisstip-mcp version (the basic and semantic image tag)
         type: string
         default: 0.3.0
+      package_index:
+        description: Index to take swisstip-mcp from; testpypi rehearses a version that is not released yet
+        type: choice
+        options: [pypi, testpypi]
+        default: pypi
       push:
         description: Push the tested images to ghcr.io
         type: boolean
@@ -76,6 +99,9 @@ jobs:
     env:
       IMAGES: ${{ inputs.images }}
       VERSION: ${{ inputs.swisstip_mcp_version }}
+      PACKAGE_INDEX: ${{ inputs.package_index }}
+      REF_NAME: ${{ github.ref_name }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       - uses: actions/checkout@v7
 
@@ -94,8 +120,27 @@ jobs:
             opencode) opencode=1 ;;
             *) echo "unknown selection $IMAGES"; exit 1 ;;
           esac
+          # A rehearsal takes swisstip-mcp from TestPyPI, with PyPI behind it for the dependencies.
+          case "$PACKAGE_INDEX" in
+            pypi)     index="" ;;
+            testpypi) index="https://test.pypi.org/simple/" ;;
+            *) echo "unknown package index $PACKAGE_INDEX"; exit 1 ;;
+          esac
+          # The default branch builds releases and nothing else, so a rehearsal belongs on another branch.
+          if [ -n "$index" ] && [ "$REF_NAME" = "$DEFAULT_BRANCH" ]; then
+            echo "::error::$DEFAULT_BRANCH builds from PyPI only; run package_index testpypi from another branch"
+            exit 1
+          fi
+          # latest is what a pull without a tag gets, so it names a release: the default branch, from PyPI, and a
+          # final version (digits and dots; 0.3.0rc1 and 0.3.0.dev0 are not).
+          latest=0
+          if [ "$REF_NAME" = "$DEFAULT_BRANCH" ] && [ -z "$index" ]; then
+            case "$VERSION" in *[!0-9.]*) ;; *) latest=1 ;; esac
+          fi
           registry="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
           {
+            echo "INDEX_URL=$index"
+            echo "PUSH_LATEST=$latest"
             echo "BUILD_MCP=$mcp"
             echo "BUILD_SEMANTIC=$semantic"
             echo "BUILD_SIDECAR=$sidecar"
@@ -108,11 +153,13 @@ jobs:
             echo "SYNTHETIC_PACK=$RUNNER_TEMP/synthetic"
           } >> "$GITHUB_ENV"
           echo "basic=$mcp semantic=$semantic sidecar=$sidecar opencode=$opencode version=$VERSION registry=$registry"
+          echo "index=$PACKAGE_INDEX ${index:-https://pypi.org/simple/}, branch $REF_NAME of $DEFAULT_BRANCH, latest pushed: $latest"
 
       # The check client, and the synthetic release the images are tested on: no test here reads a pack.
       - name: Install the check client and write the synthetic pack
         run: |
-          python -m pip install "swisstip-mcp==$VERSION"
+          python -m pip install ${INDEX_URL:+--index-url "$INDEX_URL" --extra-index-url https://pypi.org/simple/} \
+            "swisstip-mcp==$VERSION"
           python scripts/test/container/synthetic_pack.py --out "$SYNTHETIC_PACK"
 
       - uses: docker/login-action@v4
@@ -124,15 +171,19 @@ jobs:
       - name: Build and test the basic image
         if: env.BUILD_MCP == '1'
         run: |
+          tags="$MCP_IMAGE:$VERSION"
+          if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $MCP_IMAGE:latest"; fi
+          tag_args=""; for tag in $tags; do tag_args="$tag_args -t $tag"; done
           docker build -f docker/mcp/Dockerfile --build-arg SWISSTIP_MCP_VERSION="$VERSION" \
+            --build-arg PACKAGE_INDEX="$INDEX_URL" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
-            -t "$MCP_IMAGE:$VERSION" -t "$MCP_IMAGE:latest" .
+            $tag_args .
           docker run -d --name basic -p 8001:8000 -v "$SYNTHETIC_PACK:/srv/swiss-tip:ro" "$MCP_IMAGE:$VERSION"
           for attempt in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8001/health && break; sleep 1; done
           # The image serves with --require-ready, so an answer means the readiness record was accepted.
           python scripts/test/mcp/check_wheel.py --url http://127.0.0.1:8001/mcp || { docker logs basic | tail -40; exit 1; }
           docker rm -f basic
-          echo "$MCP_IMAGE:$VERSION $MCP_IMAGE:latest" >> "$RUNNER_TEMP/push.txt"
+          echo "$tags" >> "$RUNNER_TEMP/push.txt"
 
       - name: Build the semantic image
         if: env.BUILD_SEMANTIC == '1'
@@ -174,8 +225,12 @@ jobs:
             -t opencode:build .
           version=$(docker image inspect --format '{{ index .Config.Labels "swiss-tip.demo.opencode.version" }}' opencode:build)
           [ -n "$version" ] || { echo "the image carries no swiss-tip.demo.opencode.version label to take its tag from"; exit 1; }
-          tags="$OPENCODE_IMAGE:$version $OPENCODE_IMAGE:latest"
-          for tag in $tags; do docker tag opencode:build "$tag"; done
+          # compose.yaml names the latest tag, so it is always made here for the test below; it is pushed from
+          # the default branch only, like every other latest tag of this workflow.
+          docker tag opencode:build "$OPENCODE_IMAGE:$version"
+          docker tag opencode:build "$OPENCODE_IMAGE:latest"
+          tags="$OPENCODE_IMAGE:$version"
+          if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $OPENCODE_IMAGE:latest"; fi
           # Tested as compose.yaml runs it, the profile "demo" beside the server, with the server replaced by the
           # basic image of this run, or the one pushed before, on the synthetic release. The panel of this image is
           # generic and carries no sample questions.
@@ -210,7 +265,7 @@ jobs:
           {
             echo "### Container images"
             echo
-            echo "Selection \`$IMAGES\`, swisstip-mcp \`$VERSION\`, pushed: \`${{ inputs.push }}\`"
+            echo "Selection \`$IMAGES\`, swisstip-mcp \`$VERSION\` from \`$PACKAGE_INDEX\`, pushed: \`${{ inputs.push }}\`"
             echo
             if [ -f "$RUNNER_TEMP/push.txt" ]; then
               echo "Built and tested:"

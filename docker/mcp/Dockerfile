@@ -12,6 +12,16 @@
 # The build context is the repository root, for LICENSE and NOTICE; the
 # Dockerfile.dockerignore next to this file admits those two files only.
 #
+# PACKAGE_INDEX names another index than PyPI to take swisstip-mcp from, for
+# a rehearsal on a version that is not released yet:
+#
+#   docker build -f docker/mcp/Dockerfile --build-arg SWISSTIP_MCP_VERSION=0.3.0rc1 \
+#     --build-arg PACKAGE_INDEX=https://test.pypi.org/simple/ -t swiss-tip-mcp:0.3.0rc1 .
+#
+# PyPI stays the second index, because the dependencies are published there
+# and not on TestPyPI. An image built this way is a rehearsal, not a release:
+# the workflow gives it no latest tag.
+#
 # Search is lexical. For hybrid search, add --semantic-index
 # /srv/swiss-tip/semantic-index.json and provide Ollama with the index's
 # model on the container's loopback: the server accepts no other Ollama
@@ -22,6 +32,8 @@
 ARG PYTHON_IMAGE=python:3.14-slim
 FROM ${PYTHON_IMAGE}
 ARG SWISSTIP_MCP_VERSION=0.3.0
+# Empty is PyPI. Another index is used with PyPI behind it, for the dependencies.
+ARG PACKAGE_INDEX=""
 
 LABEL org.opencontainers.image.title="Swiss TIP MCP server" \
       org.opencontainers.image.description="Swiss TIP MCP server (swisstip-mcp ${SWISSTIP_MCP_VERSION}) without a knowledge release: mount release.json and readiness.json on /srv/swiss-tip. Streamable HTTP on port 8000 at /mcp, or stdio with --transport stdio; optional semantic search with a loopback Ollama." \
@@ -34,7 +46,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONIOENCODING=utf-8 \
     PORT=8000
 
-RUN pip install --no-cache-dir "swisstip-mcp==${SWISSTIP_MCP_VERSION}" \
+RUN pip install --no-cache-dir \
+      ${PACKAGE_INDEX:+--index-url "${PACKAGE_INDEX}" --extra-index-url https://pypi.org/simple/} \
+      "swisstip-mcp==${SWISSTIP_MCP_VERSION}" \
  && useradd --uid 10001 --create-home --home-dir /home/swisstip --shell /usr/sbin/nologin swisstip \
  && mkdir -p /srv/swiss-tip /usr/share/doc/swiss-tip
 

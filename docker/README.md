@@ -85,7 +85,7 @@ built for exactly that release; it runs no search, because it has no model.
 
 | Image | Build arguments |
 | --- | --- |
-| basic | `PYTHON_IMAGE`, `SWISSTIP_MCP_VERSION` |
+| basic | `PYTHON_IMAGE`, `SWISSTIP_MCP_VERSION`, `PACKAGE_INDEX` (another index than PyPI to take `swisstip-mcp` from, with PyPI behind it for the dependencies; empty is PyPI) |
 | semantic | `BASE_IMAGE`, `OLLAMA_IMAGE`, `EMBEDDING_MODEL`, `EMBEDDING_MODEL_DIGEST` |
 | slim | `BASE_IMAGE` (the basic image), `PACK` (for the labels), `RELEASE_ID`, `RELEASE_CONTENT_SHA256`, `REVISION` (the release ID and digest, when given, must match `release.json`) |
 | sidecar | `SEMANTIC_IMAGE`, `PYTHON_IMAGE`, and `EMBEDDING_MODEL`, `EMBEDDING_MODEL_DIGEST`, `OLLAMA_VERSION`, which name what the semantic image holds and are checked against it, not applied |
@@ -107,19 +107,20 @@ images", "Run workflow").
 | --- | --- |
 | `images`, here | `all` (basic, semantic, sidecar, OpenCode), `mcp`, `semantic`, `ollama` (the sidecar), `opencode` |
 | `images`, in the packs repository | `all` (every pack, then the demo), `packs`, a pack's name, `demo` |
-| `swisstip_mcp_version` | the `swisstip-mcp` version from PyPI, which is the tag of the basic and semantic images: built here, pulled there; default `0.3.0` |
+| `swisstip_mcp_version` | the `swisstip-mcp` version, which is the tag of the basic and semantic images: built here, pulled there; default `0.3.0` |
+| `package_index` | `pypi`, or `testpypi` to rehearse a version that is not released yet; in the packs repository it names where the check client comes from |
 | `code_ref`, in the packs repository | the branch, tag or commit of this repository whose slim Dockerfile and `compose.yaml` are used; default `main` |
 | `push` | push the tested images; off builds and tests only |
 
 | Image | Tags in `ghcr.io/<owner>/` |
 | --- | --- |
-| basic | `swiss-tip-mcp:<version>`, `swiss-tip-mcp:latest` |
+| basic | `swiss-tip-mcp:<version>`, and `swiss-tip-mcp:latest` from the default branch, from PyPI, for a final version |
 | semantic | `swiss-tip-semantic:<version>` |
 | pack (the release image) | `swiss-tip:<release_id>`, `swiss-tip:content-<first 12 hex digits of the content digest>`, `swiss-tip:<pack>` (the pack's moving tag; no `latest`, so a pull names a release or a pack) |
 | slim (the release image without Ollama) | `swiss-tip:<release_id>-slim`, `swiss-tip:<pack>-slim` (the moving tag `compose.yaml` names), in the package of the pack image |
 | sidecar | `swiss-tip-ollama:qwen3-embedding-0.6b` (the model tag with a hyphen, the tag `compose.yaml` names), `swiss-tip-ollama:qwen3-embedding-0.6b-<first 12 hex digits of the model digest>` |
-| demo (the test image) | `swiss-tip-demo:<release_id>`, `swiss-tip-demo:<pack>`, `swiss-tip-demo:latest` (unlike the release image: the demo is built on one pack, so `latest` names it) |
-| OpenCode (the test image without a server) | `swiss-tip-opencode:<OpenCode version>`, `swiss-tip-opencode:latest`, the tag `compose.yaml` names; it holds no release, so a new release does not change it |
+| demo (the test image) | `swiss-tip-demo:<release_id>`, `swiss-tip-demo:<pack>`, and `swiss-tip-demo:latest` from the default branch (unlike the release image: the demo is built on one pack, so `latest` names it) |
+| OpenCode (the test image without a server) | `swiss-tip-opencode:<OpenCode version>`, and `swiss-tip-opencode:latest` from the default branch, the tag `compose.yaml` names; it holds no release, so a new release does not change it |
 
 Within a run, an image built earlier is the base of the next one; an image
 not selected is pulled from `ghcr.io`. So the first run is `all` with `push`
@@ -130,6 +131,29 @@ repository's workflow pulls with its own token, so it must be able to read
 `swiss-tip-mcp`, `swiss-tip-semantic` and `swiss-tip-ollama`: the packages
 are public, or each names the packs repository under "Manage Actions access"
 in its package settings.
+
+A version that is not on PyPI yet is rehearsed with `package_index:
+testpypi`. The basic image then takes `swisstip-mcp` from TestPyPI, with
+PyPI as the second index for the dependencies, which are not published on
+TestPyPI; every other image is built on it and installs nothing.
+
+The branch a run was started from ("Use workflow from") decides two things,
+in both repositories:
+
+- **The default branch builds from PyPI only.** `package_index: testpypi`
+  ends a run started from it with an error, so nothing built on the default
+  branch ever comes from a package that no tag published. A rehearsal is
+  started from another branch.
+- **`latest` is pushed from the default branch only**, and here only from
+  PyPI and for a final version (digits and dots, so not `0.3.0rc1`). It is
+  what a pull without a tag gets, so it names a release. Every other run
+  pushes its version tags and leaves `latest` where it is; the OpenCode
+  image's `latest` tag is still made inside the run, because `compose.yaml`
+  names it in the test, and only the push is left out.
+
+The version tags are pushed as usual, so the packs repository rehearses on
+them by naming the same version, with `package_index: testpypi` there too,
+which only tells its check client where to find that version.
 
 No test here reads a pack. The release served is the synthetic test release
 of `apps/mcp-server/tests/fixtures` with a test readiness record, written by
@@ -514,6 +538,17 @@ These numbers come from one machine and do not predict a hosted instance.
   pull of `swiss-tip-opencode` from `ghcr.io`, where it exists only after a
   workflow run, and the web interface of this image in a browser.
 
+- The `package_index` path on 21 September 2026, locally: the basic image
+  built with `SWISSTIP_MCP_VERSION=0.3.0rc1` and
+  `PACKAGE_INDEX=https://test.pypi.org/simple/` carried `swisstip-mcp` and
+  `swisstip-core` 0.3.0rc1, reported the synthetic release as ready and
+  passed `check_wheel.py --url` with 0 failures; a build without the
+  argument still took 0.2.5 from PyPI. The workflow's tag logic was
+  exercised on its own over every combination of branch, index and version:
+  `latest` is pushed for the default branch with PyPI and a final version
+  and in no other case, and a run started from the default branch with
+  `testpypi` ends with an error. Not tested: the workflow's TestPyPI path on
+  GitHub, and a pack image built on a rehearsed base.
 - The tests of this repository's workflow on 21 September 2026, as a local
   run of the same commands on local builds with `swisstip-mcp` 0.2.5: the
   basic image with the synthetic pack mounted reported the release `ready`
