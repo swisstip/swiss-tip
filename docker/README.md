@@ -25,7 +25,7 @@ directory that holds a pack's files.
 
 | Image | Dockerfile | Build context | Contains |
 | --- | --- | --- | --- |
-| `swiss-tip-mcp-slim:0.3.0` | [mcp-slim/Dockerfile](mcp-slim/Dockerfile) | the repository root | `swisstip-mcp` 0.3.0 only; the release is mounted on `/srv/swiss-tip` |
+| `swiss-tip-mcp:0.3.0-slim` | [mcp-slim/Dockerfile](mcp-slim/Dockerfile) | the repository root | `swisstip-mcp` 0.3.0 only; the release is mounted on `/srv/swiss-tip` |
 | `swiss-tip-mcp:0.3.0` | [mcp/Dockerfile](mcp/Dockerfile) | `docker/mcp` | the slim MCP image, plus CPU-only Ollama 0.34.0 on `127.0.0.1:11434` and `qwen3-embedding:0.6b`; no release |
 | `swiss-tip:<pack>` | the pack's Dockerfile in the packs repository | `releases/<pack>` | the MCP image, plus `release.json`, `readiness.json`, `semantic-index.json` and the pack's image `README.md`: the release image, labelled with the release ID and content digest |
 | `swiss-tip:<pack>-slim` | [slim/Dockerfile](slim/Dockerfile), one for every pack | `releases/<pack>` | the slim release image: the slim MCP image, plus the pack's `release.json`, `readiness.json`, `semantic-index.json` and its image `README.md` where it has one, with the same labels; no Ollama and no model, so lexical search on its own and hybrid search beside the sidecar |
@@ -55,7 +55,7 @@ point, so every image built on it carries them.
 The order matters: each image builds on the previous one.
 
 ```shell
-docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp-slim:0.3.0 .
+docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.3.0-slim .
 docker build -t swiss-tip-mcp:0.3.0 docker/mcp
 docker build -f docker/opencode/Dockerfile -t local/swiss-tip-opencode:latest .
 docker build -t local/swiss-tip-ollama:qwen3-embedding-0.6b docker/ollama
@@ -114,8 +114,8 @@ images", "Run workflow").
 
 | Image | Tags in `ghcr.io/<owner>/` |
 | --- | --- |
-| slim MCP | `swiss-tip-mcp-slim:<version>`, and `swiss-tip-mcp-slim:latest` from the default branch, from PyPI, for a final version |
-| MCP | `swiss-tip-mcp:<version>` |
+| slim MCP | `swiss-tip-mcp:<version>-slim`, and `swiss-tip-mcp:latest-slim` from the default branch, from PyPI, for a final version |
+| MCP | `swiss-tip-mcp:<version>`, and `swiss-tip-mcp:latest` under the same rule. Both variants are one package, and the `-slim` suffix sits in the tag, as it does for the release images |
 | pack (the release image) | `swiss-tip:<release_id>`, `swiss-tip:content-<first 12 hex digits of the content digest>`, `swiss-tip:<pack>` (the pack's moving tag; no `latest`, so a pull names a release or a pack) |
 | slim (the release image without Ollama) | `swiss-tip:<release_id>-slim`, `swiss-tip:<pack>-slim` (the moving tag `compose.yaml` names), in the package of the pack image |
 | sidecar | `swiss-tip-ollama:qwen3-embedding-0.6b` (the model tag with a hyphen, the tag `compose.yaml` names), `swiss-tip-ollama:qwen3-embedding-0.6b-<first 12 hex digits of the model digest>` |
@@ -128,7 +128,7 @@ on here, then `all` in the packs repository, and a later run there naming
 one pack rebuilds only that pack on the pushed MCP image. A new
 `swisstip-mcp` version is a run here and then a run there. The packs
 repository's workflow pulls with its own token, so it must be able to read
-`swiss-tip-mcp-slim`, `swiss-tip-mcp` and `swiss-tip-ollama`: the packages
+`swiss-tip-mcp` and `swiss-tip-ollama`: the packages
 are public, or each names the packs repository under "Manage Actions access"
 in its package settings.
 
@@ -224,8 +224,8 @@ after the image name are added to the server's command line.
 Lexical search:
 
 ```shell
-docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp-slim:0.3.0
-docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp-slim:0.3.0 --transport stdio
+docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0-slim
+docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0-slim --transport stdio
 ```
 
 Hybrid search with the embedding sidecar: it joins the server's network
@@ -234,7 +234,7 @@ the packs' indexes were built with.
 
 ```shell
 docker run -d --name swiss-tip -p 8000:8000 \
-  -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp-slim:0.3.0 \
+  -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0-slim \
   --semantic-index /srv/swiss-tip/semantic-index.json
 docker run -d --name swiss-tip-embeddings --network container:swiss-tip swiss-tip-ollama:qwen3-embedding-0.6b
 ```
@@ -479,8 +479,9 @@ These numbers come from one machine and do not predict a hosted instance.
   the embedding model ranks every concept of the pack near that name).
 - The two-container setup on 17 September 2026, on local builds: the slim
   images of `mvp-zurich-2026-09-16-v3` and `mvp-wallisellen-2026-09-16-v3`
-  on `ghcr.io/bobrovsky420/swiss-tip-mcp-slim:0.2.1`, and the sidecar out of
-  `ghcr.io/bobrovsky420/swiss-tip-mcp:0.2.1`. With
+  on `ghcr.io/bobrovsky420/swiss-tip-mcp:0.2.1`, and the sidecar out of
+  `ghcr.io/bobrovsky420/swiss-tip-semantic:0.2.1` (the names those images
+  had that day, before the renaming of 21 September 2026). With
   `docker compose up -d --wait` on `compose.yaml`:
   `check_server.py --url --require-hybrid` with 0 failures and all 19
   searches hybrid, and with `SWISSTIP_PACK=mvp-wallisellen`

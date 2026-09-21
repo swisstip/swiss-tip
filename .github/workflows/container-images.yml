@@ -60,9 +60,10 @@
 # compose.yaml, which names it, can always pull it. Only a tested image is
 # pushed, here as everywhere.
 #
-# The slim MCP image is pushed as ghcr.io/<owner>/swiss-tip-mcp-slim with the tags
-# <version> and, under the rule above, latest; the MCP image as
-# swiss-tip-mcp:<version>.
+# Both MCP images are one package, ghcr.io/<owner>/swiss-tip-mcp, as the pack
+# and slim release images are one package in the packs repository: the image
+# with Ollama and the model carries <version> and, under the rule above,
+# latest, and the one without carries the same tags with -slim after them.
 # The sidecar is pushed as ghcr.io/<owner>/swiss-tip-ollama with the tags
 # <model> and <model>-<first 12 hex digits of the model digest>, the model
 # tag written with a hyphen (qwen3-embedding-0.6b). Every image carries this
@@ -152,7 +153,6 @@ jobs:
             echo "BUILD_SIDECAR=$sidecar"
             echo "BUILD_OPENCODE=$opencode"
             echo "REGISTRY=$registry"
-            echo "MCP_SLIM_IMAGE=$registry/swiss-tip-mcp-slim"
             echo "MCP_IMAGE=$registry/swiss-tip-mcp"
             echo "SIDECAR_IMAGE=$registry/swiss-tip-ollama"
             echo "OPENCODE_IMAGE=$registry/swiss-tip-opencode"
@@ -177,27 +177,30 @@ jobs:
       - name: Build and test the slim MCP image
         if: env.BUILD_MCP_SLIM == '1'
         run: |
-          tags="$MCP_SLIM_IMAGE:$VERSION"
-          if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $MCP_SLIM_IMAGE:latest"; fi
+          tags="$MCP_IMAGE:$VERSION-slim"
+          if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $MCP_IMAGE:latest-slim"; fi
           tag_args=""; for tag in $tags; do tag_args="$tag_args -t $tag"; done
           docker build -f docker/mcp-slim/Dockerfile --build-arg SWISSTIP_MCP_VERSION="$VERSION" \
             --build-arg PACKAGE_INDEX="$INDEX_URL" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
             $tag_args .
-          docker run -d --name basic -p 8001:8000 -v "$SYNTHETIC_PACK:/srv/swiss-tip:ro" "$MCP_SLIM_IMAGE:$VERSION"
+          docker run -d --name slim -p 8001:8000 -v "$SYNTHETIC_PACK:/srv/swiss-tip:ro" "$MCP_IMAGE:$VERSION-slim"
           for attempt in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8001/health && break; sleep 1; done
           # The image serves with --require-ready, so an answer means the readiness record was accepted.
-          python scripts/test/mcp/check_wheel.py --url http://127.0.0.1:8001/mcp || { docker logs basic | tail -40; exit 1; }
-          docker rm -f basic
+          python scripts/test/mcp/check_wheel.py --url http://127.0.0.1:8001/mcp || { docker logs slim | tail -40; exit 1; }
+          docker rm -f slim
           echo "$tags" >> "$RUNNER_TEMP/push.txt"
 
       - name: Build the MCP image
         if: env.BUILD_MCP == '1'
         run: |
-          docker build --build-arg BASE_IMAGE="$MCP_SLIM_IMAGE:$VERSION" \
+          tags="$MCP_IMAGE:$VERSION"
+          if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $MCP_IMAGE:latest"; fi
+          tag_args=""; for tag in $tags; do tag_args="$tag_args -t $tag"; done
+          docker build --build-arg BASE_IMAGE="$MCP_IMAGE:$VERSION-slim" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
-            -t "$MCP_IMAGE:$VERSION" docker/mcp
-          echo "$MCP_IMAGE:$VERSION" >> "$RUNNER_TEMP/push.txt"
+            $tag_args docker/mcp
+          echo "$tags" >> "$RUNNER_TEMP/push.txt"
 
       - name: Build and test the embedding sidecar
         if: env.BUILD_SIDECAR == '1'
@@ -241,7 +244,7 @@ jobs:
           # generic and carries no sample questions.
           compose() { docker compose -f compose.yaml -f scripts/test/container/compose.synthetic.yaml "$@"; }
           export SWISSTIP_REGISTRY="$REGISTRY" SWISSTIP_PACK=synthetic SWISSTIP_PORT=8190 SWISSTIP_DEMO_PORT=4210
-          export SWISSTIP_TEST_SERVER_IMAGE="$MCP_SLIM_IMAGE:$VERSION" SWISSTIP_TEST_PACK_DIR="$SYNTHETIC_PACK"
+          export SWISSTIP_TEST_SERVER_IMAGE="$MCP_IMAGE:$VERSION-slim" SWISSTIP_TEST_PACK_DIR="$SYNTHETIC_PACK"
           compose up -d --wait swiss-tip || { compose logs | tail -60; exit 1; }
           server=$(docker inspect --format '{{.State.StartedAt}}' "$(compose ps -q swiss-tip)")
           compose --profile demo up -d --wait swiss-tip demo || { compose --profile demo logs | tail -60; exit 1; }

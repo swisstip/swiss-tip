@@ -5,9 +5,9 @@
 # (release.json and readiness.json, optionally semantic-index.json) on
 # /srv/swiss-tip; the slim release images (docker/slim) carry one instead.
 #
-#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp-slim:0.3.0 .
-#   docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp-slim:0.3.0
-#   docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp-slim:0.3.0 --transport stdio
+#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.3.0-slim .
+#   docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0-slim
+#   docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0-slim --transport stdio
 #
 # The build context is the repository root, for LICENSE and NOTICE; the
 # Dockerfile.dockerignore next to this file admits those two files only.
@@ -16,7 +16,7 @@
 # a rehearsal on a version that is not released yet:
 #
 #   docker build -f docker/mcp-slim/Dockerfile --build-arg SWISSTIP_MCP_VERSION=0.3.0rc1 \
-#     --build-arg PACKAGE_INDEX=https://test.pypi.org/simple/ -t swiss-tip-mcp-slim:0.3.0rc1 .
+#     --build-arg PACKAGE_INDEX=https://test.pypi.org/simple/ -t swiss-tip-mcp:0.3.0rc1-slim .
 #
 # PyPI stays the second index, because the dependencies are published there
 # and not on TestPyPI. An image built this way is a rehearsal, not a release:

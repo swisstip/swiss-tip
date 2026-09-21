@@ -52,7 +52,7 @@ With Docker, the slim MCP image with the pack mounted, or a pack's own image
 from the packs repository:
 
 ```shell
-docker run --rm -p 8000:8000 -v "<packs>/releases/<pack>:/srv/swiss-tip:ro" ghcr.io/swisstip/swiss-tip-mcp-slim:latest
+docker run --rm -p 8000:8000 -v "<packs>/releases/<pack>:/srv/swiss-tip:ro" ghcr.io/swisstip/swiss-tip-mcp:latest-slim
 ```
 
 From this checkout, after the installation below:

@@ -6,7 +6,7 @@
 # no knowledge release; the pack images of the packs repository
 # (swiss-tip-mvp) add one with its semantic index.
 #
-#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp-slim:0.3.0 .
+#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.3.0-slim .
 #   docker build -t swiss-tip-mcp:0.3.0 docker/mcp
 #
 # The server only talks to a loopback Ollama, so both run in this container:
@@ -20,7 +20,7 @@
 #   docker run --rm -v "$PWD/releases/<pack>:/kb" swiss-tip-mcp:0.3.0 \
 #     python -m swisstip.runtime.search_cli index --release /kb/release.json --output /kb/semantic-index.json --timeout 600
 
-ARG BASE_IMAGE=swiss-tip-mcp-slim:0.3.0
+ARG BASE_IMAGE=swiss-tip-mcp:0.3.0-slim
 ARG OLLAMA_IMAGE=ollama/ollama:0.34.0
 
 # Ollama's CPU runtime only: its binary, the ggml and llama libraries with a
