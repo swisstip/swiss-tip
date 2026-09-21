@@ -5,9 +5,9 @@
 # (release.json and readiness.json, optionally semantic-index.json) on
 # /srv/swiss-tip; the slim release images (docker/slim) carry one instead.
 #
-#   docker build -f docker/mcp/Dockerfile -t swiss-tip-mcp:0.2.5 .
-#   docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.2.5
-#   docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.2.5 --transport stdio
+#   docker build -f docker/mcp/Dockerfile -t swiss-tip-mcp:0.3.0 .
+#   docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0
+#   docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0 --transport stdio
 #
 # The build context is the repository root, for LICENSE and NOTICE; the
 # Dockerfile.dockerignore next to this file admits those two files only.
@@ -21,7 +21,7 @@
 
 ARG PYTHON_IMAGE=python:3.14-slim
 FROM ${PYTHON_IMAGE}
-ARG SWISSTIP_MCP_VERSION=0.2.5
+ARG SWISSTIP_MCP_VERSION=0.3.0
 
 LABEL org.opencontainers.image.title="Swiss TIP MCP server" \
       org.opencontainers.image.description="Swiss TIP MCP server (swisstip-mcp ${SWISSTIP_MCP_VERSION}) without a knowledge release: mount release.json and readiness.json on /srv/swiss-tip. Streamable HTTP on port 8000 at /mcp, or stdio with --transport stdio; optional semantic search with a loopback Ollama." \

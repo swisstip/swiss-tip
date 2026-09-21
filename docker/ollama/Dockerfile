@@ -20,10 +20,10 @@
 # nothing is pulled from the Ollama registry here. The build starts Ollama
 # once and fails unless the copied model has the expected manifest digest.
 #
-#   docker build -t swiss-tip-semantic:0.2.5 docker/semantic
+#   docker build -t swiss-tip-semantic:0.3.0 docker/semantic
 #   docker build -t swiss-tip-ollama:qwen3-embedding-0.6b docker/ollama
 
-ARG SEMANTIC_IMAGE=swiss-tip-semantic:0.2.5
+ARG SEMANTIC_IMAGE=swiss-tip-semantic:0.3.0
 ARG PYTHON_IMAGE=python:3.14-slim
 
 FROM ${SEMANTIC_IMAGE} AS semantic

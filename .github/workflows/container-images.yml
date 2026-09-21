@@ -56,7 +56,7 @@ on:
       swisstip_mcp_version:
         description: swisstip-mcp version from PyPI (the basic and semantic image tag)
         type: string
-        default: 0.2.5
+        default: 0.3.0
       push:
         description: Push the tested images to ghcr.io
         type: boolean

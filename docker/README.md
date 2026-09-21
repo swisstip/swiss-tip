@@ -2,7 +2,7 @@
 
 **Last update:** 21 September 2026
 
-The images of the Swiss TIP MCP server with `swisstip-mcp` 0.2.5 from PyPI.
+The images of the Swiss TIP MCP server with `swisstip-mcp` 0.3.0 from PyPI.
 The basic image carries no knowledge release and no model; the semantic
 image adds a bundled Ollama with `qwen3-embedding:0.6b`. Two images serve a
 release in two containers: a slim release image, the basic image plus one
@@ -25,8 +25,8 @@ directory that holds a pack's files.
 
 | Image | Dockerfile | Build context | Contains |
 | --- | --- | --- | --- |
-| `swiss-tip-mcp:0.2.5` | [mcp/Dockerfile](mcp/Dockerfile) | the repository root | `swisstip-mcp` 0.2.5 only; the release is mounted on `/srv/swiss-tip` |
-| `swiss-tip-semantic:0.2.5` | [semantic/Dockerfile](semantic/Dockerfile) | `docker/semantic` | the basic image, plus CPU-only Ollama 0.34.0 on `127.0.0.1:11434` and `qwen3-embedding:0.6b`; no release |
+| `swiss-tip-mcp:0.3.0` | [mcp/Dockerfile](mcp/Dockerfile) | the repository root | `swisstip-mcp` 0.3.0 only; the release is mounted on `/srv/swiss-tip` |
+| `swiss-tip-semantic:0.3.0` | [semantic/Dockerfile](semantic/Dockerfile) | `docker/semantic` | the basic image, plus CPU-only Ollama 0.34.0 on `127.0.0.1:11434` and `qwen3-embedding:0.6b`; no release |
 | `swiss-tip:<pack>` | the pack's Dockerfile in the packs repository | `releases/<pack>` | the semantic image, plus `release.json`, `readiness.json`, `semantic-index.json` and the pack's image `README.md`: the release image, labelled with the release ID and content digest |
 | `swiss-tip:<pack>-slim` | [slim/Dockerfile](slim/Dockerfile), one for every pack | `releases/<pack>` | the slim release image: the basic image, plus the pack's `release.json`, `readiness.json`, `semantic-index.json` and its image `README.md` where it has one, with the same labels; no Ollama and no model, so lexical search on its own and hybrid search beside the sidecar |
 | `swiss-tip-ollama:qwen3-embedding-0.6b` | [ollama/Dockerfile](ollama/Dockerfile) | `docker/ollama` | the embedding sidecar: `python:3.14-slim`, plus the CPU-only Ollama 0.34.0 and the `qwen3-embedding:0.6b` model copied out of the semantic image, on `127.0.0.1:11434`; no server and no release |
@@ -55,8 +55,8 @@ point, so every image built on it carries them.
 The order matters: each image builds on the previous one.
 
 ```shell
-docker build -f docker/mcp/Dockerfile -t swiss-tip-mcp:0.2.5 .
-docker build -t swiss-tip-semantic:0.2.5 docker/semantic
+docker build -f docker/mcp/Dockerfile -t swiss-tip-mcp:0.3.0 .
+docker build -t swiss-tip-semantic:0.3.0 docker/semantic
 docker build -f docker/opencode/Dockerfile -t local/swiss-tip-opencode:latest .
 docker build -t local/swiss-tip-ollama:qwen3-embedding-0.6b docker/ollama
 docker build -f docker/slim/Dockerfile --build-arg PACK=<pack> -t local/swiss-tip:<pack>-slim <packs>/releases/<pack>
@@ -107,7 +107,7 @@ images", "Run workflow").
 | --- | --- |
 | `images`, here | `all` (basic, semantic, sidecar, OpenCode), `mcp`, `semantic`, `ollama` (the sidecar), `opencode` |
 | `images`, in the packs repository | `all` (every pack, then the demo), `packs`, a pack's name, `demo` |
-| `swisstip_mcp_version` | the `swisstip-mcp` version from PyPI, which is the tag of the basic and semantic images: built here, pulled there; default `0.2.5` |
+| `swisstip_mcp_version` | the `swisstip-mcp` version from PyPI, which is the tag of the basic and semantic images: built here, pulled there; default `0.3.0` |
 | `code_ref`, in the packs repository | the branch, tag or commit of this repository whose slim Dockerfile and `compose.yaml` are used; default `main` |
 | `push` | push the tested images; off builds and tests only |
 
@@ -194,8 +194,8 @@ after the image name are added to the server's command line.
 Lexical search:
 
 ```shell
-docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.2.5
-docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.2.5 --transport stdio
+docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0
+docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0 --transport stdio
 ```
 
 Hybrid search with the embedding sidecar: it joins the server's network
@@ -204,7 +204,7 @@ the packs' indexes were built with.
 
 ```shell
 docker run -d --name swiss-tip -p 8000:8000 \
-  -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.2.5 \
+  -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.0 \
   --semantic-index /srv/swiss-tip/semantic-index.json
 docker run -d --name swiss-tip-embeddings --network container:swiss-tip swiss-tip-ollama:qwen3-embedding-0.6b
 ```
@@ -533,7 +533,7 @@ digest changes. Build it with the semantic image, so that it matches the
 model it is served with:
 
 ```shell
-docker run --rm -v "$PWD/releases/<pack>:/kb" swiss-tip-semantic:0.2.5 \
+docker run --rm -v "$PWD/releases/<pack>:/kb" swiss-tip-semantic:0.3.0 \
   python -m swisstip.runtime.search_cli index \
   --release /kb/release.json --output /kb/semantic-index.json --timeout 600
 ```
