@@ -1,10 +1,12 @@
-"""Round trip over stdio against any release, with no knowledge of its content: what the package build runs on the
-installed wheel with a synthetic release, so that the build depends on no knowledge base.
+"""Round trip against any release, with no knowledge of its content: what the package build runs on the installed
+wheel, and the image build on the basic image, with a synthetic release, so that neither depends on a knowledge base.
 
     ./.venv/Scripts/python.exe scripts/test/mcp/check_wheel.py
     ./.venv/Scripts/python.exe scripts/test/mcp/check_wheel.py --release releases/<pack>/release.json
+    ./.venv/Scripts/python.exe scripts/test/mcp/check_wheel.py --url http://127.0.0.1:8000/mcp
 
-The server is started with the interpreter that runs this script, so it tests the packages installed there. It takes
+Without --url the server is started over stdio with the interpreter that runs this script, so it tests the packages
+installed there; with --url the round trip runs against a running Streamable HTTP endpoint, a container. It takes
 the first concept of the first topic from get_coverage, finds it again with search by its label, resolves it for its
 own jurisdiction with the first allowed value of every required context field, reads the evidence of a served fact
 and provokes a typed error. The checks of the published packs live with the packs, in swiss-tip-mvp.
@@ -14,10 +16,12 @@ import argparse
 import asyncio
 import json
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = ROOT / "apps" / "mcp-server" / "tests" / "fixtures" / "release.json"
@@ -30,11 +34,21 @@ def check(label: str, ok: bool) -> None:
         failures.append(label)
 
 
-async def run(release: Path) -> None:
+@asynccontextmanager
+async def connect(release: Path, url: str | None):
+    if url:
+        async with streamable_http_client(url) as (read, write, _):
+            yield read, write
+        return
     params = StdioServerParameters(command=sys.executable,
                                    args=["-m", "swisstip.mcp_server.server", "--release", str(release)],
                                    env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"})
     async with stdio_client(params) as (read, write):
+        yield read, write
+
+
+async def run(release: Path, url: str | None) -> None:
+    async with connect(release, url) as (read, write):
         async with ClientSession(read, write) as session:
             init = await session.initialize()
             tools = [tool.name for tool in (await session.list_tools()).tools]
@@ -72,8 +86,9 @@ async def run(release: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--release", type=Path, default=FIXTURE, help="release.json to serve; default: the synthetic test release")
+    parser.add_argument("--url", help="Streamable HTTP endpoint of a running server, instead of starting one over stdio")
     args = parser.parse_args()
-    asyncio.run(run(args.release))
+    asyncio.run(run(args.release, args.url))
     print(f"\n{len(failures)} failure(s)")
     return 1 if failures else 0
 

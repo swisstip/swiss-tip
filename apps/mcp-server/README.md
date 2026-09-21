@@ -1,6 +1,6 @@
 # swisstip-mcp-server
 
-**Last update:** 20 September 2026
+**Last update:** 21 September 2026
 
 The Swiss TIP MCP server: the four tools of
 [docs/architecture/tool-contracts.md](../../docs/architecture/tool-contracts.md)
@@ -139,15 +139,17 @@ The entry point starts `streamable-http` on `0.0.0.0` and `$PORT` (8000 in
 the image); arguments after the image name are appended, so the last two
 lines serve stdio to a local client and print the health report. The image
 declares a `HEALTHCHECK` on `/health`. The release image published on GitHub
-is built by the manual workflow
-[container-images.yml](../../.github/workflows/container-images.yml) from the
-semantic base image of [docker/](../../docker/README.md): it runs the
-round-trip check against the running container and pushes the tested tags to
-`ghcr.io/<owner>/swiss-tip` (`<release_id>`, `content-<digest>`, `<pack>`,
-`latest`). The same workflow builds a slim release image without Ollama
-(`<release_id>-slim`, `<pack>-slim`) and the embedding sidecar
-`ghcr.io/<owner>/swiss-tip-ollama`, which supplies the model from a second
-container; [compose.yaml](../../compose.yaml) starts the two together. The lexical image of the root Dockerfile is built locally with
+is built by the manual workflow "Container images" of the packs repository
+from the semantic base image of [docker/](../../docker/README.md): it runs
+the round-trip check against the running container and pushes the tested
+tags to `ghcr.io/<owner>/swiss-tip` (`<release_id>`, `content-<digest>`,
+`<pack>`). The same workflow builds a slim release image without Ollama
+(`<release_id>-slim`, `<pack>-slim`). The images without a release, among
+them the embedding sidecar `ghcr.io/<owner>/swiss-tip-ollama`, which
+supplies the model from a second container, are built by this repository's
+[container-images.yml](../../.github/workflows/container-images.yml);
+[compose.yaml](../../compose.yaml) starts the slim image and the sidecar
+together. The lexical image of the root Dockerfile is built locally with
 `build_image.py`; its `--push`, from a clean checkout after
 `docker login ghcr.io`, must name another image with `--image`, because the
 default name is the release image's. A new

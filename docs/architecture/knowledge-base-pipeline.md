@@ -1,6 +1,6 @@
 # Knowledge base pipeline
 
-**Last update:** 20 September 2026
+**Last update:** 21 September 2026
 
 How a knowledge base (a pack under `releases/<pack>/`) goes from an idea to
 a published release, and how an existing pack is extended. Each step names
@@ -250,10 +250,12 @@ reports (`release.json`, `build-report.json`, `acceptance-report.json`,
 
 ## 13. Publish
 
-- Run the workflow `container-images.yml` on GitHub (manual, selection
-  `mvp-zurich`, `mvp-wallisellen`, `packs` or `all`, with push). It builds
-  and tests the pack image and the slim image and pushes them to
-  `ghcr.io/<owner>/swiss-tip` under the release ID and pack tags.
+- Run the workflow `container-images.yml` of the packs repository on GitHub
+  (manual, selection `mvp-zurich`, `mvp-wallisellen`, `packs` or `all`, with
+  push). It builds and tests the pack image and the slim image, on the
+  basic and semantic images this repository's workflow of the same name
+  pushed before, and pushes them to `ghcr.io/<owner>/swiss-tip` under the
+  release ID and pack tags.
   [scripts/container/build_image.py](../../scripts/container/build_image.py)
   builds the same image locally
   ([docker README](../../docker/README.md)).
@@ -272,14 +274,16 @@ reports (`release.json`, `build-report.json`, `acceptance-report.json`,
   README at the new release.
 - PyPI (`pypi-packages.yml`, triggered by a `v*` tag) is only needed when
   the code of the packages changed; a new release alone needs no new
-  package version.
+  package version. A new package version also needs this repository's
+  `container-images.yml` (selection `all`, with that version) before the
+  packs are rebuilt on it.
 
 ## A new pack, beyond an extension
 
 Steps 1 to 13 apply unchanged. In addition:
 
 - a `docker/<pack>/Dockerfile` for the all-in-one pack image, and the pack
-  in the selection of `container-images.yml` (the slim image takes any pack
+  in the selection of the packs repository's `container-images.yml` (the slim image takes any pack
   through `--build-arg PACK=<pack>`);
 - the server serves the pack named by
   `--release releases/<pack>/release.json` (it has no default pack);

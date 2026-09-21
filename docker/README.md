@@ -1,6 +1,6 @@
 # Container images
 
-**Last update:** 20 September 2026
+**Last update:** 21 September 2026
 
 The images of the Swiss TIP MCP server with `swisstip-mcp` 0.2.5 from PyPI.
 The basic image carries no knowledge release and no model; the semantic
@@ -18,8 +18,8 @@ browser interface for a server that runs elsewhere - the profile `demo` of
 This repository holds no pack. The packs, their pack images (the semantic
 image plus a release and its index), the demo image (a pack image plus the
 agent and interface of the OpenCode image), the workflow that builds, tests
-and pushes every image, and the AWS deployment of the two-container setup
-live in the packs repository, [swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp). A command below that names
+and pushes the images that hold a release, and the AWS deployment of the
+two-container setup live in the packs repository, [swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp). A command below that names
 `releases/<pack>` runs in a checkout of that repository, or in any
 directory that holds a pack's files.
 
@@ -93,15 +93,22 @@ built for exactly that release; it runs no search, because it has no model.
 
 ## Build on GitHub
 
-The workflow "Container images" of the packs repository builds the images
-of this directory and the pack and demo images on one runner, tests them
-and pushes them to `ghcr.io/<owner>/`. It runs by hand only (Actions,
-"Container images", "Run workflow") with three inputs:
+Two workflows named "Container images" build the images, each on one
+runner, test them and push them to `ghcr.io/<owner>/`. The one of this
+repository, [container-images.yml](../.github/workflows/container-images.yml),
+builds the images that hold no release: basic, semantic, the sidecar and
+OpenCode. The one of the packs repository builds the images that hold one,
+on the images pushed from here: the pack images, the slim images (with
+[slim/Dockerfile](slim/Dockerfile) and `compose.yaml` of a checkout of this
+repository) and the demo image. Both run by hand only (Actions, "Container
+images", "Run workflow").
 
 | Input | Values |
 | --- | --- |
-| `images` | `all` (basic, semantic, sidecar, every pack, demo, OpenCode), `mcp`, `semantic`, `ollama` (the sidecar), `packs`, a pack's name, `demo`, `opencode` |
-| `swisstip_mcp_version` | the `swisstip-mcp` version from PyPI; default `0.2.5` |
+| `images`, here | `all` (basic, semantic, sidecar, OpenCode), `mcp`, `semantic`, `ollama` (the sidecar), `opencode` |
+| `images`, in the packs repository | `all` (every pack, then the demo), `packs`, a pack's name, `demo` |
+| `swisstip_mcp_version` | the `swisstip-mcp` version from PyPI, which is the tag of the basic and semantic images: built here, pulled there; default `0.2.5` |
+| `code_ref`, in the packs repository | the branch, tag or commit of this repository whose slim Dockerfile and `compose.yaml` are used; default `main` |
 | `push` | push the tested images; off builds and tests only |
 
 | Image | Tags in `ghcr.io/<owner>/` |
@@ -114,19 +121,32 @@ and pushes them to `ghcr.io/<owner>/`. It runs by hand only (Actions,
 | demo (the test image) | `swiss-tip-demo:<release_id>`, `swiss-tip-demo:<pack>`, `swiss-tip-demo:latest` (unlike the release image: the demo is built on one pack, so `latest` names it) |
 | OpenCode (the test image without a server) | `swiss-tip-opencode:<OpenCode version>`, `swiss-tip-opencode:latest`, the tag `compose.yaml` names; it holds no release, so a new release does not change it |
 
-An image built earlier in the same run is the base of the next one; an image
-not selected is pulled from `ghcr.io`, so the first run must be `all` with
-`push` on, and a later run naming one pack rebuilds only that pack on the pushed
-semantic image. A pack selection builds both release images of the pack, the
-pack image and the slim image, and tests the slim image beside the sidecar
-of the same run or of `ghcr.io`; so the sidecar must have been pushed, by
-`all` or by `ollama`, before a run that selects only packs. Tests before the
-push: the round trip of the pack that has one against the
-basic image with the release mounted, and for each pack image its build check,
-`search.configured_mode: hybrid` in `/health` and, for that pack, the
-round trip; the sidecar on its own must report healthy, which means the
-model is loaded; each slim image is started with the sidecar by
-`docker compose up -d --wait` on the repository's `compose.yaml`, must
+Within a run, an image built earlier is the base of the next one; an image
+not selected is pulled from `ghcr.io`. So the first run is `all` with `push`
+on here, then `all` in the packs repository, and a later run there naming
+one pack rebuilds only that pack on the pushed semantic image. A new
+`swisstip-mcp` version is a run here and then a run there. The packs
+repository's workflow pulls with its own token, so it must be able to read
+`swiss-tip-mcp`, `swiss-tip-semantic` and `swiss-tip-ollama`: the packages
+are public, or each names the packs repository under "Manage Actions access"
+in its package settings.
+
+No test here reads a pack. The release served is the synthetic test release
+of `apps/mcp-server/tests/fixtures` with a test readiness record, written by
+[synthetic_pack.py](../scripts/test/container/synthetic_pack.py). Tests
+before the push, here: the basic image with that release mounted must pass
+the round trip of the package build
+([check_wheel.py](../scripts/test/mcp/check_wheel.py) `--url`), which also
+shows that the image accepted the readiness record, because it serves with
+`--require-ready`; the semantic build pulls the model and checks its digest;
+the sidecar on its own must report healthy, which means the model is loaded.
+
+A pack selection in the packs repository builds both release images of the
+pack, the pack image and the slim image. Tests before the push, there: for
+each pack image its build check, `search.configured_mode: hybrid` in
+`/health` and, for the pack that has one, the round trip; each slim image is
+started with the sidecar of `ghcr.io` by
+`docker compose up -d --wait` on this repository's `compose.yaml`, must
 report `search.configured_mode: hybrid`, must run a check search hybrid from
 inside the server's container (`check_semantic.py`, so the sidecar answers
 on loopback with the index's model digest) and, for that pack, must pass
@@ -140,9 +160,10 @@ Dockerfile has no workflow; it is built locally with
 default image name `swiss-tip` is the release image's, so a local push must
 name another image (`--image`).
 
-The demo image is a test image, not the product. `all` builds it last, on
-the pack image of the same run; `demo` alone builds it on the pack image of
-`ghcr.io`, so that pack must have been pushed before.
+The demo image is a test image, not the product. `all` in the packs
+repository builds it last, on the pack image of the same run; `demo` alone
+builds it on the pack image of `ghcr.io`, so that pack must have been pushed
+before.
 Its test starts the container and reads the interface's own routes with
 [check_interface.py](opencode/check_interface.py): one project to open a
 session in, `swiss_tip` connected, a default model set, the welcome panel
@@ -152,13 +173,17 @@ credentials. No question is asked, which would spend a free model's budget
 and make the run depend on a provider. Only the layers OpenCode and Git add
 are new bytes in the registry; the rest are the pack image's.
 
-The OpenCode image is a test image too. `all` builds it last and `opencode`
-alone builds it; it has no base among the other images. It is tested as
-`compose.yaml` runs it, with `docker compose --profile demo up -d --wait`
-beside a slim image and the sidecar of the same run or of
-`ghcr.io`, by the same check with and without a password, and the run fails
-if switching the interface on restarted the server's container. Its package
-`swiss-tip-opencode` starts private like every new package.
+The OpenCode image is a test image too. `all` here builds it last and
+`opencode` alone builds it; it has no base among the other images. It is
+tested as `compose.yaml` runs it, with `docker compose --profile demo up -d
+--wait`, with the server replaced by the basic image of the same run or of
+`ghcr.io` on the synthetic release
+([compose.synthetic.yaml](../scripts/test/container/compose.synthetic.yaml));
+search is lexical there, so the sidecar is left out. The check is the same,
+with and without a password and with `--questions none`, since the generic
+panel carries none, and the run fails if switching the interface on
+restarted the server's container. Its package `swiss-tip-opencode` starts
+private like every new package.
 
 ## Run the basic image
 
@@ -331,8 +356,8 @@ calls at start and with no visitor's request, and the image's health check
 ([opencode_health.py](opencode/opencode_health.py)) sends none and takes
 401 as alive.
 
-On GitHub the workflow builds, tests and pushes it with `all` or `demo`;
-see above.
+On GitHub the packs repository's workflow builds, tests and pushes it with
+`all` or `demo`; see above.
 
 ## Run the OpenCode image beside the server
 
@@ -488,6 +513,18 @@ These numbers come from one machine and do not predict a hosted instance.
   they were missing, refused or incomplete. Not tested: the new workflow steps on GitHub, a
   pull of `swiss-tip-opencode` from `ghcr.io`, where it exists only after a
   workflow run, and the web interface of this image in a browser.
+
+- The tests of this repository's workflow on 21 September 2026, as a local
+  run of the same commands on local builds with `swisstip-mcp` 0.2.5: the
+  basic image with the synthetic pack mounted reported the release `ready`
+  and passed `check_wheel.py --url` with 0 failures; the OpenCode image,
+  started by `docker compose --profile demo up -d --wait swiss-tip demo`
+  with `compose.synthetic.yaml`, passed `check_interface.py --questions
+  none` without a password and, recreated with one, with it (401 without
+  credentials), the server's container kept its start time, and the sidecar
+  was not started. Not tested: either workflow on GitHub after the split,
+  and the packs repository's pulls of the basic image, the semantic image
+  and the sidecar from `ghcr.io` with its own token.
 
 ## Rebuilding an index
 

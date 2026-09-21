@@ -1,6 +1,6 @@
 # Swiss TIP OpenCode image: the demo's web interface for a server elsewhere
 
-**Last update:** 20 September 2026
+**Last update:** 21 September 2026
 
 A test image, not a release image. It is the [OpenCode](https://opencode.ai)
 agent and its web interface and nothing else: no MCP server, no knowledge
@@ -106,11 +106,14 @@ configuration's only MCP server and the plugin is loaded, and when a
 | `OPENCODE_VERSION`, `OPENCODE_PACKAGE`, `OPENCODE_SHA256` | the OpenCode release; a pack's demo image names the same one |
 | `DEMO_MODEL` | the default model |
 
-On GitHub, the workflow "Container images" of the packs repository
-builds, tests and pushes it with the input `images: all` or `images:
-opencode`, as `ghcr.io/<owner>/swiss-tip-opencode:<OpenCode version>` and
-`:latest`. It is tagged with the OpenCode version, not with a release: a new
-knowledge release does not change it.
+On GitHub, the workflow
+[Container images](../../.github/workflows/container-images.yml) builds,
+tests and pushes it with the input `images: all` or `images: opencode`, as
+`ghcr.io/<owner>/swiss-tip-opencode:<OpenCode version>` and `:latest`. Its
+test needs no pack: the server beside it is the basic image on the
+synthetic test release ([docker README](../README.md#build-on-github)). It
+is tagged with the OpenCode version, not with a release: a new knowledge
+release does not change it.
 
 ## Licences
 
