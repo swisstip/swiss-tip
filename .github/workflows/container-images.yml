@@ -50,9 +50,15 @@
 #     package that no tag published;
 #   - latest is pushed from the default branch only, and then only from PyPI
 #     and for a final version (digits and dots, so not 0.3.0rc1). Every other
-#     run pushes its version tags and leaves latest where it is. The
-#     OpenCode image's latest tag is still made locally, because
-#     compose.yaml names it in the test below; it is just not pushed.
+#     run pushes its version tags and leaves latest where it is.
+#
+# That second rule is about the images that carry a swisstip package, whose
+# latest tag says "the current release". The OpenCode image carries none, and
+# no release: package_index never reaches its build and the version above
+# neither tags it nor enters it. Its latest tag is a moving pointer to a test
+# image, like the sidecar's model tag, so it is pushed from every branch and
+# compose.yaml, which names it, can always pull it. Only a tested image is
+# pushed, here as everywhere.
 #
 # The slim MCP image is pushed as ghcr.io/<owner>/swiss-tip-mcp-slim with the tags
 # <version> and, under the rule above, latest; the MCP image as
@@ -225,12 +231,11 @@ jobs:
             -t opencode:build .
           version=$(docker image inspect --format '{{ index .Config.Labels "swiss-tip.demo.opencode.version" }}' opencode:build)
           [ -n "$version" ] || { echo "the image carries no swiss-tip.demo.opencode.version label to take its tag from"; exit 1; }
-          # compose.yaml names the latest tag, so it is always made here for the test below; it is pushed from
-          # the default branch only, like every other latest tag of this workflow.
+          # This image holds no release and no swisstip package, so its latest tag is no release pointer and
+          # the branch rule does not apply to it: compose.yaml names it, and the test below needs it too.
           docker tag opencode:build "$OPENCODE_IMAGE:$version"
           docker tag opencode:build "$OPENCODE_IMAGE:latest"
-          tags="$OPENCODE_IMAGE:$version"
-          if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $OPENCODE_IMAGE:latest"; fi
+          tags="$OPENCODE_IMAGE:$version $OPENCODE_IMAGE:latest"
           # Tested as compose.yaml runs it, the profile "demo" beside the server, with the server replaced by the
           # slim MCP image of this run, or the one pushed before, on the synthetic release. The panel of this image is
           # generic and carries no sample questions.

@@ -120,7 +120,7 @@ images", "Run workflow").
 | slim (the release image without Ollama) | `swiss-tip:<release_id>-slim`, `swiss-tip:<pack>-slim` (the moving tag `compose.yaml` names), in the package of the pack image |
 | sidecar | `swiss-tip-ollama:qwen3-embedding-0.6b` (the model tag with a hyphen, the tag `compose.yaml` names), `swiss-tip-ollama:qwen3-embedding-0.6b-<first 12 hex digits of the model digest>` |
 | demo (the test image) | `swiss-tip-demo:<release_id>`, `swiss-tip-demo:<pack>`, and `swiss-tip-demo:latest` from the default branch (unlike the release image: the demo is built on one pack, so `latest` names it) |
-| OpenCode (the test image without a server) | `swiss-tip-opencode:<OpenCode version>`, and `swiss-tip-opencode:latest` from the default branch, the tag `compose.yaml` names; it holds no release, so a new release does not change it |
+| OpenCode (the test image without a server) | `swiss-tip-opencode:<OpenCode version>` and `swiss-tip-opencode:latest`, the tag `compose.yaml` names, both from any branch: the image carries no release and no `swisstip` package, so neither tag is a release pointer; it holds no release, so a new release does not change it |
 
 Within a run, an image built earlier is the base of the next one; an image
 not selected is pulled from `ghcr.io`. So the first run is `all` with `push`
@@ -147,9 +147,15 @@ in both repositories:
 - **`latest` is pushed from the default branch only**, and here only from
   PyPI and for a final version (digits and dots, so not `0.3.0rc1`). It is
   what a pull without a tag gets, so it names a release. Every other run
-  pushes its version tags and leaves `latest` where it is; the OpenCode
-  image's `latest` tag is still made inside the run, because `compose.yaml`
-  names it in the test, and only the push is left out.
+  pushes its version tags and leaves `latest` where it is.
+
+The second rule covers the images that carry a `swisstip` package. The
+OpenCode image carries none and holds no release: `package_index` never
+reaches its build, and the version above neither tags it nor enters it. Its
+`latest` is a moving pointer to a test image, as the sidecar's model tag is,
+so it is pushed from every branch and `compose.yaml` can always pull it. The
+demo image is the other way round, because it carries a release: its
+`latest` follows the rule.
 
 The version tags are pushed as usual, so the packs repository rehearses on
 them by naming the same version, with `package_index: testpypi` there too,
