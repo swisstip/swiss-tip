@@ -1,6 +1,6 @@
 # swisstip-extraction
 
-**Last update:** 20 September 2026
+**Last update:** 22 September 2026
 
 Build-side source-text extraction for Swiss TIP: turn the saved responses of
 an ingestion run into text records that can be read, cited and hashed. One
@@ -67,6 +67,17 @@ text/
 
 `document_id` is `doc-` plus 20 hex digits of SHA-256 over the source URL and
 the raw hash, so an unchanged page keeps its ID across download attempts.
+
+Every index entry also says whether a curator is expected to read the record
+and how much of it: `curation_candidate` with `candidate_exclusion`
+(`not_extractable`, `superseded`, `secondary_representation`,
+`language_variant`, `out_of_scope_page`; the first rule that applies), and
+`sections`, `content_sections` and `content_characters` from
+`swisstip.extraction.sections`, which splits a record into heading runs and
+keeps those with citable text (no page furniture, no footnote, no bare list
+of links). The summary counts `curation_candidates` and
+`candidate_exclusions`. The build's coverage stage and the concept-extraction
+jobs share these rules, so "was this page read?" has one answer.
 Block IDs are `<document_id>:bNNNNN`. Offsets are zero-based, end-exclusive
 code points into `content_text`, which is the blocks joined by two newlines.
 

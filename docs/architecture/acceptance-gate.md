@@ -1,6 +1,6 @@
 # Acceptance gate
 
-**Last update:** 21 September 2026
+**Last update:** 22 September 2026
 
 **Status:** sections 2 to 5 and the `accept` and `ready` stages, the
 committed-record test, `--require-ready`, the container and the harness of
@@ -198,6 +198,18 @@ recorded and stated in `LIMITATIONS.md`, so a pack of unreviewed facts can be
 ready with that limitation visible. A per-pack `require_human_review` policy
 flag is the place to tighten this.
 
+The record also carries `coverage`, the counts of the pipeline's `coverage`
+stage when `curation-coverage.json` is the report of this release's content
+digest: how many candidate records and content sections the text dataset
+holds, how many a fact cites, how many a curator dispositioned in
+`curation-coverage.yaml`, how many are neither, and whether the report is
+clean. It is information, not a gate: whether an unclean report stops the
+build is the curation's `coverage_policy` (`report`, the default, or
+`enforce`), decided per pack, so that a pack with history writes its
+dispositions before the stage can fail it, and a frozen pack is not broken by
+a rule it never had. Promoting it to a gate G7 is the step after `mvp-zurich`
+is clean under `enforce`.
+
 ## 6. Where the gate is enforced
 
 | Where | Behaviour | Status |
@@ -221,7 +233,8 @@ packages/core      acceptance.py   models, the suite digest, the answers file an
                    readiness.py    the readiness record and readiness_status(release_path)
 packages/runtime   acceptance.py   check_acceptance over ReleaseService (no YAML: the container has no PyYAML)
 packages/build     acceptance.py   load and save the YAML file; load_regression combines a pack's two suites
-apps/knowledge-builder             the accept stage and the ready stage with gates G1 to G6
+apps/knowledge-builder             the accept stage, the coverage stage (swisstip.build.coverage, informational in
+                                   readiness) and the ready stage with gates G1 to G6
 apps/mcp-server                    --require-ready, the readiness field and the content digest of the health payload
 scripts/test/mock-mcp              suite_cases.py builds the harness cases from the suites; --answers aggregates
                                    the grades into acceptance-answers.json
@@ -237,8 +250,10 @@ The serving side imports nothing from the build side; the server reads
 
 The gate itself is complete. What is left lies outside it: the first graded
 runs on the current releases (then `answer_check: required` for
-`mvp-zurich`, section 9), the console's part of section 6, and the MCP
-round-trip scripts replaying the suite.
+`mvp-zurich`, section 9), the console's part of section 6, the MCP
+round-trip scripts replaying the suite, and gate G7, curation coverage,
+which section 5 describes as information until `mvp-zurich` is clean under
+`coverage_policy: enforce`.
 
 Two limits of a phrase check stay: a flattened table is read as text (the
 2026 rate is matched as `93 %` near `Politische Gemeinde`, not as a column),

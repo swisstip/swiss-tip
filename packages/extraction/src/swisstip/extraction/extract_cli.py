@@ -23,6 +23,7 @@ from .dataset import (apply_groups, check_output_location, existing_ids, index_e
                       read_json, record_path, reusable, summarize, view_path, write_dataset_files, write_record)
 from .reading_view import render
 from .records import assemble
+from .sections import apply_candidates
 from .run_reader import (ATTRIBUTED_KINDS, SCOPES, RunError, load_plan, manifest_sha256, read_verified,
                          select_items, snapshot_items)
 
@@ -86,13 +87,15 @@ def run_extraction(run: Path, output: Path | None = None, *, scope: str = "attri
     for entry in entries:
         entry["superseded"] = entry["document_id"] not in live_ids
     rewritten = apply_groups(output, [e for e in entries if not e["superseded"]])
+    candidate_counts = apply_candidates(entries)
     errors = [dict(document_id=e["document_id"], source_url=e["source_url"], warnings=e["warnings"])
               for e in entries if e["status"] == "extraction_failed"]
     failed = sum(1 for e in touched.values() if e["status"] == "extraction_failed")
     selection = dict(scope=scope, kinds=kinds, sources=sources, document_ids=document_ids, selected=len(unique),
                      snapshots_in_run=len(items), duplicates_skipped=len(selected) - len(unique))
     counts = dict(extracted_now=len(unique) - reused, reused=reused, failed_in_selection=failed,
-                  superseded=sum(e["superseded"] for e in entries), pruned=len(removed), group_fields_rewritten=rewritten)
+                  superseded=sum(e["superseded"] for e in entries), pruned=len(removed), group_fields_rewritten=rewritten,
+                  **candidate_counts)
     summary = summarize(entries, run, output, plan, selection, counts, unavailable, errors)
     write_dataset_files(output, entries, summary, unavailable, errors)
     return (1 if failed else 0), summary

@@ -138,6 +138,10 @@ class Curation(Strict):
         "Languages in which every concept needs at least one sample question (the pack's query languages); the build "
         "tells a question's language from its function words and refuses a concept that lacks one. Empty: no check."))
     context_fields: dict[str, ContextFieldSpec] = Field(default_factory=dict)
+    coverage_policy: Literal["report", "enforce"] = Field(default="report", description=(
+        "What the build does with content sections of candidate records that no fact cites and no disposition in "
+        "curation-coverage.yaml names: `report` writes curation-coverage.json and goes on, `enforce` fails the build. "
+        "Not copied into the release."))
     topics: list[CuratedTopic] = Field(min_length=1)
     concepts: list[CuratedConcept] = Field(min_length=1)
 

@@ -1,6 +1,6 @@
 # Extraction package - technical design
 
-**Last update:** 21 September 2026
+**Last update:** 22 September 2026
 
 **Status:** implemented in `packages/extraction` (`swisstip.extraction`,
 with offline tests); the text datasets of both packs
@@ -130,6 +130,12 @@ text/
 | `extractor_version`, `extracted_at` | Package version; a change invalidates reuse |
 | `imported_text` | Present on adopted records: old dataset, old document ID, old extractor version, record file, import time |
 
+The index entry of a record repeats the identifying fields and adds what a
+curator needs to know without opening the record: `curation_candidate` and
+`candidate_exclusion` (section 3.5), `sections`, `content_sections` and
+`content_characters`. The summary counts `curation_candidates` and the
+exclusions by reason.
+
 ### 3.3 Block
 
 | Field | Content |
@@ -145,6 +151,36 @@ text/
 | `level` | Headings only |
 | `rows`, `caption`, `nested_table_count` | Tables only; cells carry `text`, `header`, `rowspan`, `colspan`, `dom_path`, and `source: data-entities` for rows recovered from the table's embedded data |
 | `inline_data` | Tables with embedded data rows only: `source` (`data-entities`), `rows` (count) and `text` (the recovered rows, also appended to the block `text`) |
+
+### 3.5 Sections and curation candidates
+
+`swisstip.extraction.sections` derives two things from the immutable blocks,
+without changing an offset or interpreting a word.
+
+A *section* is a run of consecutive blocks under the same heading path. It is
+*content* when it keeps at least one block that is not page furniture (a
+`nav`, `header`, `footer` or `form` region, a furniture label such as
+`banner` or `breadcrumb`, a control, a footnote, a heading the site uses for
+furniture such as "Kontakt" or "Auf dieser Seite" on a page that is not only a
+contact page) and when it is not a bare list of links (list items marked
+`link-only`, or a "Links" heading whose blocks are nothing but their link
+texts). The rules were written for the concept-extraction jobs, which read one
+section at a time; the concepts package imports them from here, so the jobs
+and the build's coverage stage agree on what a section is.
+
+A *curation candidate* is a record a curator is expected to read: eligible,
+not superseded, the preferred representation of its source, and not a
+language variant or an out-of-scope page. The first rule that excludes a
+record is its `candidate_exclusion`. Language variants are not candidates
+because the pack decides per fact whether an English version stands next to
+the German excerpt; a variant that is cited counts as cited, one that is not
+is not asked for.
+
+Why this lives in the extractor: every consumer used to derive "which records
+should someone look at" with its own filters, and the numbers disagreed. One
+definition in the dataset lets the build say, per pack, which content
+sections no fact cites (section 6), and lets the question "was this page ever
+read?" have one answer.
 
 ### 3.4 Reading view
 
@@ -316,6 +352,17 @@ differs and `neighbourhood-changed` when the other blocks under the same
 heading were added, removed or rewritten. The build decides what the review
 mark does with each outcome; the proposal is that `same-text` and a clean
 `moved` keep it and everything else clears it.
+
+The contract runs the other way as well. The build's `coverage` stage
+(`swisstip.build.coverage`) reads the index's candidates and the records'
+content sections and asks which of them no fact cites and no disposition in
+`releases/<pack>/curation-coverage.yaml` names. Before it existed, a page
+could be catalogued, downloaded, extracted and never read, and nothing said
+so: the release's document list is derived from its citations, so validating
+the release cannot find a document outside it. A disposition binds the
+`document_id`, that is the source URL and the raw bytes, so a page downloaded
+anew loses its disposition and is judged again, the same way a cited range
+is re-anchored.
 
 ## 7. Command line
 

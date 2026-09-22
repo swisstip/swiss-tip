@@ -1,4 +1,4 @@
-"""The build pipeline of a pack: catalogue to validated, accepted and ready release in nine stages.
+"""The build pipeline of a pack: catalogue to validated, accepted and ready release in ten stages.
 
 | Stage | Does | Skipped when |
 | --- | --- | --- |
@@ -8,6 +8,7 @@
 | validate-text | Checks hashes, offsets, index and views; re-hashes saved responses with `thorough=True` | never |
 | build | Builds `release.json` from `curation.yaml`, relocating citations and embedding the place files it names | Curation, text index, place files and release ID unchanged since the last build; or no curation file yet |
 | validate-release | Validates the release against the text dataset (and the run with `thorough=True`) | never |
+| coverage | Joins the text dataset with the release: every content section of every candidate record is cited by a fact or dispositioned in `curation-coverage.yaml`; writes `curation-coverage.json` and `.md`; fails when not clean and the curation says `coverage_policy: enforce` | no release or no text index |
 | health | Loads the release the way the server does and reports its counts | never |
 | accept | Replays the pack's acceptance suite (`acceptance.yaml`) against the release, writes `acceptance-report.json` and fails on any blocking case | The pack has no acceptance suite |
 | ready | Runs the gates of the acceptance gate on the current files (validation, no dropped fact, the suite, the runway, the graded live-caller answers, the committed report) and writes `readiness.json` bound to the bytes of `release.json`; needs `attested_by` | never; only runs when asked (`--until ready`) |
@@ -24,11 +25,12 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from swisstip.build.acceptance import load_acceptance
+from swisstip.build.coverage import build_coverage, coverage_counts, load_dispositions, write_report
 from swisstip.build.curation import load_curation, save_curation
 from swisstip.build.places import PlaceFileError, place_files, place_register_for
 from swisstip.build.release_build import BuildError, build_release
 from swisstip.core.acceptance import AcceptanceAnswers, answer_verdict
-from swisstip.core.readiness import CaseCounts, Gate, Readiness, dump_readiness, readiness_path
+from swisstip.core.readiness import CaseCounts, CoverageCounts, Gate, Readiness, dump_readiness, readiness_path
 from swisstip.core.release import dump_release, load_release
 from swisstip.core.validation import validate_release
 from swisstip.extraction.extract_cli import run_extraction
@@ -40,7 +42,7 @@ from swisstip.runtime.service import ReleaseService
 
 from . import REPORT_SCHEMA_VERSION
 
-STAGES = ("acquire", "gaps", "extract", "validate-text", "build", "validate-release", "health", "accept", "ready")
+STAGES = ("acquire", "gaps", "extract", "validate-text", "build", "validate-release", "coverage", "health", "accept", "ready")
 
 
 class StageError(RuntimeError):
@@ -79,6 +81,8 @@ class Pipeline:
         self.release = self.pack_dir / "release.json"
         self.report_path = self.pack_dir / "pipeline-report.json"
         self.acceptance_report_path = self.pack_dir / "acceptance-report.json"
+        self.dispositions = self.pack_dir / "curation-coverage.yaml"
+        self.coverage_report_path = self.pack_dir / "curation-coverage.json"
         self.run = (run_dir or default_run_dir(self.root, pack)).resolve()
         self.text = self.run / "text"
         self.release_id = release_id
@@ -210,6 +214,30 @@ class Pipeline:
             raise StageError(f"{len(issues)} issue(s): " + "; ".join(issues[:5]))
         return "ran", dict(release_id=release.manifest.release_id, checked_against_text=True, saved_responses_rehashed=self.thorough)
 
+    def coverage(self) -> tuple[str, dict]:
+        """What the text dataset holds that no fact cites: the report is always written; only `enforce` fails on it."""
+        if not self.release.is_file():
+            return "skipped", dict(reason="no release file")
+        if not (self.text / "index.json").is_file():
+            return "skipped", dict(reason="the text dataset has no index; run the extract stage first")
+        policy = self.loaded_curation().coverage_policy if self.curation.is_file() else "report"
+        try:
+            dispositions = load_dispositions(self.dispositions) if self.dispositions.is_file() else None
+        except (ValidationError, ValueError) as exc:
+            raise StageError(f"curation-coverage.yaml does not load: {exc}") from exc
+        if dispositions is not None and dispositions.pack != self.pack:
+            raise StageError(f"curation-coverage.yaml is for pack {dispositions.pack!r}, not {self.pack!r}")
+        catalogue = self.read_json(self.run / "catalogue.json") or self.read_json(self.catalogue)
+        report = build_coverage(load_release(self.release), self.text, policy=policy, dispositions=dispositions, catalogue=catalogue,
+                                dispositions_sha256=sha256_file(self.dispositions) if dispositions is not None else None)
+        write_report(report, self.coverage_report_path)
+        details = dict(release_id=report["release_id"], policy=policy, clean=report["clean"], **report["counts"])
+        if not report["passed"]:
+            findings = {k: v for k, v in report["counts"]["findings"].items() if v}
+            raise StageError(f"{report['counts']['unclassified_sections']} content section(s) neither cited nor dispositioned"
+                             + (f", findings {findings}" if findings else "") + f"; see {self.coverage_report_path.with_suffix('.md')}")
+        return "ran", details
+
     def health(self) -> tuple[str, dict]:
         if not self.release.is_file():
             return "skipped", dict(reason="no release file")
@@ -305,12 +333,17 @@ class Pipeline:
         failed = [g for g in gates if g.status != "passed"]
         if failed:
             raise StageError(f"{len(failed)} of {len(gates)} gate(s) failed: " + "; ".join(f"{g.gate} {g.detail}" for g in failed))
+        # The coverage counts are carried, not gated: they say what the curator was asked to read and what stays open.
+        coverage_report = self.read_json(self.coverage_report_path)
+        coverage = (CoverageCounts(**coverage_counts(coverage_report))
+                    if coverage_report and coverage_report.get("content_sha256") == manifest.content_sha256 else None)
         record = Readiness(pack=self.pack, release_id=manifest.release_id, release_sha256=sha256_file(self.release),
                            content_sha256=manifest.content_sha256, suite_sha256=suite.digest(), attested_at=attested_at,
                            attested_by=self.attested_by, gates=gates,
                            cases=CaseCounts(total=report["cases"], blocking=report["blocking"], quarantined=report["quarantined"]),
                            review_statuses=manifest.review_statuses, snapshot_date=manifest.freshness.snapshot_date,
-                           stale_from=manifest.freshness.stale_from, min_runway_days=suite.policy.min_runway_days)
+                           stale_from=manifest.freshness.stale_from, min_runway_days=suite.policy.min_runway_days,
+                           coverage=coverage)
         readiness_path(self.release).write_text(dump_readiness(record), encoding="utf-8", newline="\n")
         return "ran", dict(release_id=manifest.release_id, release_sha256=record.release_sha256, attested_by=self.attested_by,
                            attested_at=attested_at.isoformat(), gates={g.gate: g.status for g in gates},
@@ -326,8 +359,8 @@ class Pipeline:
         if start not in STAGES or until not in STAGES or STAGES.index(start) > STAGES.index(until):
             raise ValueError(f"stages must be in order from {STAGES}")
         handlers = {"acquire": self.acquire, "gaps": self.gaps, "extract": self.extract, "validate-text": self.validate_text,
-                    "build": self.build, "validate-release": self.validate_release_stage, "health": self.health,
-                    "accept": self.accept, "ready": self.ready}
+                    "build": self.build, "validate-release": self.validate_release_stage, "coverage": self.coverage,
+                    "health": self.health, "accept": self.accept, "ready": self.ready}
         started = datetime.now(UTC)
         failed = False
         dropped = 0

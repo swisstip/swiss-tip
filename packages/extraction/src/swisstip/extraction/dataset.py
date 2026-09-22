@@ -8,6 +8,7 @@ from pathlib import Path
 
 from . import EXTRACTOR_VERSION, SCHEMA_VERSION
 from .reading_view import render
+from .sections import section_fields
 
 SUMMARY_SCHEMA = "swisstip.source-text-dataset/v1"
 GROUP_FIELDS = ("representation_group", "html_counterparts", "preferred_representation",
@@ -74,6 +75,7 @@ def index_entry(record: dict, output: Path | None = None) -> dict:
         extractor_version=record.get("extractor_version"), imported=bool(record.get("imported_text")),
         file=f"documents/{document_id}.json",
         reading_file=f"reading/{document_id}.md" if output and view_path(output, document_id).exists() else None,
+        **section_fields(record),
     )
     for field in GROUP_FIELDS:
         entry[field] = record.get(field)

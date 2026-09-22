@@ -1,6 +1,6 @@
 # Building a knowledge base with AI agents - a worked example
 
-**Last update:** 21 September 2026
+**Last update:** 22 September 2026
 
 A complete, copy-pasteable walkthrough of the
 [knowledge base pipeline](../architecture/knowledge-base-pipeline.md) run by
@@ -105,16 +105,19 @@ this document:
 | 2 | Discover the sources, write the catalogue | - | `releases/mvp-selfemployed/sources.json`, `sources.md` |
 | 3 | Run the crawler, read the gap report, correct the catalogue | - | `.local/mvp-selfemployed/pages/`, `gap-report.md` |
 | 4 | Run text extraction, check the reading views | - | `.local/mvp-selfemployed/text/` |
-| 5 | Semantic extraction: concepts, facts, keys, aliases, source terms, institutions, basis | - | `releases/mvp-selfemployed/curation.yaml` |
-| 6 | Build until nothing is dropped | - | `release.json`, `build-report.json` |
+| 5 | Semantic extraction: concepts, facts, keys, aliases, source terms, institutions, basis; a disposition for every content section no fact cites | - | `releases/mvp-selfemployed/curation.yaml`, `curation-coverage.yaml` |
+| 6 | Build until nothing is dropped and no content section is unclassified | - | `release.json`, `build-report.json`, `curation-coverage.json` |
 | 7 | Start the console, prepare the review brief | **Review every fact** | `human-reviewed` statuses, rebuilt release |
 | 8 | Author the acceptance and regression packs | Spot-check the traps | `acceptance.yaml`, `regression.yaml` |
-| 9 | Replay both packs, build the index, run and grade live sessions | - | `acceptance-report.json`, `regression-report.json` |
+| 9 | Replay both packs before and after the review, build the index, run and grade live sessions | - | `acceptance-report.json`, `regression-report.json` |
 | 10 | Run the ready stage | **Attest** | `readiness.json` |
 | 11 | Write the documents, propose the commit | Commit and publish | `COVERAGE.md`, `LIMITATIONS.md` |
 
 Steps 6 to 10 repeat after every change to the curation, and step 10 comes
-last because a single changed byte of `release.json` invalidates it.
+last because a single changed byte of `release.json` invalidates it. Step 9
+runs twice on purpose: confirming a fact raises its concept's prior in search
+from 0.7 to 1.0, so the review itself moves rankings, and a suite replayed
+only before it has not seen the release that ships.
 
 Every command below runs from the packs repository (`swiss-tip-mvp`) and uses
 the Windows virtual environment path; on macOS or Linux replace
@@ -408,6 +411,12 @@ anyone reads it:
   - For each of the 12 UAT questions, open the reading view of the page that
     should answer it and confirm the answer is actually in the text. Report
     the record ID and the heading path.
+  - The other way round: for every record the index marks curation_candidate,
+    name the UAT questions its content sections can answer, or say that it
+    answers none. A question-first check finds missing pages; only a
+    page-first check finds pages nobody will use. Keep the list: step 5 reads
+    every candidate, and step 6 checks that every content section was either
+    cited or dispositioned.
   - List records whose text is suspiciously short against their saved HTML
     size, and say why: a client-rendered table, a component the extractor does
     not read yet, a PDF that is an image (no OCR), or a genuinely short page.
@@ -424,9 +433,21 @@ needed exactly that fix for `mvp-zurich`, so the check is in the run sheet.
 
 ## 9. Step 5 - semantic extraction and the corpus
 
-This is where the knowledge is made. One reader subagent per saved page, a
-classifier pass over the result, and the coordinator merging everything into
-`curation.yaml`.
+This is where the knowledge is made. One reader subagent per curation
+candidate, a classifier pass over the result, and the coordinator merging
+everything into `curation.yaml` and `curation-coverage.yaml`.
+
+Every candidate gets a reader: the records the text index marks
+`curation_candidate`, which are the catalogue targets, the link-discovered
+`in-scope` pages and the plugin documents (the acts and ordinances Fedlex
+resolved), in their preferred representation. Not only the pages the plan
+named. The Zurich pack lacked the five-year settlement rule for a week
+because one page that held it was a discovery nobody listed and the other a
+catalogued page nobody walked to; twenty-nine catalogued German pages and
+five federal acts had been fetched and never read. A reader that finds
+nothing to propose does not say so in chat and move on: it writes the
+disposition (below), because afterwards a page read and rejected must be
+distinguishable from a page never opened.
 
 ### Prompt A - one reader per page
 
@@ -434,8 +455,10 @@ classifier pass over the result, and the coordinator merging everything into
 You are reading ONE saved official page and proposing knowledge entries for a
 Swiss public-information knowledge base.
 
-Reading view: .local/mvp-selfemployed/text/documents/<record-id>.md
+Reading view: .local/mvp-selfemployed/text/reading/<record-id>.md
 Record:       .local/mvp-selfemployed/text/documents/<record-id>.json
+Sections:     the record's content sections (swisstip.extraction.sections);
+              a disposition names them by section_id
 Publisher:    Handelsregisteramt des Kantons Zuerich (cantonal)
 Our questions: docs/product/selfemployed-user-acceptance-tests.md
 
@@ -472,7 +495,14 @@ to know, at the granularity of one question. For each concept give:
                   jurisdiction  CH | CH-ZH | CH-ZH-261
                   evidence    the block IDs (bNNNNN) of the reading view that
                               carry it, and the heading path. Copy the block
-                              IDs; do not retype the text of the block.
+                              IDs; do not retype the text of the block. If the
+                              statement restates a provision of an act or an
+                              ordinance the run holds (a plugin document in
+                              the index), add that article as a second
+                              evidence item now: the fact then rests on the
+                              law, not on the authority's summary of it, and
+                              the reviewer sees both excerpts once. Adding it
+                              after the review reopens the fact.
                   valid_through  if the statement is dated (a fee for a year, a
                               deadline for 2026), the date it stops being safe
                               notes       anything the reviewer should check
@@ -483,12 +513,26 @@ Rules:
     "in der Regel", the statement says "as a rule", not a flat claim.
   - If the page only points at another authority, that IS the fact: say that
     this office publishes the pointer, and name the other authority.
-  - If the page answers none of our questions, say so and propose nothing.
+  - Every content section of the page ends in one of two places: cited by a
+    fact you propose, or dispositioned. For each content section you cite
+    nothing from, return a disposition for
+    releases/<pack>/curation-coverage.yaml:
+      kind          out_of_scope (name the manifest's out_of_scope entry it
+                    rests on) | duplicate (name the record that carries the
+                    same content) | navigation (a hub whose children carry
+                    the content) | deferred (we could curate this and have
+                    not; give reaffirm_by, the date the disposition expires)
+      reason        one or two sentences a reviewer can check
+      document_id and section_ids, or a url_prefix rule for a whole tree
+                    with the known_documents it covers today
+    "Answers none of our questions" is a disposition with a kind, not a
+    remark. A gap the release should admit goes into not_served or
+    out_of_scope, never into a test expectation.
 
-Output YAML in the curation shape of releases/mvp-wallisellen/curation.yaml,
-with provenance.kind: curated-statement and
-provenance.review_status: assistant-authored-unreviewed. Do not write the file;
-return the YAML.
+Output YAML in the curation shape of releases/mvp-zurich/curation.yaml, with
+provenance.kind: curated-statement and
+provenance.review_status: assistant-authored-unreviewed, followed by the
+dispositions. Do not write the files; return the YAML.
 ```
 
 ### Prompt B - institutions and basis
@@ -547,9 +591,20 @@ Merge rules:
   - Every concept needs a question in every language of question_languages, or
     the build refuses it.
 
+Merge the readers' dispositions into releases/<pack>/curation-coverage.yaml
+(schema swiss-tip-curation-coverage/v1, pack, dispositions) and run the
+coverage stage:
+
+  ./.venv/Scripts/python.exe -m swisstip.builder.cli <pack> --from build --until coverage
+
 Then report: topics, concepts, facts, excerpts, cited documents, facts per
-concept (min, median, max), and every concept whose facts all come from one
-page - those are the fragile ones.
+concept (min, median, max), every concept whose facts all come from one page
+- those are the fragile ones - and, from curation-coverage.json: the
+candidate records, the content sections cited, dispositioned and
+unclassified, every disposition of kind deferred with its reaffirm_by, and
+every catalogue source whose status is `nothing`. Unclassified must be zero
+before step 7: a reviewer confirms facts against pages someone read, and the
+report is how you show which pages those were.
 ```
 
 ### What a merged entry looks like
@@ -614,9 +669,16 @@ prevent.
 ./.venv/Scripts/python.exe -m swisstip.builder.cli mvp-selfemployed
 ```
 
-Runs `build`, `validate-release`, `health` and `accept`. The build resolves
-every citation against the text dataset, pins it with hashes, verifies that
-every source term occurs in its excerpt, and refuses an invalid release.
+Runs `build`, `validate-release`, `coverage`, `health` and `accept`. The
+build resolves every citation against the text dataset, pins it with hashes,
+verifies that every source term occurs in its excerpt, and refuses an invalid
+release. The coverage stage then joins the text dataset with the release and
+writes `curation-coverage.json` and `.md`: every content section of every
+candidate record is cited, dispositioned, or listed as unclassified with its
+heading path and block range. Under the default `coverage_policy: report` it
+only writes; a new pack sets `coverage_policy: enforce` in `curation.yaml`
+from the start, so that an unclassified section is a build error and not a
+number in a report someone has to remember to read.
 
 ### Prompt
 
@@ -643,8 +705,16 @@ and add the candidate terms it lists that genuinely appear in our excerpts.
 Each added term shifts the rarity weights, so say in your report which
 concepts changed rank.
 
+Then read curation-coverage.md. Every unclassified section is a page someone
+saved and nobody read: either a reader missed it (send it back to step 5) or
+it needs a disposition with a reason. Do not disposition a section as
+out_of_scope to make the count zero: the disposition must name the manifest
+entry that excludes it, and the stage checks that it exists.
+
 Report: release ID, content digest, topics, concepts, facts, excerpts, cited
-documents, dropped facts (must be 0), and the validator's warnings.
+documents, dropped facts (must be 0), unclassified sections (must be 0),
+dispositions by kind, catalogue sources with status `nothing`, and the
+validator's warnings.
 ```
 
 ## 11. Step 7 - the human review
@@ -757,6 +827,12 @@ Rules:
   - Never put the expected answer's words into the query. A query that quotes
     the fact tests nothing.
   - Each case names expect_concept and, where it matters, expect_strength.
+  - Never write an expectation that asserts the release does NOT know
+    something, unless that absence stands in not_served or out_of_scope. A
+    must_not pattern that forbids a true, citable rule locks the gap in: the
+    Zurich pack's UAT-5 forbade the five-year settlement rule for a week,
+    and every green run confirmed the pack was "right". A gap is a
+    disposition of kind deferred and a line in LIMITATIONS.md, not a test.
 
 Then say how many cases per concept you wrote, and which concepts have fewer
 than the pack ratio.
@@ -764,7 +840,10 @@ than the pack ratio.
 
 ## 13. Step 9 - validating the release against the tests
 
-Three runs, in this order.
+Three runs, in this order, and the whole set again after the review of
+step 7: confirming a fact raises its concept's prior in search from 0.7 to
+1.0, so the review reorders hybrid results and can displace an expected
+concept that ranked while the new facts were still unreviewed.
 
 ```shell
 # 1. the gate: acceptance replayed with no model
@@ -804,7 +883,17 @@ retrieval limit is committed with blocking: false and a quarantine_reason that
 states what was measured, on which release ID. A case that fails because the
 knowledge is missing is not quarantined; it is a gap and goes on the worklist.
 
-Report a table: suite, cases, passed, failed, quarantined, lexical vs hybrid.
+Expect verdict drift when the release grows. match_strength reads strong when
+the query's anchored weight reaches 1.5 or its lexical share 0.5; the weight
+is an absolute sum of rarity weights, and every concept added to a topic
+lowers the weight of that topic's words. Adding twenty concepts to the
+Zurich pack moved eight questions from strong to weak without changing
+their ranking. Report such cases separately, as "verdict only, ranking
+unchanged", with the weight before and after; do not rewrite a user's
+question to move the number.
+
+Report a table: suite, cases, passed, failed, quarantined, lexical vs hybrid,
+once before the review and once after it.
 ```
 
 ### The live caller run
@@ -834,6 +923,12 @@ quote only the numbers in the documents.
 ```
 
 ## 14. Step 10 - readiness, and the second human step
+
+The record carries the coverage counts of the release it attests (candidate
+records, content sections cited, dispositioned and unclassified, and whether
+the report is clean) as information next to the six gates. Read them before
+attesting: a release can pass every gate with a hundred sections nobody
+opened, and the counts are the only place that says so.
 
 ```shell
 ./.venv/Scripts/python.exe -m swisstip.builder.cli mvp-selfemployed \
