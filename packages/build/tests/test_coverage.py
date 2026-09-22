@@ -342,6 +342,27 @@ class AutomaticClassTests(unittest.TestCase):
         self.assertEqual(card["status"], "cited_nowhere", card)
         self.assertEqual(card["cited_on"], [])
 
+    def test_the_index_marks_the_repeated_card_on_every_page_and_the_reading_view_says_so(self):
+        topic = self.by_url["https://www.sem.example/topic-0.html"]
+        self.assertEqual([(s["heading_path"], s["pages"]) for s in topic["repeated_sections"]], [(["Topic 0", "Telefon"], 6)])
+        view = (self.text / topic["reading_file"]).read_text(encoding="utf-8")
+        self.assertIn("repeated on 6 pages]: 044 000 00 00", view)
+        self.assertIn("Telefon (6 pages)", view)
+        # The office's card sits under Kontakt, which is furniture there: not a content section, so not a repeated one.
+        self.assertEqual(self.by_url["https://www.sem.example/office.html"]["repeated_sections"], [])
+        self.assertEqual(self.by_url[URL]["repeated_sections"][0]["pages"], 6)
+        summary = json.loads((self.text / "summary.json").read_text(encoding="utf-8"))
+        self.assertEqual(summary["records_with_repeated_sections"], 6)
+        self.assertEqual(summary["repeated_sections"], 6)
+
+    def test_the_report_names_the_host_and_the_pack_s_threshold(self):
+        report = build_coverage(self.release, self.text, today=self.today)
+        self.assertEqual(report["rules"]["boilerplate_min_pages"], 5)
+        self.assertEqual(self.repeated(report)["044 000 00 00, monta"]["host"], "www.sem.example")
+        self.assertIn("| Host |", render_markdown(report))
+        with self.assertRaises(ValueError):
+            build_coverage(self.release, self.text, today=self.today, min_pages=2)
+
     def test_a_repeated_text_cited_on_two_pages_is_reported_as_such(self):
         first, last = self.blocks_of("https://www.sem.example/topic-1.html", "Telefon")
         data = yaml.safe_load(CURATION.replace("DOC", self.by_url[URL]["document_id"]))
@@ -360,3 +381,57 @@ class AutomaticClassTests(unittest.TestCase):
         documents = self.documents(report)
         self.assertEqual(documents["https://www.sem.example/topic-1.html"]["cited"], 1)
         self.assertEqual(documents["https://www.sem.example/topic-3.html"]["boilerplate"], 1)
+
+
+class HostAndThresholdTests(unittest.TestCase):
+    """The same card on three pages of each of two hosts: six pages, but never six of one host."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        pages = {URL: PAGE}
+        for number in range(3):
+            pages[f"https://www.sem.example/topic-{number}.html"] = topic_page(number)
+            pages[f"https://www.zh.example/topic-{number + 10}.html"] = topic_page(number + 10)
+        self.run = make_run(self.root, pages)
+        run_extraction(self.run, log=lambda *a, **k: None)
+        self.text = self.run / "text"
+        index = json.loads((self.text / "index.json").read_text(encoding="utf-8"))
+        self.by_url = {e["source_url"]: e for e in index}
+        curation = Curation.model_validate(yaml.safe_load(CURATION.replace("DOC", self.by_url[URL]["document_id"])))
+        self.release, _ = build_release(curation, self.text, "test-2026-09-22-v4")
+        self.today = date(2026, 9, 22)
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def card_status(self, report, url) -> str:
+        document = next(d for d in report["documents"] if d["source_url"] == url)
+        return "boilerplate" if document["boilerplate"] else "unclassified" if any(
+            s["heading_path"][-1] == "Telefon" for s in document["unclassified_sections"]) else "other"
+
+    def test_the_index_counts_the_card_per_host(self):
+        self.assertEqual(self.by_url["https://www.sem.example/topic-0.html"]["repeated_sections"][0]["pages"], 3)
+        self.assertEqual(self.by_url["https://www.zh.example/topic-10.html"]["repeated_sections"][0]["pages"], 3)
+
+    def test_under_the_default_threshold_three_pages_of_a_host_are_not_boilerplate(self):
+        report = build_coverage(self.release, self.text, today=self.today)
+        self.assertEqual(report["repeated_sections"], [])
+        self.assertEqual(self.card_status(report, "https://www.sem.example/topic-0.html"), "unclassified")
+        self.assertEqual(self.card_status(report, "https://www.zh.example/topic-10.html"), "unclassified")
+
+    def test_the_pack_lowers_the_threshold_to_the_floor(self):
+        report = build_coverage(self.release, self.text, today=self.today, min_pages=3)
+        self.assertEqual(sorted((r["host"], r["pages"]) for r in report["repeated_sections"]),
+                         [("www.sem.example", 3), ("www.zh.example", 3)])
+        self.assertEqual(self.card_status(report, "https://www.sem.example/topic-0.html"), "boilerplate")
+        self.assertEqual(self.card_status(report, "https://www.zh.example/topic-10.html"), "boilerplate")
+
+    def test_the_curation_field_has_a_floor_and_the_release_does_not_carry_it(self):
+        data = yaml.safe_load(CURATION.replace("DOC", self.by_url[URL]["document_id"]))
+        self.assertEqual(Curation.model_validate(data).boilerplate_min_pages, 5)
+        self.assertEqual(Curation.model_validate(data | dict(boilerplate_min_pages=3)).boilerplate_min_pages, 3)
+        with self.assertRaises(ValidationError):
+            Curation.model_validate(data | dict(boilerplate_min_pages=2))
+        self.assertNotIn("boilerplate_min_pages", self.release.manifest.model_dump())
+

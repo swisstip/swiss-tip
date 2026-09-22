@@ -29,10 +29,15 @@ Three classes are settled without a curator, and reported as such:
   the Fedlex plugin resolved) is one unit, cited when any article is cited. A
   curator cites articles from a statute; asking for a disposition of every
   uncited article would produce nothing but rubber stamps;
-- *boilerplate*: a section whose text recurs, word for word, in
-  `BOILERPLATE_MIN_DOCUMENTS` or more candidate records (the contact card, the
-  telephone hours, the "no e-mail address" note that every page of a site
-  repeats) is not asked for, unless a fact cites it on that page;
+- *boilerplate*: a section whose text recurs, word for word, on
+  `boilerplate_min_pages` or more candidate pages of the same host (the
+  contact card, the telephone hours, the closure notice that every page of a
+  service repeats) is not asked for, unless a fact cites it on that page. The
+  threshold is the pack's, set in its curation (default 5, never below 3),
+  and the count is per host because the same sentence on two authorities'
+  sites is two authorities saying it. The extractor marks the same repetition
+  in the text index and the reading views (`repeated_sections`, from two pages
+  up) so that readers see it before any threshold applies;
 - an *oversized* page (more than `OVERSIZE_SECTIONS` content sections, a
   tariff table rendered as hundreds of heading runs) is judged by its top two
   heading levels instead of its deepest, so that it has tens of units, not
@@ -77,7 +82,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from swisstip.core.release import Release
-from swisstip.extraction.sections import build_sections, candidate_status, is_content
+from swisstip.extraction.sections import build_sections, candidate_status, host_of, is_content, normalise, section_text
 
 COVERAGE_SCHEMA_VERSION = "swiss-tip-curation-coverage/v1"
 REPORT_SCHEMA_VERSION = "swiss-tip-curation-coverage-report/v1"
@@ -85,8 +90,10 @@ POLICIES = ("report", "enforce")
 DispositionKind = Literal["out_of_scope", "duplicate", "navigation", "deferred"]
 # Records judged as one unit: the statutes the Fedlex plugin resolved, which a curator cites from article by article.
 REFERENCE_KINDS = frozenset({"plugin-document"})
-# A section whose text recurs in this many candidate records is site boilerplate, not content to disposition.
-BOILERPLATE_MIN_DOCUMENTS = 5
+# A section whose text recurs on this many candidate pages of one host is site boilerplate, not content to disposition;
+# the pack's curation sets the number (`boilerplate_min_pages`), never below the floor.
+DEFAULT_BOILERPLATE_MIN_PAGES = 5
+BOILERPLATE_MIN_PAGES_FLOOR = 3
 # A page with more content sections than this is judged by its top two heading levels.
 OVERSIZE_SECTIONS = 100
 # A page cites a repeated text when the blocks a fact cites there cover this share of the text's characters.
@@ -180,14 +187,6 @@ def candidate_entries(index: list[dict]) -> list[dict]:
     return result
 
 
-def normalise(text: str) -> str:
-    return " ".join(text.split()).lower()
-
-
-def section_text(section: dict) -> str:
-    return " ".join(normalise(block["text"]) for block in section["span_blocks"])
-
-
 def cited_block_texts(text: Path, cited: dict[str, set[int]]) -> dict[str, set[str]]:
     """Normalised text of every block a fact cites -> the documents that cite a block with that text.
 
@@ -241,10 +240,14 @@ def unit_sections(record: dict, entry: dict) -> tuple[list[dict], str]:
 
 
 def build_coverage(release: Release, text: Path, *, policy: str = "report", dispositions: CoverageDispositions | None = None,
-                   catalogue: dict | None = None, today: date | None = None, dispositions_sha256: str | None = None) -> dict:
-    """The coverage report of a release over its text dataset."""
+                   catalogue: dict | None = None, today: date | None = None, dispositions_sha256: str | None = None,
+                   min_pages: int | None = None) -> dict:
+    """The coverage report of a release over its text dataset; `min_pages` is the pack's `boilerplate_min_pages`."""
     if policy not in POLICIES:
         raise ValueError(f"coverage_policy must be one of {POLICIES}")
+    min_pages = DEFAULT_BOILERPLATE_MIN_PAGES if min_pages is None else min_pages
+    if min_pages < BOILERPLATE_MIN_PAGES_FLOOR:
+        raise ValueError(f"boilerplate_min_pages must be at least {BOILERPLATE_MIN_PAGES_FLOOR}")
     today = today or date.today()
     text = Path(text)
     index = json.loads((text / "index.json").read_text(encoding="utf-8"))
@@ -275,28 +278,31 @@ def build_coverage(release: Release, text: Path, *, policy: str = "report", disp
         else:
             rules.append((number, item))
 
-    # Pass one: the units of every candidate, and which section texts recur across records (boilerplate).
+    # Pass one: the units of every candidate, and which section texts recur across pages of one host (boilerplate).
     units_of: dict[str, tuple[list[dict], str]] = {}
-    text_documents: dict[str, set[str]] = defaultdict(set)
-    text_blocks: dict[str, list[str]] = {}
-    text_heading: dict[str, list[str]] = {}
+    text_documents: dict[tuple[str, str], set[str]] = defaultdict(set)
+    text_blocks: dict[tuple[str, str], list[str]] = {}
+    text_heading: dict[tuple[str, str], list[str]] = {}
     for entry in candidates:
         record = json.loads((text / entry["file"]).read_text(encoding="utf-8")) if entry.get("file") else {}
         units, unit_kind = unit_sections(record, entry)
         units_of[entry["document_id"]] = (units, unit_kind)
+        host = host_of(entry.get("source_url"))
         for unit in units:
             if unit["text"]:
-                text_documents[unit["text"]].add(entry["document_id"])
-                text_blocks.setdefault(unit["text"], unit["block_texts"])
-                text_heading.setdefault(unit["text"], unit["heading_path"])
-    boilerplate_texts = {t for t, docs in text_documents.items() if len(docs) >= BOILERPLATE_MIN_DOCUMENTS}
+                key = (host, unit["text"])
+                text_documents[key].add(entry["document_id"])
+                text_blocks.setdefault(key, unit["block_texts"])
+                text_heading.setdefault(key, unit["heading_path"])
+    boilerplate_texts = {key for key, docs in text_documents.items() if len(docs) >= min_pages}
 
     # Where does a fact cite each repeated text? Block by block, over every cited record, furniture included; a page
     # counts when its cited blocks cover enough of the text, not when it shares a two-word widget label with it.
     citing = cited_block_texts(text, cited) if boilerplate_texts else {}
     repeated_sections = []
-    for value in boilerplate_texts:
-        blocks = text_blocks.get(value, [])
+    for key in boilerplate_texts:
+        host, value = key
+        blocks = text_blocks.get(key, [])
         total = sum(len(block) for block in blocks) or 1
         covered: Counter = Counter()
         for block in blocks:
@@ -305,12 +311,12 @@ def build_coverage(release: Release, text: Path, *, policy: str = "report", disp
         pages = {d: round(chars / total, 2) for d, chars in covered.items() if chars / total >= REPEATED_MATCH_SHARE}
         status = "cited_nowhere" if not pages else "cited_once" if len(pages) == 1 else "cited_on_several_pages"
         repeated_sections.append(dict(
-            status=status, pages=len(text_documents[value]), heading_path=text_heading.get(value, []),
+            status=status, host=host, pages=len(text_documents[key]), heading_path=text_heading.get(key, []),
             text=value[:160], characters=len(value),
             cited_on=[dict(document_id=d, source_url=by_id.get(d, {}).get("source_url"), title=by_id.get(d, {}).get("title"),
                            share=pages[d]) for d in sorted(pages)]))
     order = {"cited_nowhere": 0, "cited_on_several_pages": 1, "cited_once": 2}
-    repeated_sections.sort(key=lambda r: (order[r["status"]], -r["pages"], r["text"]))
+    repeated_sections.sort(key=lambda r: (order[r["status"]], -r["pages"], r["host"], r["text"]))
 
     # Pass two: classify every unit.
     documents = []
@@ -323,6 +329,7 @@ def build_coverage(release: Release, text: Path, *, policy: str = "report", disp
         document_id = entry["document_id"]
         units, unit_kind = units_of[document_id]
         unit_kinds[unit_kind] += 1
+        host = host_of(entry.get("source_url"))
         cited_here = cited.get(document_id, set())
         matched_rules = [(number, rule) for number, rule in rules if (entry.get("source_url") or "").startswith(rule.url_prefix)]
         for number, rule in matched_rules:
@@ -344,7 +351,7 @@ def build_coverage(release: Release, text: Path, *, policy: str = "report", disp
                 statuses.append("dispositioned")
                 kind = whole[0].kind if whole else named[0].kind if named else matched_rules[0][1].kind
                 dispositions_used[kind] += 1
-            elif unit["text"] and unit["text"] in boilerplate_texts:
+            elif unit["text"] and (host, unit["text"]) in boilerplate_texts:
                 statuses.append("boilerplate")
             else:
                 statuses.append("unclassified")
@@ -405,7 +412,7 @@ def build_coverage(release: Release, text: Path, *, policy: str = "report", disp
         content_sha256=release.manifest.content_sha256, text_index_sha256=sha256_file(text / "index.json"),
         dispositions_sha256=dispositions_sha256, dispositions=len(items), policy=policy, today=today.isoformat(),
         generated_at=datetime.now(UTC).isoformat(),
-        rules=dict(reference_kinds=sorted(REFERENCE_KINDS), boilerplate_min_documents=BOILERPLATE_MIN_DOCUMENTS,
+        rules=dict(reference_kinds=sorted(REFERENCE_KINDS), boilerplate_min_pages=min_pages,
                    oversize_sections=OVERSIZE_SECTIONS, repeated_match_share=REPEATED_MATCH_SHARE),
         counts=dict(candidates=len(candidates), units=dict(unit_kinds),
                     content_sections=unit_totals["cited"] + unit_totals["dispositioned"] + unit_totals["unclassified"],
@@ -452,15 +459,16 @@ def render_markdown(report: dict) -> str:
                          f"{section['first_block']}-{section['last_block']} | {section['characters']} |")
     if report.get("repeated_sections"):
         lines += ["", "## Repeated sections", "",
-                  "Texts that recur in five or more candidate records and were set aside as boilerplate, with the page or pages "
-                  "where a fact cites them (at least half of the text's characters). `cited_nowhere` is repeated information the "
-                  "release serves from no page.", "",
-                  "| Status | Pages | Cited on | Heading | Text |", "| --- | ---: | --- | --- | --- |"]
+                  f"Texts that recur on {report['rules']['boilerplate_min_pages']} or more candidate pages of one host and were set "
+                  "aside as boilerplate, with the page or pages where a fact cites them (at least half of the text's characters). "
+                  "`cited_nowhere` is repeated information the release serves from no page.", "",
+                  "| Status | Host | Pages | Cited on | Heading | Text |", "| --- | --- | ---: | --- | --- | --- |"]
         for item in report["repeated_sections"]:
             cited_on = "; ".join(f"[{(c['title'] or c['source_url'] or c['document_id']).replace('|', '/')}]({c['source_url']})"
                                  for c in item["cited_on"]) or "-"
             heading = " > ".join(item["heading_path"]).replace("|", "/") or "(no heading)"
-            lines.append(f"| {item['status']} | {item['pages']} | {cited_on} | {heading} | {item['text'][:100].replace('|', '/')} |")
+            lines.append(f"| {item['status']} | {item['host']} | {item['pages']} | {cited_on} | {heading} | "
+                         f"{item['text'][:100].replace('|', '/')} |")
     lines += ["", "## Sources", "", "| Status | Source | Documents | Units | Cited | Dispositioned | Boilerplate | Unclassified |",
               "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for source in report["sources"]:

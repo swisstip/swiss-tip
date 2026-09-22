@@ -26,18 +26,20 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--release", type=Path, required=True)
     parser.add_argument("--text", type=Path, required=True, help="text dataset of the pack's run")
-    parser.add_argument("--curation", type=Path, help="curation.yaml, for coverage_policy; default policy report")
+    parser.add_argument("--curation", type=Path, help="curation.yaml, for coverage_policy and boilerplate_min_pages; defaults report and 5")
     parser.add_argument("--dispositions", type=Path, help="curation-coverage.yaml with the curator's dispositions")
     parser.add_argument("--catalogue", type=Path, help="the run's catalogue.json (or sources.json), for the source roll-up")
     parser.add_argument("--output", type=Path, required=True, help="curation-coverage.json to write; the .md goes next to it")
     args = parser.parse_args(argv)
     try:
         release = load_release(args.release)
-        policy = load_curation(args.curation).coverage_policy if args.curation else "report"
+        curation = load_curation(args.curation) if args.curation else None
+        policy = curation.coverage_policy if curation else "report"
         dispositions = load_dispositions(args.dispositions) if args.dispositions and args.dispositions.is_file() else None
         catalogue = json.loads(args.catalogue.read_text(encoding="utf-8")) if args.catalogue and args.catalogue.is_file() else None
         report = build_coverage(release, args.text, policy=policy, dispositions=dispositions, catalogue=catalogue,
-                                dispositions_sha256=sha256_file(args.dispositions) if dispositions else None)
+                                dispositions_sha256=sha256_file(args.dispositions) if dispositions else None,
+                                min_pages=curation.boilerplate_min_pages if curation else None)
     except (ValidationError, OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

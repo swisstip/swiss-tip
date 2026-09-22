@@ -75,9 +75,17 @@ and how much of it: `curation_candidate` with `candidate_exclusion`
 `sections`, `content_sections` and `content_characters` from
 `swisstip.extraction.sections`, which splits a record into heading runs and
 keeps those with citable text (no page furniture, no footnote, no bare list
-of links). The summary counts `curation_candidates` and
-`candidate_exclusions`. The build's coverage stage and the concept-extraction
-jobs share these rules, so "was this page read?" has one answer.
+of links), and `repeated_sections`: the content sections whose text also
+stands on another candidate page of the same host, with block range and page
+count, from two pages up. The reading view of such a record marks every block
+of the section `repeated on N pages` and lists the ranges in its header, so a
+reader cites the contact card once, from the page that owns it; the mark
+never hides a block. The summary counts `curation_candidates`,
+`candidate_exclusions`, `records_with_repeated_sections` and
+`repeated_sections`. The build's coverage stage and the concept-extraction
+jobs share these rules, so "was this page read?" has one answer, and the
+coverage stage applies the pack's boilerplate threshold to the same
+repetition.
 Block IDs are `<document_id>:bNNNNN`. Offsets are zero-based, end-exclusive
 code points into `content_text`, which is the blocks joined by two newlines.
 

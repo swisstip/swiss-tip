@@ -19,9 +19,20 @@ superseded nor a language variant of another page. The exclusions are named so
 that a coverage report can say why a record is not asked for, and so that the
 question "was this page ever read?" has one answer in the dataset instead of
 one per consumer.
+
+A *repeated section* is a content section whose text, whitespace and case
+aside, also stands on another candidate page of the same host: the contact
+card, the counter hours, the closure notice a site prints on every page of a
+service. The dataset marks it on every page it appears on, with the number of
+pages, and never drops it: whether it is boilerplate to set aside is the
+build's decision under the pack's threshold, and which page cites it is the
+coverage report's. Counting is per host because the same sentence on two
+authorities' sites is two authorities saying it, not one site's furniture.
 """
 
 import unicodedata
+from collections import defaultdict
+from urllib.parse import urlsplit
 
 FURNITURE_HEADINGS = frozenset({
     "kontakt", "contact", "contacts", "kontaktinformationen", "contact details",
@@ -143,6 +154,45 @@ def section_summary(section: dict) -> dict:
 def is_content(section: dict) -> bool:
     """A section a curator could cite: it keeps text and is not a bare list of links."""
     return bool(section.get("kept")) and not section.get("link_only")
+
+
+def normalise(text: str) -> str:
+    """The text of a block as repetition sees it: one space between words, lower case."""
+    return " ".join(text.split()).lower()
+
+
+def section_text(section: dict) -> str:
+    """The normalised text of a section's kept blocks; two sections repeat each other when this is equal."""
+    return " ".join(normalise(block["text"]) for block in section["span_blocks"])
+
+
+def host_of(url: str | None) -> str:
+    return (urlsplit(url or "").hostname or "").lower()
+
+
+def repeated_sections(candidates: list[tuple[dict, dict]]) -> dict[str, list[dict]]:
+    """Per candidate record, the content sections whose text also stands on another candidate page of the same host.
+
+    `candidates` pairs an index entry with its record. The result maps `document_id` to a list of
+    `{section_id, heading_path, first_block, last_block, pages}`, `pages` being the number of candidate pages of the
+    host that carry the text, this one included; records without a repeated section are absent."""
+    pages: dict[tuple[str, str], set[str]] = defaultdict(set)
+    sections_of: dict[str, list[tuple[dict, str]]] = {}
+    for entry, record in candidates:
+        host = host_of(entry.get("source_url") or record.get("source_url"))
+        kept = [(s, section_text(s)) for s in build_sections(record) if is_content(s)]
+        sections_of[entry["document_id"]] = [(s, text) for s, text in kept if text]
+        for _, text in sections_of[entry["document_id"]]:
+            pages[(host, text)].add(entry["document_id"])
+    result: dict[str, list[dict]] = {}
+    for entry, record in candidates:
+        host = host_of(entry.get("source_url") or record.get("source_url"))
+        repeated = [dict(section_id=s["section_id"], heading_path=s["heading_path"], first_block=s["first_block"],
+                         last_block=s["last_block"], pages=len(pages[(host, text)]))
+                    for s, text in sections_of[entry["document_id"]] if len(pages[(host, text)]) > 1]
+        if repeated:
+            result[entry["document_id"]] = repeated
+    return result
 
 
 def content_sections(record: dict) -> list[dict]:

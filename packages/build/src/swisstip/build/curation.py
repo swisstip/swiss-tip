@@ -142,6 +142,10 @@ class Curation(Strict):
         "What the build does with content sections of candidate records that no fact cites and no disposition in "
         "curation-coverage.yaml names: `report` writes curation-coverage.json and goes on, `enforce` fails the build. "
         "Not copied into the release."))
+    boilerplate_min_pages: int = Field(default=5, ge=3, description=(
+        "A content section whose text stands on this many candidate pages of the same host is site boilerplate: the "
+        "coverage stage does not ask for a disposition of it and instead reports the page where a fact cites it. Never "
+        "below 3: two pages sharing a paragraph is a duplicate to disposition, not furniture. Not copied into the release."))
     topics: list[CuratedTopic] = Field(min_length=1)
     concepts: list[CuratedConcept] = Field(min_length=1)
 

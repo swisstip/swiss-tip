@@ -54,9 +54,12 @@ it or a curator dispositioned it in `curation-coverage.yaml`
 `out_of_scope`, `deferred` a `reaffirm_by` date). The report lists every
 open section with its heading path and block range, the findings (`stale`,
 `expired`, `unknown_out_of_scope_entry`, `new_under_rule`, `unused_rule`) and
-a roll-up per catalogue source. A section whose text recurs in five or more
-candidate records is boilerplate: not asked for, but traced. `repeated_sections`
-names, per repeated text, the page or pages where a fact cites at least half
+a roll-up per catalogue source. A section whose text recurs on
+`boilerplate_min_pages` or more candidate pages of one host (a curation
+field, default 5, never below 3; the count is per host because the same
+sentence on two authorities' sites is two authorities saying it) is
+boilerplate: not asked for, but traced. `repeated_sections`
+names, per repeated text and host, the page or pages where a fact cites at least half
 of its characters (`cited_nowhere`, `cited_once`, `cited_on_several_pages`),
 looking at every cited record including blocks the section rules exclude as
 furniture, because the canonical citation of a contact card is usually under

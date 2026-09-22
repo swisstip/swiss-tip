@@ -132,9 +132,12 @@ text/
 
 The index entry of a record repeats the identifying fields and adds what a
 curator needs to know without opening the record: `curation_candidate` and
-`candidate_exclusion` (section 3.5), `sections`, `content_sections` and
-`content_characters`. The summary counts `curation_candidates` and the
-exclusions by reason.
+`candidate_exclusion` (section 3.5), `sections`, `content_sections`,
+`content_characters` and `repeated_sections`, the content sections whose text
+also stands on another candidate page of the same host, each with its block
+range and the number of pages. The summary counts `curation_candidates`, the
+exclusions by reason, `records_with_repeated_sections` and
+`repeated_sections`.
 
 ### 3.3 Block
 
@@ -175,6 +178,23 @@ record is its `candidate_exclusion`. Language variants are not candidates
 because the pack decides per fact whether an English version stands next to
 the German excerpt; a variant that is cited counts as cited, one that is not
 is not asked for.
+
+A *repeated section* is a content section whose text, whitespace and case
+aside, also stands on another candidate page of the same host: the contact
+card, the counter hours, the closure notice a site prints on every page of a
+service. The index marks it on every page it appears on with the number of
+pages, from two up, and the reading view marks each of its blocks
+`repeated on N pages` and lists the ranges in its header. The mark informs
+and never hides: on the page that owns the card, the card is the fact; on the
+other pages a reader who sees the mark cites it once, from the owner, instead
+of restating it as a fact of every page. What counts as boilerplate to set
+aside is not decided here: the build's coverage stage applies the pack's
+`boilerplate_min_pages` (default five, never below three) to the same
+repetition, and reports where a fact cites each such text. Counting is per
+host because the same sentence on two authorities' sites is two authorities
+saying it, not one site's furniture. The coverage stage counts units, so a
+text that also stands on a rolled-up or reference page can show one page
+fewer there than in the index.
 
 Why this lives in the extractor: every consumer used to derive "which records
 should someone look at" with its own filters, and the numbers disagreed. One

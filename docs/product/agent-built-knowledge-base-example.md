@@ -400,7 +400,12 @@ look at the body and not only at the status code.
 
 No model is involved. The stage writes labelled blocks with code-point offsets
 and hashes, plus a Markdown reading view per record. The reading view is what
-the readers in step 5 read, and the block IDs are what they cite.
+the readers in step 5 read, and the block IDs are what they cite. A section
+the dataset finds on other candidate pages of the same host (a contact card,
+the counter hours, a closure notice) is marked `repeated on N pages` on each
+of its blocks and listed in the view's header and in the index entry's
+`repeated_sections`, so a reader sees the card for what it is before deciding
+what to cite. The mark hides nothing.
 
 ### Prompt
 
@@ -513,6 +518,11 @@ Rules:
     "in der Regel", the statement says "as a rule", not a flat claim.
   - If the page only points at another authority, that IS the fact: say that
     this office publishes the pointer, and name the other authority.
+  - A section marked `repeated on N pages` is a card one page owns (an
+    address, opening hours) or furniture of the whole service. Cite it once,
+    from the page that owns it (the office's own page for its address), and
+    do not restate it as a fact of every page that carries it. Never skip it
+    because of the mark: on the page that owns it, it is the fact.
   - Every content section of the page ends in one of two places: cited by a
     fact you propose, or dispositioned. For each content section you cite
     nothing from, return a disposition for
@@ -675,8 +685,9 @@ verifies that every source term occurs in its excerpt, and refuses an invalid
 release. The coverage stage then joins the text dataset with the release and
 writes `curation-coverage.json` and `.md`: every content section of every
 candidate record is cited, dispositioned, or listed as unclassified with its
-heading path and block range. A section whose text recurs on five or more
-candidate pages (a contact card, a closure notice) is set aside as boilerplate
+heading path and block range. A section whose text recurs on
+`boilerplate_min_pages` or more candidate pages of the same host (a curation
+field, default five, never below three) is set aside as boilerplate
 and traced instead: the report's `repeated_sections` table names the page
 where a fact cites it, so that an office address repeated on twenty pages is
 served once, from the office's own page, and one that is served from no page

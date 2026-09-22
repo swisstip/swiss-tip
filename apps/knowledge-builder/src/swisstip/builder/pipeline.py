@@ -220,7 +220,8 @@ class Pipeline:
             return "skipped", dict(reason="no release file")
         if not (self.text / "index.json").is_file():
             return "skipped", dict(reason="the text dataset has no index; run the extract stage first")
-        policy = self.loaded_curation().coverage_policy if self.curation.is_file() else "report"
+        curation = self.loaded_curation() if self.curation.is_file() else None
+        policy = curation.coverage_policy if curation else "report"
         try:
             dispositions = load_dispositions(self.dispositions) if self.dispositions.is_file() else None
         except (ValidationError, ValueError) as exc:
@@ -229,7 +230,8 @@ class Pipeline:
             raise StageError(f"curation-coverage.yaml is for pack {dispositions.pack!r}, not {self.pack!r}")
         catalogue = self.read_json(self.run / "catalogue.json") or self.read_json(self.catalogue)
         report = build_coverage(load_release(self.release), self.text, policy=policy, dispositions=dispositions, catalogue=catalogue,
-                                dispositions_sha256=sha256_file(self.dispositions) if dispositions is not None else None)
+                                dispositions_sha256=sha256_file(self.dispositions) if dispositions is not None else None,
+                                min_pages=curation.boilerplate_min_pages if curation else None)
         write_report(report, self.coverage_report_path)
         details = dict(release_id=report["release_id"], policy=policy, clean=report["clean"], **report["counts"])
         if not report["passed"]:
