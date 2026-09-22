@@ -664,6 +664,29 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(service.lexical_hits("What does Testtown offer?"), [])
         self.assertEqual([hit[1] for hit in service.lexical_hits("Testtown Kiosk2")], ["town-2"])
 
+    def test_a_one_character_token_is_kept_unless_it_is_an_elision(self):
+        # The letter is the whole question: without it "What is an L permit?" comes down to "permit".
+        self.assertEqual(tokens("What is an L permit?"), {"l", "permit"})
+        self.assertEqual(tokens("Wie bekomme ich eine B-Bewilligung?"), {"b", "bekomm", "bewill"})
+        self.assertEqual(tokens("What is a D visa?"), {"d", "visa"})
+        self.assertEqual(tokens("Tarif B"), {"b", "tarif"})
+        # A character joined to a word by an apostrophe is grammar, in English and in French.
+        self.assertEqual(tokens("the foreign national's permit"), {"foreig", "nation", "permit"})
+        self.assertEqual(tokens("l’autorisation d'etablissement"), {"autori", "etabli"})
+        # The articles stay stopwords, and so do the one-letter function words the length filter used to hide.
+        self.assertEqual(tokens("I need a permit"), {"permit"})
+        self.assertEqual(tokens("Wo isch s Amt z Winterthur? E-Mail?"), {"isch", "amt", "winter", "mail"})
+
+    def test_a_one_character_token_no_anchor_names_does_not_weaken_the_match(self):
+        # An unnamed letter is grammar, not the question's most distinctive unmatched word ("d Stadt", "z.B.").
+        self.assertEqual(self.service.anchored_match("Anmeldefrist d Stadt"), self.service.anchored_match("Anmeldefrist Stadt"))
+        # A letter an alias names is a word of the question like any other.
+        release = sample_release()
+        release.concepts[0].aliases = [*release.concepts[0].aliases, "Ausweis Q"]
+        release.manifest.content_sha256 = content_hash(release)
+        named = ReleaseService(release)
+        self.assertGreater(named.anchored_match("Ausweis Q")[1], named.anchored_match("Ausweis")[1])
+
     def test_loose_hits_far_below_the_best_are_dropped(self):
         hits = self.service.lexical_hits("Anmeldefrist 14 days register permit")
         self.assertEqual(hits[0][1], "deadline")

@@ -41,6 +41,13 @@ from .semantic import SemanticError, SemanticSearch
 STOPWORDS = {"a", "an", "and", "as", "at", "by", "do", "for", "i", "in", "is", "it", "my", "of", "on", "or", "the",
              "to", "when", "with", "should", "must", "have", "need", "can", "am", "me", "next", "week", "latest",
              "no", "not",
+             # Single characters are tokens (see tokens()), so the one-letter function words need naming. "e" is the
+             # prefix of E-Mail, E-ID and e-Umzug, a morpheme and not the name of a type; it lifted the office-contact
+             # concepts, whose aliases carry "E-Mail", into the hits of a rent question announced by e-mail. "s" and
+             # "z" are the Zurich German article and preposition of "Wo isch s Amt z Winterthur?"; counted as words,
+             # they read as the question's most distinctive unmatched terms. A pack that names a type S or Z (the
+             # permit S of temporary protection is listed, not published) reaches it through the embedding only.
+             "e", "s", "z",
              # Question words: the authored "questions" field is an anchor, so "what" or "does" matched every concept
              # whose sample questions used them.
              "does", "what", "where", "which", "who", "how", "why", "this", "that", "these", "those", "you", "your",
@@ -291,8 +298,17 @@ def stem(token: str) -> str:
     return token[:6] if len(token) > 6 else token
 
 
+# A one-character token often carries the whole question when a type is named by a letter or a digit: "What is an L
+# permit?", "Tarif B", "Visum D", "Kreis 5". Without it the question comes down to a noun that nearly every concept
+# of the topic carries. Such a token is kept; which types a pack names is the pack's business, read from its
+# aliases like any other term. A character attached to a word by an apostrophe is grammar, not a name ("the
+# national's permit", "l'autorisation"), and is dropped.
+ELISION = re.compile(r"(?<!\w)[a-z0-9]['’]|['’][a-z0-9](?!\w)")
+
+
 def tokens(text: str) -> set[str]:
-    return {stem(collapse_umlauts(t)) for t in re.findall(r"[a-z0-9]+", fold(text)) if t not in STOPWORDS and len(t) > 1}
+    folded = ELISION.sub(" ", fold(text))
+    return {stem(collapse_umlauts(t)) for t in re.findall(r"[a-z0-9]+", folded) if t not in STOPWORDS}
 
 
 FACET_TOKENS = frozenset(tokens(FACET_WORDS))
@@ -540,6 +556,12 @@ class ReleaseService:
         anything and 1 when one concept's anchors carry every distinctive word of the question; the weight is the
         same mass in units of the rarest possible token. Unlike the score, both ignore field weights and the prior."""
         query = tokens(query_text) - self.common_tokens - FACET_TOKENS
+        # A one-character token that no label, alias or question carries is grammar the stopword list does not know
+        # (the Zurich German "s" and "z" of "Wo isch s Amt z Winterthur?"), not the name of a type: a type a pack
+        # names is in its aliases. It is left out rather than counted as the question's most distinctive unmatched
+        # word; a statement that merely mentions the letter does not make it a name.
+        named = {token for fields in self.search_index.values() for name in ANCHOR_FIELDS for token in query & fields[name]}
+        query = {token for token in query if len(token) > 1 or token in named}
         weights = {token: self.token_weight.get(token, self.unknown_token_weight) for token in query}
         total = sum(weights.values())
         if not total:
