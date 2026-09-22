@@ -675,7 +675,12 @@ verifies that every source term occurs in its excerpt, and refuses an invalid
 release. The coverage stage then joins the text dataset with the release and
 writes `curation-coverage.json` and `.md`: every content section of every
 candidate record is cited, dispositioned, or listed as unclassified with its
-heading path and block range. Under the default `coverage_policy: report` it
+heading path and block range. A section whose text recurs on five or more
+candidate pages (a contact card, a closure notice) is set aside as boilerplate
+and traced instead: the report's `repeated_sections` table names the page
+where a fact cites it, so that an office address repeated on twenty pages is
+served once, from the office's own page, and one that is served from no page
+appears as `cited_nowhere`. Under the default `coverage_policy: report` it
 only writes; a new pack sets `coverage_policy: enforce` in `curation.yaml`
 from the start, so that an unclassified section is a build error and not a
 number in a report someone has to remember to read.
@@ -710,6 +715,11 @@ saved and nobody read: either a reader missed it (send it back to step 5) or
 it needs a disposition with a reason. Do not disposition a section as
 out_of_scope to make the count zero: the disposition must name the manifest
 entry that excludes it, and the stage checks that it exists.
+
+Then read the repeated-sections table. A `cited_nowhere` entry that is an
+address, a telephone number or opening hours is contact information the
+release does not serve: cite it once, from the office's own page. A closure
+notice or a browser warning that is cited nowhere is right as it is.
 
 Report: release ID, content digest, topics, concepts, facts, excerpts, cited
 documents, dropped facts (must be 0), unclassified sections (must be 0),

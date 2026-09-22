@@ -54,7 +54,13 @@ it or a curator dispositioned it in `curation-coverage.yaml`
 `out_of_scope`, `deferred` a `reaffirm_by` date). The report lists every
 open section with its heading path and block range, the findings (`stale`,
 `expired`, `unknown_out_of_scope_entry`, `new_under_rule`, `unused_rule`) and
-a roll-up per catalogue source. Exit code 1 only when the report is not
+a roll-up per catalogue source. A section whose text recurs in five or more
+candidate records is boilerplate: not asked for, but traced. `repeated_sections`
+names, per repeated text, the page or pages where a fact cites at least half
+of its characters (`cited_nowhere`, `cited_once`, `cited_on_several_pages`),
+looking at every cited record including blocks the section rules exclude as
+furniture, because the canonical citation of a contact card is usually under
+the "Kontakt" heading of the office's own page. Exit code 1 only when the report is not
 clean and the curation says `coverage_policy: enforce`; `report`, the
 default, writes it and exits 0. The knowledge builder runs it as the
 `coverage` stage. Module docstring: why the release validator alone could

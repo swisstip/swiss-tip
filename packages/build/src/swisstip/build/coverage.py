@@ -38,6 +38,20 @@ Three classes are settled without a curator, and reported as such:
   heading levels instead of its deepest, so that it has tens of units, not
   hundreds.
 
+Boilerplate is set aside, not forgotten: the report's `repeated_sections`
+table names, for every repeated text, the page or pages where a fact cites
+it. The match is block by block over every record the release cites,
+including blocks the section rules exclude as furniture, because the
+canonical citation of a contact card is often on the office's own page under
+a "Kontakt" heading that never becomes a unit; a page counts when the cited
+blocks cover at least `REPEATED_MATCH_SHARE` of the text's characters, so
+that the two-word widget labels every office card shares ("Route (Google)",
+"Adresse wurde kopiert") do not make one office's address look cited on
+another office's page. A repeated text `cited_nowhere`
+is contact information the release serves from no page; `cited_on_several_pages`
+is the same sentence stated as a fact several times, which a reviewer may keep
+or collapse. Both are information; neither fails the build.
+
 A disposition names a `document_id` (all sections, or the `section_ids` it
 lists) or a `url_prefix` rule with the `known_documents` it covers. A document
 under a rule that the rule does not know yet is reported as `new_under_rule`,
@@ -75,6 +89,8 @@ REFERENCE_KINDS = frozenset({"plugin-document"})
 BOILERPLATE_MIN_DOCUMENTS = 5
 # A page with more content sections than this is judged by its top two heading levels.
 OVERSIZE_SECTIONS = 100
+# A page cites a repeated text when the blocks a fact cites there cover this share of the text's characters.
+REPEATED_MATCH_SHARE = 0.5
 
 
 class Strict(BaseModel):
@@ -164,24 +180,48 @@ def candidate_entries(index: list[dict]) -> list[dict]:
     return result
 
 
+def normalise(text: str) -> str:
+    return " ".join(text.split()).lower()
+
+
 def section_text(section: dict) -> str:
-    return " ".join(" ".join(block["text"].split()) for block in section["span_blocks"]).lower()
+    return " ".join(normalise(block["text"]) for block in section["span_blocks"])
+
+
+def cited_block_texts(text: Path, cited: dict[str, set[int]]) -> dict[str, set[str]]:
+    """Normalised text of every block a fact cites -> the documents that cite a block with that text.
+
+    Every cited record is read, and every cited block counts whatever the section rules say about it: this is how a
+    contact card that is a unit on twenty pages is traced to its citation on the one page where it sits under a
+    furniture heading."""
+    result: dict[str, set[str]] = defaultdict(set)
+    for document_id, numbers in cited.items():
+        path = text / "documents" / f"{document_id}.json"
+        if not path.is_file():
+            continue
+        for block in json.loads(path.read_text(encoding="utf-8")).get("blocks", []):
+            if block.get("kind") != "heading" and block_number(block["block_id"]) in numbers:
+                value = normalise(block.get("text", ""))
+                if value:
+                    result[value].add(document_id)
+    return result
 
 
 def unit_sections(record: dict, entry: dict) -> tuple[list[dict], str]:
     """The units of a record a curator answers for, and how they were formed (section, rolled_up or document).
 
-    Every unit carries section_id, heading_path, first_block, last_block, characters, text and section_ids (the
-    content sections it stands for)."""
+    Every unit carries section_id, heading_path, first_block, last_block, characters, text, block_texts and
+    section_ids (the content sections it stands for)."""
     sections = [dict(section_id=s["section_id"], heading_path=s["heading_path"], first_block=s["first_block"],
                      last_block=s["last_block"], characters=s["characters"], text=section_text(s),
+                     block_texts=[normalise(b["text"]) for b in s["span_blocks"] if normalise(b["text"])],
                      section_ids=[s["section_id"]]) for s in build_sections(record) if is_content(s)]
     if not sections:
         return [], "section"
     if (entry.get("attribution_kind") or (entry.get("attribution") or {}).get("kind")) in REFERENCE_KINDS:
         return [dict(section_id="document", heading_path=[record.get("title") or entry.get("title") or ""],
                      first_block=sections[0]["first_block"], last_block=sections[-1]["last_block"],
-                     characters=sum(s["characters"] for s in sections), text="",
+                     characters=sum(s["characters"] for s in sections), text="", block_texts=[],
                      section_ids=[s["section_id"] for s in sections])], "document"
     if len(sections) <= OVERSIZE_SECTIONS:
         return sections, "section"
@@ -196,7 +236,7 @@ def unit_sections(record: dict, entry: dict) -> tuple[list[dict], str]:
         else:
             rolled.append(dict(section_id=section["section_id"], heading_path=key, first_block=section["first_block"],
                                last_block=section["last_block"], characters=section["characters"], text="",
-                               section_ids=[section["section_id"]]))
+                               block_texts=[], section_ids=[section["section_id"]]))
     return rolled, "rolled_up"
 
 
@@ -209,6 +249,7 @@ def build_coverage(release: Release, text: Path, *, policy: str = "report", disp
     text = Path(text)
     index = json.loads((text / "index.json").read_text(encoding="utf-8"))
     known_ids = {entry["document_id"] for entry in index}
+    by_id = {entry["document_id"]: entry for entry in index}
     candidates = sorted(candidate_entries(index), key=lambda e: (e.get("source_url") or "", e["document_id"]))
     cited = cited_blocks(release)
     items = dispositions.dispositions if dispositions else []
@@ -237,6 +278,8 @@ def build_coverage(release: Release, text: Path, *, policy: str = "report", disp
     # Pass one: the units of every candidate, and which section texts recur across records (boilerplate).
     units_of: dict[str, tuple[list[dict], str]] = {}
     text_documents: dict[str, set[str]] = defaultdict(set)
+    text_blocks: dict[str, list[str]] = {}
+    text_heading: dict[str, list[str]] = {}
     for entry in candidates:
         record = json.loads((text / entry["file"]).read_text(encoding="utf-8")) if entry.get("file") else {}
         units, unit_kind = unit_sections(record, entry)
@@ -244,7 +287,30 @@ def build_coverage(release: Release, text: Path, *, policy: str = "report", disp
         for unit in units:
             if unit["text"]:
                 text_documents[unit["text"]].add(entry["document_id"])
+                text_blocks.setdefault(unit["text"], unit["block_texts"])
+                text_heading.setdefault(unit["text"], unit["heading_path"])
     boilerplate_texts = {t for t, docs in text_documents.items() if len(docs) >= BOILERPLATE_MIN_DOCUMENTS}
+
+    # Where does a fact cite each repeated text? Block by block, over every cited record, furniture included; a page
+    # counts when its cited blocks cover enough of the text, not when it shares a two-word widget label with it.
+    citing = cited_block_texts(text, cited) if boilerplate_texts else {}
+    repeated_sections = []
+    for value in boilerplate_texts:
+        blocks = text_blocks.get(value, [])
+        total = sum(len(block) for block in blocks) or 1
+        covered: Counter = Counter()
+        for block in blocks:
+            for document_id in citing.get(block, ()):
+                covered[document_id] += len(block)
+        pages = {d: round(chars / total, 2) for d, chars in covered.items() if chars / total >= REPEATED_MATCH_SHARE}
+        status = "cited_nowhere" if not pages else "cited_once" if len(pages) == 1 else "cited_on_several_pages"
+        repeated_sections.append(dict(
+            status=status, pages=len(text_documents[value]), heading_path=text_heading.get(value, []),
+            text=value[:160], characters=len(value),
+            cited_on=[dict(document_id=d, source_url=by_id.get(d, {}).get("source_url"), title=by_id.get(d, {}).get("title"),
+                           share=pages[d]) for d in sorted(pages)]))
+    order = {"cited_nowhere": 0, "cited_on_several_pages": 1, "cited_once": 2}
+    repeated_sections.sort(key=lambda r: (order[r["status"]], -r["pages"], r["text"]))
 
     # Pass two: classify every unit.
     documents = []
@@ -340,14 +406,16 @@ def build_coverage(release: Release, text: Path, *, policy: str = "report", disp
         dispositions_sha256=dispositions_sha256, dispositions=len(items), policy=policy, today=today.isoformat(),
         generated_at=datetime.now(UTC).isoformat(),
         rules=dict(reference_kinds=sorted(REFERENCE_KINDS), boilerplate_min_documents=BOILERPLATE_MIN_DOCUMENTS,
-                   oversize_sections=OVERSIZE_SECTIONS),
+                   oversize_sections=OVERSIZE_SECTIONS, repeated_match_share=REPEATED_MATCH_SHARE),
         counts=dict(candidates=len(candidates), units=dict(unit_kinds),
                     content_sections=unit_totals["cited"] + unit_totals["dispositioned"] + unit_totals["unclassified"],
                     cited_sections=unit_totals["cited"], dispositioned_sections=unit_totals["dispositioned"],
                     unclassified_sections=unit_totals["unclassified"], boilerplate_sections=unit_totals["boilerplate"],
+                    repeated_texts=len(repeated_sections),
+                    repeated_by_citation=dict(Counter(r["status"] for r in repeated_sections)),
                     documents=dict(document_statuses), findings=blocking | dict(unused_rule=len(findings["unused_rule"]))),
         clean=clean, passed=clean if policy == "enforce" else True,
-        documents=documents, sources=sources, findings=findings)
+        documents=documents, sources=sources, repeated_sections=repeated_sections, findings=findings)
 
 
 def coverage_counts(report: dict) -> dict:
@@ -382,6 +450,17 @@ def render_markdown(report: dict) -> str:
             heading = " > ".join(section["heading_path"]).replace("|", "/") or "(no heading)"
             lines.append(f"| `{document['document_id']}` | {section['section_id']} | {heading} | "
                          f"{section['first_block']}-{section['last_block']} | {section['characters']} |")
+    if report.get("repeated_sections"):
+        lines += ["", "## Repeated sections", "",
+                  "Texts that recur in five or more candidate records and were set aside as boilerplate, with the page or pages "
+                  "where a fact cites them (at least half of the text's characters). `cited_nowhere` is repeated information the "
+                  "release serves from no page.", "",
+                  "| Status | Pages | Cited on | Heading | Text |", "| --- | ---: | --- | --- | --- |"]
+        for item in report["repeated_sections"]:
+            cited_on = "; ".join(f"[{(c['title'] or c['source_url'] or c['document_id']).replace('|', '/')}]({c['source_url']})"
+                                 for c in item["cited_on"]) or "-"
+            heading = " > ".join(item["heading_path"]).replace("|", "/") or "(no heading)"
+            lines.append(f"| {item['status']} | {item['pages']} | {cited_on} | {heading} | {item['text'][:100].replace('|', '/')} |")
     lines += ["", "## Sources", "", "| Status | Source | Documents | Units | Cited | Dispositioned | Boilerplate | Unclassified |",
               "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for source in report["sources"]:

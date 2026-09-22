@@ -31,7 +31,7 @@ no pack.
 | `validate-text` | Hashes, offsets, index and reading views; with `--thorough` also every saved response | Never |
 | `build` | `curation.yaml` to `release.json` with citation relocation and `build-report.json`; verifies every `source_terms` entry against the concept's excerpts (a term the evidence does not contain fails the build) and merges the verified terms into the released aliases; with `question_languages` in the curation, fails for a concept that has no sample question in one of them | Curation, text index and release ID unchanged since the last build; or no curation file |
 | `validate-release` | The release against the text dataset (and the run with `--thorough`) | Never |
-| `coverage` | Joins the text dataset with the release: every content section of every curation candidate (`curation_candidate` in the text index) must be cited by a fact or dispositioned in `releases/<pack>/curation-coverage.yaml`; writes `curation-coverage.json` and `.md` with the open sections, the findings (stale, expired, unknown out-of-scope entry, new under a prefix rule) and a roll-up per catalogue source. Fails only when the report is not clean and the curation says `coverage_policy: enforce`; the default `report` writes and goes on | No release, or no text index |
+| `coverage` | Joins the text dataset with the release: every content section of every curation candidate (`curation_candidate` in the text index) must be cited by a fact or dispositioned in `releases/<pack>/curation-coverage.yaml`; writes `curation-coverage.json` and `.md` with the open sections, the findings (stale, expired, unknown out-of-scope entry, new under a prefix rule), a roll-up per catalogue source and, for every section text that recurs on five or more pages, the page where a fact cites it. Fails only when the report is not clean and the curation says `coverage_policy: enforce`; the default `report` writes and goes on | No release, or no text index |
 | `health` | Loads the release like the server and reports counts, languages, staleness and review statuses | Never |
 | `accept` | Replays the pack's acceptance suite (`releases/<pack>/acceptance.yaml`) against the built release with no model involved, writes `acceptance-report.json` and fails when a blocking case fails: a search that no longer finds its concept, a resolve with another status, a claim of the expected answer that no served fact states (or whose cited excerpt does not contain the quoted phrase), a lost `not_served` item, a fact the case excludes | The pack has no acceptance suite |
 | `ready` | Runs the gates of the acceptance gate on the current files (thorough validation with every cited saved response re-hashed, no dropped fact, the suite replayed, the freshness runway, the graded live-caller sessions of `acceptance-answers.json` under the suite's answer policy, the committed acceptance report current) and writes `readiness.json` bound to the bytes of `release.json`; only runs when asked with `--until ready`, and needs `--attested-by` | Never |
@@ -45,7 +45,11 @@ disposition names a `document_id` (with optional `section_ids`) or a
 `url_prefix` rule with its `known_documents`, carries a kind (`out_of_scope`
 with the manifest entry it rests on, `duplicate`, `navigation`, `deferred`
 with a `reaffirm_by` date), a reason, an author and a date; the ready stage
-copies the counts into `readiness.json` as information, not as a gate. The
+copies the counts into `readiness.json` as information, not as a gate.
+Repeated site boilerplate (a section text on five or more candidate pages) is
+not asked for but traced: the report says on which page, if any, a fact cites
+it, so a contact card is served once from the office's own page and an
+address the release serves from nowhere is visible as `cited_nowhere`. The
 per-package command is `swisstip-coverage`
 (`python -m swisstip.build.coverage_cli`).
 

@@ -17,6 +17,7 @@ from swisstip.build.curation import Curation, load_curation
 from swisstip.build.release_build import build_release
 from swisstip.core.release import dump_release
 from swisstip.extraction.extract_cli import run_extraction
+from swisstip.extraction.sections import build_sections
 
 URL = "https://www.sem.example/faq.html"
 # Two content sections: Registration is cited by the curation below, Fees never is.
@@ -25,7 +26,7 @@ PAGE = (b"<html lang=\"en\"><head><title>FAQ</title></head><body><main><h1>FAQ</
         b"<h2>Fees</h2><p>The permit costs 65 francs.</p></main></body></html>")
 # A telephone card every page of the site repeats. Its heading is not one of the furniture headings on purpose: the
 # boilerplate rule exists for exactly the repeated sections the section rules cannot know about.
-CONTACT = b"<h2>Telefon</h2><p>044 000 00 00, Montag bis Freitag 8 bis 12 Uhr.</p>"
+CONTACT = b"<h2>Telefon</h2><p>044 000 00 00, Montag bis Freitag 8 bis 12 Uhr.</p><p>Route</p>"
 CURATION = """
 schema_version: swiss-tip-curation/v1
 pack: test
@@ -86,6 +87,20 @@ def topic_page(number: int) -> bytes:
     body = f"<html lang=\"en\"><head><title>Page</title></head><body><main><h1>Topic {number}</h1><h2>Rule</h2>" \
            f"<p>Only this page says rule number {number}.</p>"
     return body.encode() + CONTACT + b"</main></body></html>"
+
+
+def widget_page() -> bytes:
+    """A page that shares nothing with the card but its two-word widget label, under a heading a fact cites whole."""
+    return (b"<html lang=\"en\"><head><title>Map</title></head><body><main><h1>Map</h1>"
+            b"<h2>Directions</h2><p>The office is on the hill.</p><p>Route</p></main></body></html>")
+
+
+def office_page() -> bytes:
+    """The office's own page: the same card as everywhere else, but under the heading Kontakt, which the section
+    rules exclude as furniture, so that it is never a unit there."""
+    return (b"<html lang=\"en\"><head><title>Office</title></head><body><main><h1>Office</h1>"
+            b"<h2>Opening</h2><p>The counter is open on weekdays.</p>" + CONTACT.replace(b"<h2>Telefon</h2>", b"<h2>Kontakt</h2>")
+            + b"</main></body></html>")
 
 
 def tariff_page(rows: int) -> bytes:
@@ -229,6 +244,8 @@ class AutomaticClassTests(unittest.TestCase):
         for number in range(5):
             pages[f"https://www.sem.example/topic-{number}.html"] = topic_page(number)
         pages["https://www.sem.example/tariffs.html"] = tariff_page(120)
+        pages["https://www.sem.example/office.html"] = office_page()
+        pages["https://www.sem.example/map.html"] = widget_page()
         self.run = make_run(self.root, pages)
         run_extraction(self.run, log=lambda *a, **k: None)
         self.text = self.run / "text"
@@ -276,3 +293,70 @@ class AutomaticClassTests(unittest.TestCase):
         self.assertEqual(tariffs["status"], "unclassified")
         self.assertTrue(all(len(s["heading_path"]) <= 2 for s in tariffs["unclassified_sections"]))
         self.assertGreater(len(tariffs["unclassified_sections"][0]["section_ids"]), 0)
+
+    def blocks_of(self, url: str, heading: str) -> tuple[int, int]:
+        """The block range of the heading run named `heading` on the page at `url`, whether the rules keep it or not."""
+        entry = self.by_url[url]
+        record = json.loads((self.text / entry["file"]).read_text(encoding="utf-8"))
+        section = next(s for s in build_sections(record) if s["heading_path"] and s["heading_path"][-1] == heading)
+        return section["first_block"], section["last_block"]
+
+    def release_citing(self, url: str, heading: str):
+        first, last = self.blocks_of(url, heading)
+        data = yaml.safe_load(CURATION.replace("DOC", self.by_url[URL]["document_id"]))
+        data["concepts"].append(dict(concept_id="office-contact", topic_id="residence", label="Office contact",
+                                     description="How to reach the office.", facts=[dict(
+                                         fact_id="office-contact-1", statement="The office answers the telephone on weekday mornings.",
+                                         provenance=dict(kind="curated-statement", review_status="assistant-authored-unreviewed", author="test"),
+                                         evidence=[dict(document_id=self.by_url[url]["document_id"], first_block=first, last_block=last)])]))
+        release, _ = build_release(Curation.model_validate(data), self.text, "test-2026-09-22-v2")
+        return release
+
+    def repeated(self, report) -> dict:
+        return {item["text"][:20]: item for item in report["repeated_sections"]}
+
+    def test_a_repeated_text_no_fact_cites_is_reported_as_cited_nowhere(self):
+        report = build_coverage(self.release, self.text, today=self.today)
+        card = self.repeated(report)["044 000 00 00, monta"]
+        self.assertEqual(card["status"], "cited_nowhere")
+        self.assertGreaterEqual(card["pages"], 6)
+        self.assertEqual(card["cited_on"], [])
+        self.assertEqual(report["counts"]["repeated_by_citation"], {"cited_nowhere": 1})
+        self.assertIn("## Repeated sections", render_markdown(report))
+
+    def test_the_canonical_citation_is_found_even_under_a_furniture_heading(self):
+        office = "https://www.sem.example/office.html"
+        report = build_coverage(self.release_citing(office, "Kontakt"), self.text, today=self.today)
+        # On the office page the card is not a unit at all (Kontakt is furniture), yet the citation of its blocks there
+        # is what makes it the canonical page.
+        self.assertEqual(self.documents(report)[office]["units"], 1)
+        card = self.repeated(report)["044 000 00 00, monta"]
+        self.assertEqual(card["status"], "cited_once")
+        self.assertEqual([c["source_url"] for c in card["cited_on"]], [office])
+        self.assertEqual(report["counts"]["repeated_by_citation"], {"cited_once": 1})
+
+    def test_a_page_that_shares_only_a_widget_label_with_the_card_does_not_cite_it(self):
+        release = self.release_citing("https://www.sem.example/map.html", "Directions")
+        report = build_coverage(release, self.text, today=self.today)
+        card = self.repeated(report)["044 000 00 00, monta"]
+        self.assertEqual(card["status"], "cited_nowhere", card)
+        self.assertEqual(card["cited_on"], [])
+
+    def test_a_repeated_text_cited_on_two_pages_is_reported_as_such(self):
+        first, last = self.blocks_of("https://www.sem.example/topic-1.html", "Telefon")
+        data = yaml.safe_load(CURATION.replace("DOC", self.by_url[URL]["document_id"]))
+        for number, url in enumerate(("https://www.sem.example/topic-1.html", "https://www.sem.example/topic-2.html")):
+            f, l = self.blocks_of(url, "Telefon")
+            data["concepts"][0]["facts"].append(dict(
+                fact_id=f"registration-deadline-{number + 2}", statement=f"The office is reachable by telephone ({number}).",
+                provenance=dict(kind="curated-statement", review_status="assistant-authored-unreviewed", author="test"),
+                evidence=[dict(document_id=self.by_url[url]["document_id"], first_block=f, last_block=l)]))
+        release, _ = build_release(Curation.model_validate(data), self.text, "test-2026-09-22-v3")
+        report = build_coverage(release, self.text, today=self.today)
+        card = self.repeated(report)["044 000 00 00, monta"]
+        self.assertEqual(card["status"], "cited_on_several_pages")
+        self.assertEqual(len(card["cited_on"]), 2)
+        # On the two citing pages the card counts as cited, everywhere else it stays boilerplate.
+        documents = self.documents(report)
+        self.assertEqual(documents["https://www.sem.example/topic-1.html"]["cited"], 1)
+        self.assertEqual(documents["https://www.sem.example/topic-3.html"]["boilerplate"], 1)
