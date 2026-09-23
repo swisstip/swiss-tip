@@ -1,6 +1,6 @@
 # Tool contracts
 
-**Last update:** 21 September 2026
+**Last update:** 23 September 2026
 
 **Schema version:** `swiss-tip/v4`<br>
 **Source of truth:** [`packages/core/src/swisstip/core/contracts.py`](../../packages/core/src/swisstip/core/contracts.py)
@@ -16,6 +16,9 @@ the lead may still change it, additively or not.
 
 This document defines what a caller sends to and receives from the four MCP
 tools. The mock server serves exactly these shapes; the real server must too.
+The bundle also carries a fifth tool, `lookup`, and four gap dimensions of
+the dataset connectors (section 10); a server lists the tool only while a
+connector is registered.
 Field tables are normative; the examples are real responses captured from
 the mock on 12 September 2026, except where an example names another
 source. Those of section 5 send the jurisdiction under the field names of
@@ -642,6 +645,7 @@ ConceptResolution:
 | `missing_context` | list of MissingContext | `field`, `options`, `hint`; non-empty only on `NEEDS_CONTEXT` |
 | `gaps` | list of CoverageGap | Named reasons and published values; see below |
 | `not_served` | list of string, absent when empty | What users commonly ask about the concept that the release does not publish (for example a fee, a document list or live availability); the caller says so instead of filling it in |
+| `lookups` | list of LookupOffer, absent when empty | Datasets a registered connector serves behind the concept for the resolved place (section 10): `dataset_id`, `type`, `title`, `label`, `jurisdiction`, `requires`, `accepts`, `period`, `publisher`. Only on `SUPPORTED` and `STALE`; `guidance_for_caller` then says to ask for the postal code and call `lookup` |
 
 Fact:
 
@@ -697,6 +701,7 @@ CoverageGap:
 | `concept_not_published` | Unknown `concept_id` | The published concept IDs |
 | `context_not_covered` | A context value has no published facts, or a context field is unknown | The context values the concept is published for |
 | `review_status_not_met` | `reviewed_only` was set and no fact of the concept is human-reviewed | The review statuses the concept's facts actually carry |
+| `postal_code_not_covered`, `period_not_published`, `no_dates_in_range`, `connector_unavailable` | Only in a `lookup` result ([dataset-connectors.md](dataset-connectors.md), section 6); never on `resolve` | See there |
 
 `published_values` are always codes. The `message` of a jurisdiction gap
 names up to six places with their level and the register's name (`published
@@ -949,3 +954,42 @@ gap dimension) keep the schema version. A change that removes or renames a
 field, or makes an optional field required, bumps the version and needs the
 lead's decision. The `--check` command above runs in the test suite so that
 the committed bundle and the models cannot drift apart.
+
+## 10. `lookup` (dataset connectors)
+
+Listed only while a dataset connector is registered (`swisstip-server
+--connector URL`). The facts of a concept give the rule; a dataset behind
+it gives the dates, taken unchanged from a publisher's open-data file and
+served with the file's provenance. The design, the connector side and the
+field tables are in [dataset-connectors.md](dataset-connectors.md), section
+6; this section states the wire shape.
+
+### Request
+
+| Field | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `dataset_id` | string | required | From a `resolve` result's `lookups` |
+| `postal_code` | string | required | Four digits, as the user gave it; never guessed from the municipality |
+| `as_of` | date or null | today | The date "next" counts from |
+| `start`, `end` | date or null | `as_of`, end of the published period | The range wanted, both inclusive |
+| `limit` | integer | 3 | 1 for the next date only, up to 60 for a whole year |
+| `release_id` | string or null | | As on the other tools |
+
+### Result: LookupResult
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `release_id`, `dataset_id`, `dataset_version`, `type`, `label` | string | |
+| `status` | Status | `SUPPORTED` with at least one event, else `OUT_OF_COVERAGE` |
+| `as_of` | date | |
+| `events` | list of LookupEvent | `date`, `label`, optional `location`; oldest first, at most `limit` |
+| `truncated` | boolean | More dates than `limit` fell into the range |
+| `provenance` | LookupProvenance | `publisher`, `publisher_url` (cite it), `licence`, `sources` (`url`, `sha256`, `bytes`, `downloaded_on`), `period`, `dataset_version` |
+| `gaps` | list of CoverageGap | `postal_code_not_covered` (the codes the dataset holds), `period_not_published` and `no_dates_in_range` (the published period), `connector_unavailable` (empty; the facts are unaffected) |
+| `guidance_for_caller` | string | On `SUPPORTED`: state the dates as published by the named publisher for that postal code, cite the publisher's page, say they are unreviewed rows and name the published period; on `OUT_OF_COVERAGE`: say what the gap says and derive no date from the facts |
+| `limitations` | list of string | The release's two standing lines, then the dataset's own |
+
+An unknown `dataset_id` and a malformed request are `INVALID_ARGUMENT`
+errors; a connector that does not answer is the `connector_unavailable`
+gap, never an error. The call pattern is `search`, `resolve` (the rule and
+the offer), `lookup` (the dates).

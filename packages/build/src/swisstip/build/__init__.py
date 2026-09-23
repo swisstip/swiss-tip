@@ -4,3 +4,4 @@ The serving side never imports this package.
 """
 
 CURATION_SCHEMA_VERSION = "swiss-tip-curation/v1"
+DATASET_CURATION_SCHEMA_VERSION = "swiss-tip-dataset-curation/v1"

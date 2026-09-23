@@ -1,6 +1,6 @@
 # swisstip-build
 
-**Last update:** 22 September 2026
+**Last update:** 23 September 2026
 
 The build side of a pack: read `releases/<pack>/curation.yaml`, resolve every
 cited block range against the pack's text dataset, pin it with hashes,
@@ -38,6 +38,28 @@ build. The packs of one country share the files under `config/places/`.
 Exit code nonzero when a fact was dropped; the release is still written. The
 curation format, the relocation rules and the build report are described in
 [docs/architecture/release-format.md](../../docs/architecture/release-format.md).
+
+## Dataset bundles
+
+```shell
+./.venv/Scripts/python.exe -m swisstip.build.dataset_cli --packs-dir ../swiss-tip-mvp --pack <pack> --dataset <dataset_id>
+```
+
+`swisstip.build.datasets` builds the bundle a dataset connector serves
+(`swiss-tip-dataset/v1`, models and validator in `swisstip.core.datasets`)
+from `datasets/<pack>/<dataset_id>/dataset.yaml`
+(`swiss-tip-dataset-curation/v1`: the binding to a pack and a concept, the
+publisher and licence, the sources, the `csv-columns` importer with its
+column mapping, the published period). The command downloads every source
+it does not find under `.local/<pack>/datasets/<dataset_id>/`, the one step
+with network, pins its hash in the curation file on the first download,
+imports the rows, validates and writes `dataset.json` and
+`build-report.json` next to the curation file. A downloaded file whose
+bytes differ from the pin stops the build; `--refresh` accepts the
+publisher's new file and re-pins it, `--offline` never downloads, and
+`--version` raises the `v<n>` of the dataset version for a rebuild of the
+same download. Design and status:
+[docs/architecture/dataset-connectors.md](../../docs/architecture/dataset-connectors.md).
 
 ## Curation coverage
 

@@ -1283,6 +1283,14 @@
                 },
                 "title": "Not Served",
                 "type": "array"
+              },
+              "lookups": {
+                "description": "Datasets served behind this concept by a registered connector, for a date the facts cannot give (the next collection day for a postal code). Call lookup with the dataset_id and the fields it requires; never derive such a date from the facts. Omitted when no dataset stands behind the concept for the resolved place.",
+                "items": {
+                  "$ref": "#/$defs/LookupOffer"
+                },
+                "title": "Lookups",
+                "type": "array"
               }
             },
             "required": [
@@ -1303,7 +1311,11 @@
                   "date_outside_coverage",
                   "concept_not_published",
                   "context_not_covered",
-                  "review_status_not_met"
+                  "review_status_not_met",
+                  "postal_code_not_covered",
+                  "period_not_published",
+                  "no_dates_in_range",
+                  "connector_unavailable"
                 ],
                 "title": "Dimension",
                 "type": "string"
@@ -1635,6 +1647,71 @@
             "title": "FreshnessPolicy",
             "type": "object"
           },
+          "LookupOffer": {
+            "additionalProperties": false,
+            "description": "What resolve says about a dataset a caller can look up for the concept.",
+            "properties": {
+              "dataset_id": {
+                "description": "What to send to lookup.",
+                "title": "Dataset Id",
+                "type": "string"
+              },
+              "type": {
+                "description": "calendar: dates for a postal code.",
+                "title": "Type",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "jurisdiction": {
+                "description": "The municipality the dataset is published for.",
+                "title": "Jurisdiction",
+                "type": "string"
+              },
+              "requires": {
+                "description": "Input fields lookup needs: ask the user for them when the conversation has not given them.",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Requires",
+                "type": "array"
+              },
+              "accepts": {
+                "description": "Optional input fields of lookup.",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Accepts",
+                "type": "array"
+              },
+              "period": {
+                "$ref": "#/$defs/Period"
+              },
+              "publisher": {
+                "title": "Publisher",
+                "type": "string"
+              }
+            },
+            "required": [
+              "dataset_id",
+              "type",
+              "title",
+              "label",
+              "jurisdiction",
+              "requires",
+              "accepts",
+              "period",
+              "publisher"
+            ],
+            "title": "LookupOffer",
+            "type": "object"
+          },
           "MissingContext": {
             "additionalProperties": false,
             "properties": {
@@ -1667,6 +1744,29 @@
               "hint"
             ],
             "title": "MissingContext",
+            "type": "object"
+          },
+          "Period": {
+            "additionalProperties": false,
+            "properties": {
+              "start": {
+                "description": "First published date, inclusive.",
+                "format": "date",
+                "title": "Start",
+                "type": "string"
+              },
+              "end": {
+                "description": "Last published date, inclusive; next year's file is not published before it exists.",
+                "format": "date",
+                "title": "End",
+                "type": "string"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "title": "Period",
             "type": "object"
           },
           "RequiredUserFact": {
@@ -2042,6 +2142,438 @@
         "anyOf": [
           {
             "$ref": "#/$defs/GetEvidenceResult"
+          },
+          {
+            "$ref": "#/$defs/ToolError"
+          }
+        ]
+      }
+    },
+    "lookup": {
+      "description": "Read the published dates of a dataset a resolve result offered in lookups, for one four-digit postal code: for example the next collection days of a kind of waste. The facts of the concept give the rule; the dataset gives the dates, taken unchanged from the publisher's open-data file and not reviewed by a person. Send the dataset_id of the offer, the postal code the user gave (ask for it when the conversation has not given it; never guess one from the municipality), as_of (normally today), and limit 1 for the next date only, or start and end for a range such as a month. SUPPORTED returns the dates oldest first; OUT_OF_COVERAGE names the gap: a postal code the dataset does not hold (published_values lists the ones it holds), a range outside the published period (typically next year before its file exists), no date left in the range, or a connector that is not running (the facts are unaffected). State the dates as published by the named publisher for that postal code, cite provenance.publisher_url, and follow guidance_for_caller.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "dataset_id": {
+            "description": "From a resolve result's lookups.",
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "postal_code": {
+            "description": "Four digits, as the user gave it.",
+            "pattern": "^\\d{4}$",
+            "title": "Postal Code",
+            "type": "string"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The date the next dates count from; omit for today.",
+            "title": "As Of"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "First date wanted; omit for as_of.",
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Last date wanted, inclusive; omit for the end of the published period.",
+            "title": "End"
+          },
+          "limit": {
+            "default": 3,
+            "description": "1 for the next date only, up to 60 for a whole year.",
+            "maximum": 60,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "release_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Release Id"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "postal_code"
+        ],
+        "title": "LookupRequest",
+        "type": "object"
+      },
+      "output": {
+        "type": "object",
+        "$defs": {
+          "CoverageGap": {
+            "additionalProperties": false,
+            "properties": {
+              "dimension": {
+                "enum": [
+                  "jurisdiction_not_covered",
+                  "more_specific_jurisdiction_available",
+                  "more_specific_jurisdiction_not_published",
+                  "date_outside_coverage",
+                  "concept_not_published",
+                  "context_not_covered",
+                  "review_status_not_met",
+                  "postal_code_not_covered",
+                  "period_not_published",
+                  "no_dates_in_range",
+                  "connector_unavailable"
+                ],
+                "title": "Dimension",
+                "type": "string"
+              },
+              "message": {
+                "title": "Message",
+                "type": "string"
+              },
+              "published_values": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Published Values",
+                "type": "array"
+              }
+            },
+            "required": [
+              "dimension",
+              "message",
+              "published_values"
+            ],
+            "title": "CoverageGap",
+            "type": "object"
+          },
+          "ErrorBody": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "issues": {
+                "items": {
+                  "$ref": "#/$defs/ValidationIssue"
+                },
+                "title": "Issues",
+                "type": "array"
+              }
+            },
+            "required": [
+              "code",
+              "issues"
+            ],
+            "title": "ErrorBody",
+            "type": "object"
+          },
+          "ErrorCode": {
+            "enum": [
+              "INVALID_ARGUMENT",
+              "RELEASE_UNAVAILABLE",
+              "OPERATIONAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          },
+          "LookupEvent": {
+            "additionalProperties": false,
+            "properties": {
+              "date": {
+                "format": "date",
+                "title": "Date",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "location": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Where the event happens, when the publisher names a place.",
+                "title": "Location"
+              }
+            },
+            "required": [
+              "date",
+              "label"
+            ],
+            "title": "LookupEvent",
+            "type": "object"
+          },
+          "LookupProvenance": {
+            "additionalProperties": false,
+            "properties": {
+              "publisher": {
+                "title": "Publisher",
+                "type": "string"
+              },
+              "publisher_url": {
+                "description": "The publisher's page for the dataset; cite it.",
+                "title": "Publisher Url",
+                "type": "string"
+              },
+              "licence": {
+                "title": "Licence",
+                "type": "string"
+              },
+              "sources": {
+                "items": {
+                  "$ref": "#/$defs/LookupSource"
+                },
+                "title": "Sources",
+                "type": "array"
+              },
+              "period": {
+                "$ref": "#/$defs/Period"
+              },
+              "dataset_version": {
+                "title": "Dataset Version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "publisher",
+              "publisher_url",
+              "licence",
+              "sources",
+              "period",
+              "dataset_version"
+            ],
+            "title": "LookupProvenance",
+            "type": "object"
+          },
+          "LookupResult": {
+            "additionalProperties": false,
+            "properties": {
+              "release_id": {
+                "title": "Release Id",
+                "type": "string"
+              },
+              "dataset_id": {
+                "title": "Dataset Id",
+                "type": "string"
+              },
+              "dataset_version": {
+                "title": "Dataset Version",
+                "type": "string"
+              },
+              "type": {
+                "title": "Type",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/Status",
+                "description": "SUPPORTED with at least one event, else OUT_OF_COVERAGE with a gap."
+              },
+              "as_of": {
+                "format": "date",
+                "title": "As Of",
+                "type": "string"
+              },
+              "events": {
+                "items": {
+                  "$ref": "#/$defs/LookupEvent"
+                },
+                "title": "Events",
+                "type": "array"
+              },
+              "truncated": {
+                "description": "More dates than limit fell into the range.",
+                "title": "Truncated",
+                "type": "boolean"
+              },
+              "provenance": {
+                "$ref": "#/$defs/LookupProvenance"
+              },
+              "gaps": {
+                "items": {
+                  "$ref": "#/$defs/CoverageGap"
+                },
+                "title": "Gaps",
+                "type": "array"
+              },
+              "guidance_for_caller": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Guidance For Caller"
+              },
+              "limitations": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Limitations",
+                "type": "array"
+              }
+            },
+            "required": [
+              "release_id",
+              "dataset_id",
+              "dataset_version",
+              "type",
+              "label",
+              "status",
+              "as_of",
+              "events",
+              "truncated",
+              "provenance",
+              "gaps",
+              "limitations"
+            ],
+            "title": "LookupResult",
+            "type": "object"
+          },
+          "LookupSource": {
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "title": "Url",
+                "type": "string"
+              },
+              "sha256": {
+                "title": "Sha256",
+                "type": "string"
+              },
+              "bytes": {
+                "title": "Bytes",
+                "type": "integer"
+              },
+              "downloaded_on": {
+                "format": "date",
+                "title": "Downloaded On",
+                "type": "string"
+              }
+            },
+            "required": [
+              "url",
+              "sha256",
+              "bytes",
+              "downloaded_on"
+            ],
+            "title": "LookupSource",
+            "type": "object"
+          },
+          "Period": {
+            "additionalProperties": false,
+            "properties": {
+              "start": {
+                "description": "First published date, inclusive.",
+                "format": "date",
+                "title": "Start",
+                "type": "string"
+              },
+              "end": {
+                "description": "Last published date, inclusive; next year's file is not published before it exists.",
+                "format": "date",
+                "title": "End",
+                "type": "string"
+              }
+            },
+            "required": [
+              "start",
+              "end"
+            ],
+            "title": "Period",
+            "type": "object"
+          },
+          "Status": {
+            "description": "Result status of a resolution; see section 4.3 of the specification.",
+            "enum": [
+              "SUPPORTED",
+              "NEEDS_CONTEXT",
+              "OUT_OF_COVERAGE",
+              "STALE"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "ToolError": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "$ref": "#/$defs/ErrorBody"
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "title": "ToolError",
+            "type": "object"
+          },
+          "ValidationIssue": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "title": "Path",
+                "type": "string"
+              },
+              "message": {
+                "title": "Message",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "message"
+            ],
+            "title": "ValidationIssue",
+            "type": "object"
+          }
+        },
+        "anyOf": [
+          {
+            "$ref": "#/$defs/LookupResult"
           },
           {
             "$ref": "#/$defs/ToolError"

@@ -20,10 +20,13 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from swisstip.core.basis import DEFAULT_RANKING_POLICY, basis_weight, concept_authority, fact_weight
-from swisstip.core.contracts import (SCHEMA_VERSION, TOOL_CONTRACTS, TOOL_DESCRIPTIONS, Citation, ConceptResolution, ConceptSummary,
+from swisstip.core.connector import ConnectorError, DatasetSummary
+from swisstip.core.contracts import (CONNECTOR_TOOL_CONTRACTS, SCHEMA_VERSION, TOOL_CONTRACTS, TOOL_DESCRIPTIONS, Citation,
+                                     ConceptResolution, ConceptSummary,
                                      ContextField, CoverageGap, CoverageRoot, CoverageTopic, DecisionRule, ErrorBody,
                                      ErrorCode, Evidence, ExecutedScope, Fact, FreshnessPolicy, GetCoverageRequest,
-                                     GetEvidenceRequest, GetEvidenceResult, MatchSignals, MissingContext,
+                                     GetEvidenceRequest, GetEvidenceResult, LookupEvent, LookupOffer, LookupProvenance,
+                                     LookupRequest, LookupResult, LookupSource, MatchSignals, MissingContext, Period,
                                      PublishedElsewhere, QueryLanguage, RequiredUserFact,
                                      ResolveRequest, ResolveResult, SearchHit, SearchRequest, SearchResult, Status,
                                      ToolError, TopicSummary, ValidationIssue, page_citations, shared_basis, shared_review,
@@ -33,7 +36,10 @@ from swisstip.core.release import Release, load_release
 from swisstip.core.text import collapse_umlauts, fold
 from swisstip.core.validation import assert_valid, contains
 
+from .connectors import ConnectorRegistry, ConnectorUnavailable
 from .semantic import SemanticError, SemanticSearch
+
+ALL_TOOL_CONTRACTS = {**TOOL_CONTRACTS, **CONNECTOR_TOOL_CONTRACTS}
 
 # Function words in their folded form (tokens() strips diacritics before filtering, so "fur" is "für").
 # German is covered because the release carries German aliases taken from the cited pages; "no" and "not" are
@@ -210,6 +216,22 @@ GUIDANCE_PLACE_NOT_RECOGNISED = (" The place register does not hold {parts}, so 
                                  "(the political commune, not a district, a quarter or a postcode) or with the "
                                  "canton; otherwise tell the user which place the answer is for.")
 NORM_OR_AUTHORITY = {"act", "ordinance", "treaty", "directive", "guidance"}
+# Dataset connectors (docs/architecture/dataset-connectors.md): the facts give the rule, a registered dataset gives
+# the dates. Said once per resolve result when a concept carries an offer, and on every lookup result.
+GUIDANCE_LOOKUP_OFFER = (" A dataset of published dates stands behind a concept of this result (lookups): to name a "
+                         "date, such as the next collection day, ask the user for the four-digit postal code unless the "
+                         "conversation gave it, then call lookup with the offer's dataset_id; never derive a date from "
+                         "the facts.")
+GUIDANCE_LOOKUP_SUPPORTED = ("State these dates as published by {publisher} for postal code {postal_code}, oldest first, "
+                             "and cite provenance.publisher_url. They are rows of the publisher's open-data file, not "
+                             "reviewed statements, and the file covers {start} to {end}; say so when the user asks "
+                             "beyond it. Do not compute further dates from the interval between these.")
+GUIDANCE_LOOKUP_OUT_OF_COVERAGE = ("No published date answers this request, for the reason named in gaps: tell the user "
+                                   "what the gap says, and do not derive a date from the facts or from general "
+                                   "knowledge. For postal_code_not_covered, ask the user to check the postal code; for "
+                                   "period_not_published, say that the publisher has not published that period yet; "
+                                   "for connector_unavailable, say that the dates cannot be read at the moment and that "
+                                   "the facts are unaffected.")
 
 
 def match_strength(lexical_share: float, anchored_weight: float, best_semantic_score: float | None) -> str:
@@ -326,10 +348,12 @@ def argument_error(path: str, message: str, code: ErrorCode = ErrorCode.INVALID_
 
 class ReleaseService:
     def __init__(self, release: Release, semantic_search: SemanticSearch | None = None,
-                 semantic_error: str | None = None):
+                 semantic_error: str | None = None, connectors: ConnectorRegistry | None = None):
         self.release = release
         self.semantic_search = semantic_search
         self.semantic_error = semantic_error
+        # The dataset connectors registered behind the release's concepts; None or empty means no lookup tool.
+        self.connectors = connectors
         manifest = release.manifest
         self.release_id = manifest.release_id
         self.topics = {t.topic_id: t for t in release.topics}
@@ -398,6 +422,13 @@ class ReleaseService:
         if self.context_note:
             self.instructions += "\n" + self.context_note
 
+    def tools(self) -> list[str]:
+        """The tools this server lists: the four of the release, and lookup while a dataset is registered."""
+        names = list(TOOL_CONTRACTS)
+        if self.connectors is not None and self.connectors.datasets:
+            names.extend(CONNECTOR_TOOL_CONTRACTS)
+        return names
+
     def tool_description(self, name: str) -> str:
         """The contract's description, with this release's query languages on search."""
         description = TOOL_DESCRIPTIONS[name]
@@ -406,7 +437,7 @@ class ReleaseService:
         return description
 
     def tool_input_schema(self, name: str) -> dict:
-        schema = tool_input_schema(TOOL_CONTRACTS[name][0])
+        schema = tool_input_schema(ALL_TOOL_CONTRACTS[name][0])
         if name == "search" and self.query_language_note:
             query = schema["properties"]["query"]
             query["description"] = "Question or key terms to find published concepts. " + self.query_language_note
@@ -789,7 +820,17 @@ class ReleaseService:
         served, basis = shared_basis(served)
         return ConceptResolution(
             concept_id=concept_id, status=status, answering_jurisdiction=label(answering), **review, basis=basis,
-            facts=served, citations=self.citations(evidence_ids), gaps=gaps, not_served=concept.not_served)
+            facts=served, citations=self.citations(evidence_ids), gaps=gaps, not_served=concept.not_served,
+            lookups=self.lookup_offers(concept_id, requested))
+
+    def lookup_offers(self, concept_id: str, requested: str) -> list[LookupOffer]:
+        """The datasets a registered connector serves behind the concept for the resolved place."""
+        if self.connectors is None:
+            return []
+        return [LookupOffer(dataset_id=s.dataset_id, type=s.type, title=s.title, label=s.label, jurisdiction=s.jurisdiction,
+                            requires=s.requires, accepts=s.accepts, period=Period(start=s.period.start, end=s.period.end),
+                            publisher=s.publisher)
+                for s in self.connectors.offers(concept_id, requested)]
 
     def narrower_published_elsewhere(self, topic_id: str, requested: str) -> tuple[str, list[str]] | None:
         """For a place the topic serves less deeply than another place: the deepest level that applies there, and
@@ -847,6 +888,8 @@ class ReleaseService:
             text += GUIDANCE_MIXED_BASIS
         if any(gap.dimension == "more_specific_jurisdiction_not_published" for result in results for gap in result.gaps):
             text += GUIDANCE_NARROWER_NOT_PUBLISHED
+        if any(result.lookups for result in results):
+            text += GUIDANCE_LOOKUP_OFFER
         text += self.scope_guidance(scope)
         if any(result.facts for result in results):
             text += " Write the whole answer in the language of the user's question, even when the excerpts are in another language."
@@ -932,14 +975,55 @@ class ReleaseService:
                       for e in (self.evidence[item] for item in selected[:5])],
             limitations=self.result_limitations)
 
+    def lookup(self, request: LookupRequest):
+        """Forward a lookup to the connector that serves the dataset and put the answer into the release's shape."""
+        error = self.check_release(request.release_id)
+        if error:
+            return error
+        registered = sorted(self.connectors.datasets) if self.connectors is not None else []
+        if request.dataset_id not in registered:
+            return argument_error("dataset_id", f"Unknown dataset_id {request.dataset_id!r}; the registered datasets are "
+                                                f"{registered}. Take it from a resolve result's lookups.")
+        summary: DatasetSummary = self.connectors.datasets[request.dataset_id].summary
+        as_of = request.as_of or date.today()
+        body = dict(dataset_id=request.dataset_id, postal_code=request.postal_code, start=(request.start or as_of).isoformat(),
+                    end=request.end.isoformat() if request.end else None, limit=request.limit)
+        provenance = LookupProvenance(
+            publisher=summary.publisher, publisher_url=summary.publisher_url, licence=summary.licence,
+            sources=[LookupSource(url=s.url, sha256=s.sha256, bytes=s.bytes, downloaded_on=s.downloaded_on) for s in summary.sources],
+            period=Period(start=summary.period.start, end=summary.period.end), dataset_version=summary.dataset_version)
+        try:
+            answer = self.connectors.lookup(request.dataset_id, body)
+        except ConnectorUnavailable as exc:
+            gap = CoverageGap(dimension="connector_unavailable", published_values=[], message=(
+                f"The connector serving {summary.title} did not answer ({exc}); the facts of the release are unaffected. "
+                "Tell the user that the dates cannot be read at the moment."))
+            return LookupResult(release_id=self.release_id, dataset_id=summary.dataset_id, dataset_version=summary.dataset_version,
+                                type=summary.type, label=summary.label, status=Status.OUT_OF_COVERAGE, as_of=as_of, events=[],
+                                truncated=False, provenance=provenance, gaps=[gap], guidance_for_caller=GUIDANCE_LOOKUP_OUT_OF_COVERAGE,
+                                limitations=[*self.result_limitations, *summary.limitations])
+        if isinstance(answer, ConnectorError):
+            return argument_error(answer.path or "lookup", answer.message)
+        status = Status.SUPPORTED if answer.status == "SUPPORTED" else Status.OUT_OF_COVERAGE
+        guidance = (GUIDANCE_LOOKUP_SUPPORTED.format(publisher=summary.publisher, postal_code=request.postal_code,
+                                                    start=summary.period.start.isoformat(), end=summary.period.end.isoformat())
+                    if status == Status.SUPPORTED else GUIDANCE_LOOKUP_OUT_OF_COVERAGE)
+        return LookupResult(
+            release_id=self.release_id, dataset_id=answer.dataset_id, dataset_version=answer.dataset_version,
+            type=summary.type, label=summary.label, status=status, as_of=as_of,
+            events=[LookupEvent(date=e.date, label=e.label, location=e.location) for e in answer.events],
+            truncated=answer.truncated, provenance=provenance,
+            gaps=[CoverageGap(dimension=g.dimension, message=g.message, published_values=g.published_values) for g in answer.gaps],
+            guidance_for_caller=guidance, limitations=[*self.result_limitations, *summary.limitations])
+
     def dispatch(self, name: str, arguments: dict | None):
         """Validate the arguments against the request model and run the tool."""
         handlers = {"get_coverage": self.get_coverage, "search": self.search, "resolve": self.resolve,
-                    "get_evidence": self.get_evidence}
-        if name not in handlers:
+                    "get_evidence": self.get_evidence, "lookup": self.lookup}
+        if name not in self.tools():
             return argument_error("name", f"Unknown tool {name!r}.")
         try:
-            request = TOOL_CONTRACTS[name][0].model_validate(arguments or {})
+            request = ALL_TOOL_CONTRACTS[name][0].model_validate(arguments or {})
         except ValidationError as exc:
             return invalid(exc)
         return handlers[name](request)

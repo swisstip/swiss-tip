@@ -1,6 +1,6 @@
 # Container images
 
-**Last update:** 21 September 2026
+**Last update:** 23 September 2026
 
 The images of the Swiss TIP MCP server with `swisstip-mcp` 0.3.0 from PyPI.
 The slim MCP image carries no knowledge release and no model; the MCP
@@ -32,6 +32,8 @@ directory that holds a pack's files.
 | `swiss-tip-ollama:qwen3-embedding-0.6b` | [ollama/Dockerfile](ollama/Dockerfile) | `docker/ollama` | the embedding sidecar: `python:3.14-slim`, plus the CPU-only Ollama 0.34.0 and the `qwen3-embedding:0.6b` model copied out of the MCP image, on `127.0.0.1:11434`; no server and no release |
 | `swiss-tip-demo:<pack>` | the demo Dockerfile in the packs repository | its directory there | test image: a pack image, plus the OpenCode agent and its web interface on port 4096, configured against the MCP server on the container's loopback, with a proxy for the routes the interface needs and the server does not answer, and a welcome panel with the pack's coverage and sample questions; its configuration, plugin, proxy and start script are those of `docker/opencode` |
 | `swiss-tip-opencode` | [opencode/Dockerfile](opencode/Dockerfile) | the repository root | test image: `python:3.14-slim`, plus the OpenCode agent, its web interface on port 4096, and the configuration, plugin, proxy and a generic welcome panel from `docker/opencode`; no server, no release and no model - the MCP server is named by `SWISSTIP_MCP_URL` |
+| `swiss-tip-calendar-connector:0.3.0` | [calendar-connector/Dockerfile](calendar-connector/Dockerfile) | the repository root | `swisstip-calendar-connector` 0.3.0 only, the first [dataset connector](../docs/architecture/dataset-connectors.md): HTTP on port 8100 for the MCP server, no dataset; bundles are mounted on `/srv/swiss-tip/datasets`, one subdirectory each |
+| `swiss-tip-calendar:<pack>` | the pack's calendar Dockerfile in the packs repository | `datasets/<pack>` | the calendar connector image, plus the pack's dataset bundles; the profile `calendar` of `compose.yaml` starts it beside the server |
 
 Semantic search is hybrid: lexical matching fused with the embedding ranking
 of concept IDs in `search`. `resolve` and the facts it returns are
@@ -58,6 +60,7 @@ The order matters: each image builds on the previous one.
 docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.3.0-slim .
 docker build -t swiss-tip-mcp:0.3.0 docker/mcp
 docker build -f docker/opencode/Dockerfile -t local/swiss-tip-opencode:latest .
+docker build -f docker/calendar-connector/Dockerfile -t local/swiss-tip-calendar-connector:0.3.0 .
 docker build -t local/swiss-tip-ollama:qwen3-embedding-0.6b docker/ollama
 docker build -f docker/slim/Dockerfile --build-arg PACK=<pack> -t local/swiss-tip:<pack>-slim <packs>/releases/<pack>
 ```
@@ -90,6 +93,7 @@ built for exactly that release; it runs no search, because it has no model.
 | slim | `BASE_IMAGE` (the slim MCP image), `PACK` (for the labels), `RELEASE_ID`, `RELEASE_CONTENT_SHA256`, `REVISION` (the release ID and digest, when given, must match `release.json`) |
 | sidecar | `MCP_IMAGE`, `PYTHON_IMAGE`, and `EMBEDDING_MODEL`, `EMBEDDING_MODEL_DIGEST`, `OLLAMA_VERSION`, which name what the MCP image holds and are checked against it, not applied |
 | OpenCode | `PYTHON_IMAGE`, `OPENCODE_VERSION`, `OPENCODE_PACKAGE`, `OPENCODE_SHA256`, `DEMO_MODEL`; a pack's demo image names the same OpenCode release |
+| calendar connector | `PYTHON_IMAGE`, `SWISSTIP_VERSION`, `PACKAGE_INDEX`, as for the slim MCP image |
 
 ## Build on GitHub
 
@@ -105,7 +109,7 @@ images", "Run workflow").
 
 | Input | Values |
 | --- | --- |
-| `images`, here | `all` (both MCP images, sidecar, OpenCode), `mcp-slim`, `mcp`, `ollama` (the sidecar), `opencode` |
+| `images`, here | `all` (both MCP images, sidecar, OpenCode, calendar connector), `mcp-slim`, `mcp`, `ollama` (the sidecar), `opencode`, `calendar` |
 | `images`, in the packs repository | `all` (every pack, then the demo), `packs`, a pack's name, `demo` |
 | `swisstip_mcp_version` | the `swisstip-mcp` version, which is the tag of both MCP images: built here, pulled there; default `0.3.0` |
 | `package_index` | `pypi`, or `testpypi` to rehearse a version that is not released yet; in the packs repository it names where the check client comes from |
@@ -121,6 +125,8 @@ images", "Run workflow").
 | sidecar | `swiss-tip-ollama:qwen3-embedding-0.6b` (the model tag with a hyphen, the tag `compose.yaml` names), `swiss-tip-ollama:qwen3-embedding-0.6b-<first 12 hex digits of the model digest>` |
 | demo (the test image) | `swiss-tip-demo:<release_id>`, `swiss-tip-demo:<pack>`, and `swiss-tip-demo:latest` from the default branch (unlike the release image: the demo is built on one pack, so `latest` names it) |
 | OpenCode (the test image without a server) | `swiss-tip-opencode:<OpenCode version>` and `swiss-tip-opencode:latest`, the tag `compose.yaml` names, both from any branch: the image carries no release and no `swisstip` package, so neither tag is a release pointer; it holds no release, so a new release does not change it |
+| calendar connector | `swiss-tip-calendar-connector:<version>`, and `swiss-tip-calendar-connector:latest` under the MCP image's rule; tested with the synthetic bundle of `apps/calendar-connector/tests/fixtures` mounted and the conformance test `scripts/test/connector/check_connector.py --url` |
+| calendar (a pack's connector image) | `swiss-tip-calendar:<pack>`, the tag `compose.yaml` names, and `swiss-tip-calendar:<pack>-<dataset version>`, built in the packs repository on the calendar connector image |
 
 Within a run, an image built earlier is the base of the next one; an image
 not selected is pulled from `ghcr.io`. So the first run is `all` with `push`

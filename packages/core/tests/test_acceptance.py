@@ -51,6 +51,7 @@ class AcceptanceModelTests(unittest.TestCase):
                 if step["resolve"]:
                     for name in ("expect_scope", "expect_not_recognised", "expect_error"):
                         step["resolve"].pop(name)
+                step.pop("lookup")
         self.assertEqual(plain.digest(), sha256_text(json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
         for fields in (dict(expect_scope="CH-ZH"), dict(expect_not_recognised=[]), dict(expect_not_recognised=["city"])):
             changed = AcceptanceFile(pack="test", cases=[case(steps=[search, dict(resolve=dict(RESOLVE, **fields))])])
@@ -72,6 +73,33 @@ class AcceptanceModelTests(unittest.TestCase):
         self.assertEqual(AcceptanceFile(pack="test", cases=[case(language="fr", steps=translated)]).cases[0].language, "fr")
         with self.assertRaises(ValidationError):
             AcceptanceFile(pack="test", cases=[case(language="French")])
+
+    def test_a_lookup_step_follows_the_tool_contract_and_leaves_older_digests(self):
+        lookup = dict(dataset_id="zurich-waste-bioabfall", postal_code="8001", as_of="2026-09-23", limit=1,
+                      expect_status="SUPPORTED", expect_first_date="2026-09-28")
+        suite = AcceptanceFile(pack="test", cases=[case(steps=[dict(resolve=RESOLVE), dict(lookup=lookup)])])
+        step = suite.case("T-1").steps[1].lookup
+        self.assertEqual(step.request(datetime(2026, 9, 1).date()).as_of.isoformat(), "2026-09-23")
+        self.assertEqual(step.expect_status.value, "SUPPORTED")
+        for bad in (dict(lookup, postal_code="80"), dict(lookup, limit=61), dict(lookup, expect_status="NEEDS_CONTEXT"),
+                    dict(lookup, street="x")):
+            with self.assertRaises(ValidationError):
+                AcceptanceFile(pack="test", cases=[case(steps=[dict(lookup=bad)])])
+        with self.assertRaises(ValidationError):
+            AcceptanceFile(pack="test", cases=[case(steps=[dict(resolve=RESOLVE, lookup=lookup)])])
+        # A suite without lookup steps digests as before the kind existed: the canonical JSON is the one the earlier
+        # rule produced, with no "lookup" key in any step.
+        from swisstip.core.acceptance import OPTIONAL_DIGEST_FIELDS, drop_defaults
+        without = AcceptanceFile(pack="test", cases=[case()])
+        data = without.model_dump(mode="json")
+        for item in data["cases"]:
+            drop_defaults(item, OPTIONAL_DIGEST_FIELDS["case"])
+            for entry in item["steps"]:
+                entry.pop("lookup")
+                if entry.get("resolve"):
+                    drop_defaults(entry["resolve"], OPTIONAL_DIGEST_FIELDS["resolve"])
+        self.assertEqual(without.digest(), sha256_text(json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
+        self.assertNotEqual(without.digest(), suite.digest())
 
     def test_a_step_is_a_search_or_a_resolve(self):
         with self.assertRaises(ValidationError):

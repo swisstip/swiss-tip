@@ -1,0 +1,71 @@
+{
+  "manifest": {
+    "schema_version": "swiss-tip-dataset/v1",
+    "dataset_id": "test-waste-bioabfall",
+    "dataset_version": "2026-09-23-v1",
+    "type": "calendar",
+    "title": "Organic waste collection days, test city",
+    "label": "Organic waste (Bioabfall)",
+    "pack": "test-pack",
+    "concept_id": "test-organic-waste",
+    "jurisdiction": "CH-ZH-261",
+    "publisher": "Entsorgung + Recycling Zürich",
+    "publisher_url": "https://data.example.ch/dataset/entsorgungskalender_bioabfall",
+    "licence": "CC0-1.0",
+    "refresh": "bundled",
+    "sources": [
+      {
+        "url": "https://data.example.ch/dataset/entsorgungskalender_bioabfall/download/entsorgungskalender_test_2026.csv",
+        "sha256": "3486b46ebc5d29856aa80956358fc3b960c6ce9accb6e60598776abdd938da1d",
+        "bytes": 148,
+        "downloaded_on": "2026-09-23"
+      }
+    ],
+    "period": {
+      "start": "2026-01-01",
+      "end": "2026-12-31"
+    },
+    "postal_codes": [
+      "8001",
+      "8002"
+    ],
+    "row_count": 7,
+    "created_at": "2026-09-23T10:00:00",
+    "limitations": [
+      "Calendar rows are taken from the publisher's file unchanged and are not human-reviewed; the hashes of the downloaded files and the build's checks are the whole gate.",
+      "Postal codes are the publisher's; no register ties them to CH-ZH-261.",
+      "Licence of the rows: CC0-1.0, published by Entsorgung + Recycling Zürich at https://data.example.ch/dataset/entsorgungskalender_bioabfall."
+    ],
+    "content_sha256": "a023b195314eee819f9b4c7030aedaaa8c69de38a065a6ffc65550e3da5e638d"
+  },
+  "rows": [
+    {
+      "postal_code": "8001",
+      "date": "2026-01-05"
+    },
+    {
+      "postal_code": "8001",
+      "date": "2026-01-12"
+    },
+    {
+      "postal_code": "8001",
+      "date": "2026-09-28"
+    },
+    {
+      "postal_code": "8001",
+      "date": "2026-10-05"
+    },
+    {
+      "postal_code": "8001",
+      "date": "2026-10-12"
+    },
+    {
+      "postal_code": "8002",
+      "date": "2026-01-06"
+    },
+    {
+      "postal_code": "8002",
+      "date": "2026-09-29"
+    }
+  ]
+}
