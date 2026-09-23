@@ -15,6 +15,10 @@
 //      shown in small print under the note.
 //   3. A sample question clicked there is typed into the prompt and sent. On
 //      the home screen it opens a new session first.
+//   4. `?ask=<n>` in the address opens a new session and puts sample question
+//      <n> (counting from one) in the prompt without sending it, so that a
+//      demo starts armed and one key sends it; `?ask=<text>` takes the text
+//      itself, and `&send=1` sends it as a click on the sample would.
 //
 // The interface is OpenCode's, pinned to one version in the Dockerfile. The
 // script finds its elements by their data-component and data-action
@@ -28,6 +32,23 @@
   var SERVER_KEY = "opencode.global.dat:server";
   var MARK = "data-swisstip-welcome";
   var pending = null;
+  var wanted = null;
+  var armed = false;
+
+  // The question named in the address, as {question, send}, or null. A number
+  // counts from one into the sample questions; anything else is the question
+  // itself. Without `send=1` the question is typed and left in the prompt.
+  function requested() {
+    var ask = new URLSearchParams(location.search).get("ask");
+    if (!ask) return null;
+    var index = /^[0-9]+$/.test(ask) ? parseInt(ask, 10) : 0;
+    var question = index ? (config.questions || [])[index - 1] : ask;
+    if (!question) {
+      console.warn("swiss-tip welcome: there is no sample question " + ask);
+      return null;
+    }
+    return { question: question, send: new URLSearchParams(location.search).get("send") === "1" };
+  }
 
   function registerWorkspace() {
     if (!config.worktree) return;
@@ -112,7 +133,7 @@
   // an ordinary typed text and enables its send button. A prompt sent before
   // the model selector is shown goes to another model than the configured
   // one, so the question waits for it.
-  function ask(question) {
+  function ask(question, send) {
     when("[data-action=prompt-model]", 10000, type, function () {
       console.warn("swiss-tip welcome: no model selector; the question is typed but not sent");
       type(null);
@@ -123,7 +144,7 @@
       input.focus();
       document.execCommand("selectAll", false);
       document.execCommand("insertText", false, question);
-      if (!model) return;
+      if (!model || !send) return;
       when("[data-action=prompt-submit]", 1000, function (button) { button.click(); }, function () {
         console.warn("swiss-tip welcome: the send button stayed disabled; the question is in the prompt");
       });
@@ -146,9 +167,9 @@
     below.appendChild(samples(ask));
     column.appendChild(below);
     if (pending) {
-      var question = pending;
+      var request = pending;
       pending = null;
-      ask(question);
+      ask(request.question, request.send);
     }
   }
 
@@ -166,10 +187,27 @@
     var panel = element("div", { "data-swisstip-welcome": "home" });
     panel.appendChild(header());
     panel.appendChild(samples(function (question) {
-      pending = question;
+      pending = { question: question, send: true };
       button.click();
     }));
     column.insertBefore(panel, button);
+  }
+
+  // The question named in the address is armed once: on a new-session view
+  // straight away, on the home screen by opening a session first. A browser
+  // that reopens an old session shows neither, and nothing is armed.
+  function arm(view) {
+    if (!wanted || armed) return;
+    if (view) {
+      armed = true;
+      ask(wanted.question, wanted.send);
+      return;
+    }
+    var button = document.querySelector("[data-action=home-new-session]");
+    if (!button) return;
+    armed = true;
+    pending = wanted;
+    button.click();
   }
 
   function update() {
@@ -177,6 +215,7 @@
     var view = document.querySelector("[data-component=session-new-design]");
     if (view) decorateNewSession(view);
     document.querySelectorAll("[data-action=home-new-session]").forEach(decorateHome);
+    arm(view);
   }
 
   var scheduled = false;
@@ -188,6 +227,7 @@
 
   registerWorkspace();
   document.addEventListener("DOMContentLoaded", function () {
+    wanted = requested();
     document.head.appendChild(element("style", { "data-swisstip-welcome": "style" }, STYLE));
     new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
     schedule();

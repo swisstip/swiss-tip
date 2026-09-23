@@ -151,7 +151,11 @@ class Curation(Strict):
 
 
 def load_curation(path: Path) -> Curation:
-    return Curation.model_validate(yaml.safe_load(Path(path).read_text(encoding="utf-8")))
+    return parse_curation(Path(path).read_text(encoding="utf-8"))
+
+
+def parse_curation(text: str) -> Curation:
+    return Curation.model_validate(yaml.safe_load(text))
 
 
 class CurationDumper(yaml.SafeDumper):

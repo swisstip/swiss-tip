@@ -19,6 +19,7 @@ A failed stage stops the pipeline. Every run writes `releases/<pack>/pipeline-re
 import hashlib
 import json
 import re
+from contextlib import nullcontext
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -38,11 +39,14 @@ from swisstip.extraction.validate import validate_dataset
 from swisstip.ingestion import download_cli, gap_report
 from swisstip.ingestion.acquisition import write_json as write_run_json
 from swisstip.runtime.acceptance import check_acceptance, issues_of, policy_date
+from swisstip.runtime.semantic import load_index, semantic_index_binding
 from swisstip.runtime.service import ReleaseService
 
 from . import REPORT_SCHEMA_VERSION
+from .autopilot.store import PackWriteLock
 
 STAGES = ("acquire", "gaps", "extract", "validate-text", "build", "validate-release", "coverage", "health", "accept", "ready")
+PACK = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
 
 class StageError(RuntimeError):
@@ -70,7 +74,11 @@ def default_run_dir(root: Path, pack: str) -> Path:
 class Pipeline:
     def __init__(self, root: Path, pack: str, *, run_dir: Path | None = None, release_id: str | None = None,
                  download: bool = False, retry_failed: bool = False, workers: int = 1, scope: str = "attributed",
-                 thorough: bool = False, update_curation: bool = False, attested_by: str | None = None, log=print):
+                 thorough: bool = False, update_curation: bool = False, attested_by: str | None = None,
+                 source_plugins: bool = True, lock_pack: bool = True, require_same_snapshot: bool = False,
+                 log=print):
+        if PACK.fullmatch(pack) is None:
+            raise ValueError("pack must be a lowercase kebab-case identifier")
         self.root = Path(root).resolve()  # the packs repository: releases/<pack> and .local/<pack> live under it
         self.pack = pack
         self.pack_dir = self.root / "releases" / pack
@@ -88,7 +96,10 @@ class Pipeline:
         self.release_id = release_id
         self.download, self.retry_failed, self.workers, self.scope = download, retry_failed, workers, scope
         self.thorough, self.update_curation, self.log = thorough, update_curation, log
+        self.source_plugins = source_plugins
+        self.require_same_snapshot = require_same_snapshot
         self.attested_by = (attested_by or "").strip() or None
+        self.lock_pack = lock_pack
         self.previous = json.loads(self.report_path.read_text(encoding="utf-8")) if self.report_path.is_file() else {}
         self.stages: list[dict] = []
         self._curation = None
@@ -111,6 +122,8 @@ class Pipeline:
         arguments = ["--catalogue", str(self.catalogue), "--output", str(self.run), "--workers", str(min(max(self.workers, 1), 4))]
         if self.markdown.is_file():
             arguments += ["--markdown", str(self.markdown)]
+        if not self.source_plugins:
+            arguments.append("--no-source-plugins")
         if self.download:
             arguments.append("--download")
             if self.retry_failed:
@@ -172,8 +185,9 @@ class Pipeline:
             places = [sha256_file(path).encode() for path in place_files(self.loaded_curation(), self.curation)]
         except OSError as exc:
             raise StageError(f"a place file the curation names cannot be read: {exc}") from exc
+        acceptance = [sha256_file(self.acceptance).encode()] if self.acceptance.is_file() else []
         return hashlib.sha256(b"".join([sha256_file(self.curation).encode(), sha256_file(self.text / "index.json").encode(),
-                                        release_id.encode(), *places])).hexdigest()
+                        release_id.encode(), *acceptance, *places])).hexdigest()
 
     def build(self) -> tuple[str, dict]:
         if not self.curation.is_file():
@@ -190,16 +204,28 @@ class Pipeline:
         if self.release_id is None and existing_id and previous and previous.get("inputs_sha256") != self.build_inputs(existing_id):
             release_id = next_release_id(existing_id, self.pack, date.today())
         curation = self.loaded_curation()
+        suite_sha256 = load_acceptance(self.acceptance).digest() if self.acceptance.is_file() else None
         try:
             release, report = build_release(curation, self.text, release_id, update_citations=self.update_curation,
-                                            place_register=place_register_for(curation, self.curation))
+                                            place_register=place_register_for(curation, self.curation),
+                                            acceptance_suite_sha256=suite_sha256)
         except (BuildError, PlaceFileError) as exc:
             raise StageError(str(exc)) from exc
-        self.release.write_text(dump_release(release), encoding="utf-8", newline="\n")
-        (self.pack_dir / "build-report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n",
-                                                         encoding="utf-8", newline="\n")
+        changed_citations = {outcome: count for outcome, count in report["citation_outcomes"].items()
+                             if outcome != "same-snapshot" and count}
+        if self.require_same_snapshot and changed_citations:
+            raise StageError("reviewed citations no longer resolve against the approved snapshot "
+                             f"({changed_citations}); reopen fact review")
         if self.update_curation:
             save_curation(self.curation, curation)
+        self.release.write_text(dump_release(release), encoding="utf-8", newline="\n")
+        report.update(content_sha256=release.manifest.content_sha256,
+                  release_sha256=sha256_file(self.release),
+                  curation_sha256=sha256_file(self.curation),
+                  text_index_sha256=sha256_file(self.text / "index.json"),
+                  acceptance_suite_sha256=suite_sha256)
+        (self.pack_dir / "build-report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+                                                         encoding="utf-8", newline="\n")
         return "ran", dict(release_id=release_id, concepts=report["concepts"], facts=report["facts"],
                            evidence=report["evidence"], documents=report["documents"],
                            citation_outcomes=report["citation_outcomes"], dropped=len(report["dropped"]),
@@ -294,12 +320,29 @@ class Pipeline:
              "; ".join(issues[:5]) if issues else f"{len(release.documents)} saved responses re-hashed")
         build_report = self.read_json(self.pack_dir / "build-report.json")
         if build_report is None:
-            gate("G2", "the build dropped no fact", False, "no build-report.json")
-        elif build_report.get("release_id") != manifest.release_id:
-            gate("G2", "the build dropped no fact", False, f"build-report.json is for {build_report.get('release_id')}")
+            gate("G2", "the build report is current and dropped no fact", False, "no build-report.json")
         else:
             dropped = build_report.get("dropped") or []
-            gate("G2", "the build dropped no fact", not dropped, f"{len(dropped)} dropped" if dropped else "0 dropped")
+            expected = {
+                "release_id": manifest.release_id,
+                "content_sha256": manifest.content_sha256,
+                "release_sha256": sha256_file(self.release),
+                "curation_sha256": sha256_file(self.curation),
+                "text_index_sha256": sha256_file(self.text / "index.json"),
+            }
+            mismatches = [name for name, value in expected.items() if build_report.get(name) != value]
+            if manifest.acceptance_suite_sha256 is not None:
+                try:
+                    suite_digest = load_acceptance(self.acceptance).digest()
+                except (OSError, ValidationError, ValueError):
+                    suite_digest = None
+                if (build_report.get("acceptance_suite_sha256") != manifest.acceptance_suite_sha256
+                        or suite_digest != manifest.acceptance_suite_sha256):
+                    mismatches.append("acceptance_suite_sha256")
+            passed = not dropped and not mismatches
+            detail = (f"stale bindings: {', '.join(mismatches)}" if mismatches else
+                      f"{len(dropped)} dropped" if dropped else "all build inputs match; 0 dropped")
+            gate("G2", "the build report is current and dropped no fact", passed, detail)
         try:
             suite = load_acceptance(self.acceptance)
         except (ValidationError, ValueError) as exc:
@@ -339,13 +382,27 @@ class Pipeline:
         coverage_report = self.read_json(self.coverage_report_path)
         coverage = (CoverageCounts(**coverage_counts(coverage_report))
                     if coverage_report and coverage_report.get("content_sha256") == manifest.content_sha256 else None)
+        semantic_binding = None
+        semantic_path = self.pack_dir / "semantic-index.json"
+        if semantic_path.is_file():
+            try:
+                semantic_binding = semantic_index_binding(semantic_path, load_index(semantic_path, release))
+            except (OSError, ValueError) as exc:
+                raise StageError(f"semantic-index.json does not match the release: {exc}") from exc
+            regression = self.read_json(self.pack_dir / "regression-report.json")
+            if (regression is None or regression.get("content_sha256") != manifest.content_sha256
+                    or regression.get("semantic_index") != semantic_binding
+                    or regression.get("runs", {}).get("hybrid", {}).get("retrieval_mode") != "hybrid"
+                    or regression.get("passed") is not True):
+                raise StageError("regression-report.json does not attest the current semantic index and hybrid run")
         record = Readiness(pack=self.pack, release_id=manifest.release_id, release_sha256=sha256_file(self.release),
-                           content_sha256=manifest.content_sha256, suite_sha256=suite.digest(), attested_at=attested_at,
+                           content_sha256=manifest.content_sha256, suite_sha256=suite.digest(),
+                           suite_file_sha256=sha256_file(self.acceptance), attested_at=attested_at,
                            attested_by=self.attested_by, gates=gates,
                            cases=CaseCounts(total=report["cases"], blocking=report["blocking"], quarantined=report["quarantined"]),
                            review_statuses=manifest.review_statuses, snapshot_date=manifest.freshness.snapshot_date,
                            stale_from=manifest.freshness.stale_from, min_runway_days=suite.policy.min_runway_days,
-                           coverage=coverage)
+                           coverage=coverage, semantic_index=semantic_binding)
         readiness_path(self.release).write_text(dump_readiness(record), encoding="utf-8", newline="\n")
         return "ran", dict(release_id=manifest.release_id, release_sha256=record.release_sha256, attested_by=self.attested_by,
                            attested_at=attested_at.isoformat(), gates={g.gate: g.status for g in gates},
@@ -358,6 +415,12 @@ class Pipeline:
     # --- orchestration -----------------------------------------------------
 
     def run_stages(self, start: str = "acquire", until: str = "accept") -> dict:
+        lock = (PackWriteLock(self.root, self.pack)
+            if self.lock_pack else nullcontext())
+        with lock:
+            return self._run_stages(start, until)
+
+    def _run_stages(self, start: str = "acquire", until: str = "accept") -> dict:
         if start not in STAGES or until not in STAGES or STAGES.index(start) > STAGES.index(until):
             raise ValueError(f"stages must be in order from {STAGES}")
         handlers = {"acquire": self.acquire, "gaps": self.gaps, "extract": self.extract, "validate-text": self.validate_text,
@@ -389,7 +452,8 @@ class Pipeline:
                       started_at=started.isoformat(), finished_at=datetime.now(UTC).isoformat(),
                       options=dict(download=self.download, retry_failed=self.retry_failed, workers=self.workers, scope=self.scope,
                                    thorough=self.thorough, update_curation=self.update_curation, release_id=self.release_id,
-                                   attested_by=self.attested_by, stages=f"{start}..{until}"),
+                                   attested_by=self.attested_by, source_plugins=self.source_plugins,
+                                   stages=f"{start}..{until}"),
                       stages=self.merge_previous(self.stages), exit_code=1 if failed or dropped else 0,
                       facts_dropped=dropped)
         self.pack_dir.mkdir(parents=True, exist_ok=True)

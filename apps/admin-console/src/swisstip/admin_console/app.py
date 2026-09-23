@@ -18,6 +18,7 @@ missing button is not the only thing that stops a write.
 import argparse
 import base64
 import hashlib
+import ipaddress
 import json
 import os
 import secrets
@@ -29,6 +30,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import CONSOLE_NAME, CONSOLE_VERSION
 from .data import Console, PackData
@@ -125,7 +127,28 @@ def require_editor(request: Request, user: str = Depends(authenticate)) -> str:
     """Write endpoints are for users listed as editors; in local mode there is one actor."""
     if request.app.state.users and getattr(request.state, "role", "reader") != "editor":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This user may read but not write")
+    origin = request.headers.get("origin")
+    if not request.app.state.users and origin is not None:
+        host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]")
+        if not loopback_host(host):
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                "Unauthenticated console writes require a loopback Host")
+    if origin is not None:
+        expected = f"{request.url.scheme}://{request.headers.get('host')}"
+        if origin != expected:
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                "Console writes require a same-origin request")
     return user
+
+
+def loopback_host(value: str) -> bool:
+    host = value.strip().strip("[]").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def get_pack(request: Request, pack: str) -> PackData:
@@ -141,7 +164,7 @@ def get_pack(request: Request, pack: str) -> PackData:
 def create_app(root: Path, *, read_only: bool = False, actor: str = "operator",
                run_dirs: dict[str, Path] | None = None, server_log: Path | None = None,
                auth_file: Path | None = None) -> FastAPI:
-    from .screens import documents, operations, packs, release, review, runs, sandbox, sources, workbench
+    from .screens import documents, operations, packs, release, review, runs, sandbox, sources, workbench, workflow
 
     console = Console(root, read_only=read_only, actor=actor, run_dirs=run_dirs, server_log=server_log)
     users = read_users(auth_file) if auth_file else {}
@@ -151,6 +174,9 @@ def create_app(root: Path, *, read_only: bool = False, actor: str = "operator",
     app.state.console = console
     app.state.jobs = JobRunner()
     app.state.users = users
+    if not users:
+        app.add_middleware(TrustedHostMiddleware,
+                           allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"])
     app.mount("/static", StaticFiles(directory=str(PACKAGE / "static")), name="static")
     for name in console.pack_names():
         app.state.jobs.mark_interrupted(console.pack(name))
@@ -175,7 +201,7 @@ def create_app(root: Path, *, read_only: bool = False, actor: str = "operator",
         return dict(status="ok", name=CONSOLE_NAME, version=CONSOLE_VERSION, root=str(console.root),
                     mode="read-only" if read_only else "edit", packs=console.pack_names())
 
-    for module in (packs, sources, runs, documents, workbench, review, release, sandbox, operations):
+    for module in (packs, workflow, sources, runs, documents, workbench, review, release, sandbox, operations):
         app.include_router(module.read_router)
         if not read_only and hasattr(module, "write_router"):
             app.include_router(module.write_router)
@@ -212,8 +238,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         if not path:
             parser.error("--run-dir takes PACK=DIR")
         run_dirs[name] = Path(path)
-    if args.host != DEFAULT_HOST and not args.auth_file:
-        print("warning: binding beyond 127.0.0.1 without --auth-file leaves the console open", file=sys.stderr)
+    if not loopback_host(args.host) and not args.auth_file:
+        print("error: binding beyond loopback requires --auth-file", file=sys.stderr)
+        return 2
     app = create_app(args.packs_dir, read_only=args.read_only, actor=args.actor, run_dirs=run_dirs,
                      server_log=args.server_log, auth_file=args.auth_file)
     import uvicorn

@@ -14,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from swisstip.ingestion import SafeCrawler  # noqa: E402
 from swisstip.ingestion import acquisition, download_cli  # noqa: E402
 from swisstip.ingestion.acquisition import (  # noqa: E402
-    catalogue_targets, markdown_targets, read_json, registry_targets, saved_and_intact, snapshot, summary, url_id,
+    NetworkBudgetExceeded, budget_usage, catalogue_targets, complete_network_attempt, markdown_targets,
+    read_json, registry_targets, reserve_network_attempt, saved_and_intact, snapshot, summary, url_id,
 )
 from test_crawler import FakeOpener, FakeResponse, public_resolver  # noqa: E402
 
@@ -98,9 +99,20 @@ class CatalogueTargetTests(unittest.TestCase):
                             encoding="utf-8")
         targets = catalogue_targets(path, read_json(path)["sources"], markdown)
         self.assertEqual([t["url"].rsplit("/", 1)[1] for t in targets], ["extra", "start", "review"])
-        self.assertEqual(targets[0]["registry_entries"], [])
+        self.assertEqual(targets[0]["registry_entries"][0]["definition"]["source_id"], "official-start")
         self.assertEqual([r["label"] for r in targets[1]["references"]], ["Seed", "Title of official-start"])
         self.assertEqual(targets[1]["registry_entries"][0]["definition"]["source_id"], "official-start")
+
+    def test_markdown_links_outside_allowlists_or_without_https_are_refused(self) -> None:
+        path = registry(self.tmp)
+        entries = read_json(path)["sources"]
+        for url in ("https://other.example/allowed/extra", "https://official.example/outside/extra",
+                    "http://official.example/allowed/extra"):
+            with self.subTest(url=url):
+                markdown = self.tmp / "sources.md"
+                markdown.write_text(f"[Unapproved]({url})\n", encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    catalogue_targets(path, entries, markdown)
 
 
 class SnapshotTests(unittest.TestCase):
@@ -183,6 +195,31 @@ class SummaryTests(unittest.TestCase):
             self.assertIn("| [https://a.example/y](https://a.example/y) | pending | pending |", readme)
             self.assertEqual(read_json(output / "summary.json")["schema_version"], "swisstip.catalogue-download/v1")
 
+    def test_cumulative_budget_charges_crashed_and_retried_attempts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            plan = {"catalogue_sha256": "a" * 64,
+                    "network_budget": {"max_requests": 3, "max_bytes": 100},
+                    "targets": []}
+            target = {"url": "https://official.example/allowed/start"}
+            crashed_id, crashed_limits = reserve_network_attempt(output, plan, target)
+            self.assertEqual((crashed_limits.max_requests, crashed_limits.max_total_bytes), (3, 100))
+            self.assertEqual(budget_usage(output, plan)["charged_requests"], 3)
+            with self.assertRaisesRegex(NetworkBudgetExceeded, "exhausted"):
+                reserve_network_attempt(output, plan, target)
+
+            ledger = read_json(output / "network-budget.json")
+            ledger["attempts"][0].update(actual_requests=1, actual_bytes=10, completed_at="2026-09-12T00:00:00+00:00")
+            acquisition.write_json(output / "network-budget.json", ledger)
+            retry_id, retry_limits = reserve_network_attempt(output, plan, target)
+            self.assertEqual((retry_limits.max_requests, retry_limits.max_total_bytes), (2, 90))
+            complete_network_attempt(output, plan, retry_id,
+                                     {"report": {"requests_sent": 2, "bytes_downloaded": 20}})
+            usage = budget_usage(output, plan)
+            self.assertEqual((usage["charged_requests"], usage["charged_bytes"]), (3, 30))
+            with self.assertRaisesRegex(NetworkBudgetExceeded, "exhausted"):
+                reserve_network_attempt(output, plan, target)
+
 
 class DownloadCliTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -203,7 +240,9 @@ class DownloadCliTests(unittest.TestCase):
         plan = read_json(self.output / "plan.json")
         self.assertEqual(plan["schema_version"], "swisstip.catalogue-download-plan/v1")
         self.assertEqual([t["url"].rsplit("/", 1)[1] for t in plan["targets"]], ["start", "review"])
-        self.assertEqual(plan["allowed_redirect_hosts"], ["official.example", "www.official.example"])
+        self.assertEqual(plan["targets"][0]["allowed_redirect_hosts"],
+                 ["official.example", "www.official.example"])
+        self.assertEqual(plan["targets"][0]["allowed_path_prefixes"], ["/allowed/"])
         self.assertEqual(plan["selection"], {"scan_set": "all", "source_ids": None, "selected_source_count": 2})
         self.assertEqual(plan["catalogue_sha256"], hashlib.sha256(self.catalogue.read_bytes()).hexdigest())
         self.assertEqual((self.output / "catalogue.json").read_bytes(), self.catalogue.read_bytes())
@@ -218,7 +257,7 @@ class DownloadCliTests(unittest.TestCase):
     def test_download_skips_intact_pages_not_ready_seeds_and_retries_on_request(self) -> None:
         calls: list[str] = []
 
-        def fake_snapshot(target, output, hosts, transport):
+        def fake_snapshot(target, output, allowed_hosts=None, transport="urllib"):
             calls.append(target["url"])
             attempt = len(list((output / "pages" / target["url_id"]).glob("attempt-*"))) + 1
             path = output / "pages" / target["url_id"] / f"attempt-{attempt:03d}" / "response.html"

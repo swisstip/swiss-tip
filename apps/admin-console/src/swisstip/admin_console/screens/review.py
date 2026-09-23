@@ -27,12 +27,16 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
 from swisstip.build.curation import Anchor
+from swisstip.builder.autopilot.models import (Actor, ActorKind, AuthenticationKind,
+                                               WorkflowState)
+from swisstip.builder.autopilot.service import AutopilotService
+from swisstip.builder.autopilot.store import WorkflowConflict, WorkflowNotFound
 from swisstip.extraction.anchors import make_anchor
 
 from ..app import get_pack, render, require_editor
 from ..basis import BASIS_KINDS, citation_basis, fact_basis
 from ..data import PackData, paginate
-from ..writes import WriteRefused, record_rejection, write_curation
+from ..writes import WriteRefused, pack_file_lock, record_rejection, write_curation
 
 read_router = APIRouter()
 write_router = APIRouter()
@@ -40,6 +44,29 @@ write_router = APIRouter()
 WARNING_OUTCOMES = ("same-text", "moved", "ambiguous", "changed", "dropped")
 FILTERS = ("review_status", "kind", "jurisdiction", "language", "concept", "document", "by_check", "basis")
 BULK_ACTIONS = ("confirm", "flag", "reject")
+
+
+def governed_review(request: Request, pack: PackData, actor: str):
+    service = AutopilotService(pack.root, pack.pack)
+    try:
+        workflow = service.status()
+    except WorkflowNotFound:
+        return None
+    if workflow.state != WorkflowState.AWAITING_FACT_REVIEW:
+        raise WriteRefused(f"facts can be confirmed only while workflow is awaiting fact review, not {workflow.state.value}")
+    authentication = AuthenticationKind.HOSTED if request.app.state.users else AuthenticationKind.LOCAL_ASSERTED
+    return service, workflow.revision, Actor(kind=ActorKind.HUMAN, actor_id=actor,
+                                             authentication=authentication)
+
+
+def record_governed_review(governed, fact_ids: list[str]) -> None:
+    if governed is None:
+        return
+    service, revision, actor = governed
+    try:
+        service.record_fact_review(fact_ids, actor, revision)
+    except (OSError, ValueError, WorkflowConflict) as exc:
+        raise WriteRefused(f"fact-review receipt refused: {exc}") from exc
 
 
 def anchor_state(pack: PackData, fact, citation, outcome: dict) -> str:
@@ -236,14 +263,17 @@ def remove_fact(curation, fact_id: str) -> tuple:
 
 @write_router.post("/packs/{pack}/review/{fact_id}/confirm")
 def confirm(request: Request, fact_id: str, pack: PackData = Depends(get_pack),
-            actor: str = Depends(require_editor), sha256: str = Form(""), next_fact: str = Form("")):
+            actor: str = Depends(require_editor), sha256: str = Form(...), next_fact: str = Form("")):
     """The only action that sets `human-reviewed`, with the bulk action; it also refreshes the anchor."""
-    anchors = current_anchors(pack, fact_id)
+    with pack_file_lock(pack):
+        governed = governed_review(request, pack, actor)
+        anchors = current_anchors(pack, fact_id)
 
-    def mutate(curation) -> None:
-        mark_confirmed(find_fact(curation, fact_id)[1], actor, anchors)
+        def mutate(curation) -> None:
+            mark_confirmed(find_fact(curation, fact_id)[1], actor, anchors)
 
-    write_curation(pack, mutate, actor, f"confirm fact {fact_id}", expected_sha256=sha256 or None, ids=[fact_id])
+        write_curation(pack, mutate, actor, f"confirm fact {fact_id}", expected_sha256=sha256, ids=[fact_id])
+        record_governed_review(governed, [fact_id])
     target = f"&fact_id={next_fact}" if next_fact else ""
     return RedirectResponse(f"/packs/{pack.pack}/review?notice=confirmed+{fact_id}{target}", status_code=303)
 
@@ -279,7 +309,7 @@ def reject(request: Request, fact_id: str, pack: PackData = Depends(get_pack), a
 
 @write_router.post("/packs/{pack}/review/bulk")
 def bulk(request: Request, pack: PackData = Depends(get_pack), actor: str = Depends(require_editor),
-         action: str = Form(...), note: str = Form(""), sha256: str = Form(""), scope: str = Form("selected"),
+         action: str = Form(...), note: str = Form(""), sha256: str = Form(...), scope: str = Form("selected"),
          fact_ids: list[str] = Form(default=[]), review_status: str = Form(""), kind: str = Form(""),
          jurisdiction: str = Form(""), language: str = Form(""), concept: str = Form(""),
          document: str = Form(""), by_check: str = Form(""), basis: str = Form("")):
@@ -306,25 +336,30 @@ def bulk(request: Request, pack: PackData = Depends(get_pack), actor: str = Depe
     reason = f"bulk {action} of {count}" + (f": {note}" if note else "")
     removed: list[tuple] = []
     if action == "confirm":
-        anchors = {fact_id: current_anchors(pack, fact_id) for fact_id in ids}
-        # A single fact confirmed through the bulk form is an ordinary confirmation; a group says it was one.
-        group = f"confirmed in a bulk review of {count}" if len(ids) > 1 else ""
-        confirm_note = "; ".join(part for part in (group, note) if part) or None
+        with pack_file_lock(pack):
+            governed = governed_review(request, pack, actor)
+            anchors = {fact_id: current_anchors(pack, fact_id) for fact_id in ids}
+            # A single fact confirmed through the bulk form is ordinary; a group says it was one.
+            group = f"confirmed in a bulk review of {count}" if len(ids) > 1 else ""
+            confirm_note = "; ".join(part for part in (group, note) if part) or None
 
-        def mutate(curation) -> None:
-            for fact_id in ids:
-                mark_confirmed(find_fact(curation, fact_id)[1], actor, anchors[fact_id], confirm_note)
+            def mutate(curation) -> None:
+                for fact_id in ids:
+                    mark_confirmed(find_fact(curation, fact_id)[1], actor, anchors[fact_id], confirm_note)
+
+            write_curation(pack, mutate, actor, reason, expected_sha256=sha256, ids=ids)
+            record_governed_review(governed, ids)
     elif action == "flag":
         def mutate(curation) -> None:
             for fact_id in ids:
                 add_flag(find_fact(curation, fact_id)[1], actor, note)
+        write_curation(pack, mutate, actor, reason, expected_sha256=sha256, ids=ids)
     else:
         def mutate(curation) -> None:
             removed.clear()
             removed.extend(remove_fact(curation, fact_id) for fact_id in ids)
-
-    write_curation(pack, mutate, actor, reason, expected_sha256=sha256 or None, ids=ids,
-                   allow_drop=action == "reject")
+        write_curation(pack, mutate, actor, reason, expected_sha256=sha256, ids=ids,
+                       allow_drop=True)
     for concept_id, fact in removed:
         record_rejection(pack, concept_id, fact, actor, note)
     done = dict(confirm="confirmed", flag="flagged", reject="rejected")[action]
@@ -335,20 +370,24 @@ def bulk(request: Request, pack: PackData = Depends(get_pack), actor: str = Depe
 
 @write_router.post("/packs/{pack}/review/{fact_id}/accept")
 def accept_candidate(request: Request, fact_id: str, pack: PackData = Depends(get_pack),
-                     actor: str = Depends(require_editor), statement: str = Form(...), sha256: str = Form("")):
+                     actor: str = Depends(require_editor), statement: str = Form(...), sha256: str = Form(...)):
     """A model candidate becomes a curated statement; the model stays in `author` and `source`."""
-    def mutate(curation) -> None:
-        _, fact = find_fact(curation, fact_id)
-        if fact.provenance.kind != "model-candidate":
-            raise WriteRefused(f"fact {fact_id} is not a model candidate")
-        fact.statement = statement.strip()
-        fact.provenance.kind = "curated-statement"
-        fact.provenance.review_status = "human-reviewed"
-        fact.provenance.reviewed_on = date.today()
-        fact.provenance.reviewed_by = actor
+    with pack_file_lock(pack):
+        governed = governed_review(request, pack, actor)
 
-    write_curation(pack, mutate, actor, f"accept model candidate {fact_id}", expected_sha256=sha256 or None,
-                   ids=[fact_id])
+        def mutate(curation) -> None:
+            _, fact = find_fact(curation, fact_id)
+            if fact.provenance.kind != "model-candidate":
+                raise WriteRefused(f"fact {fact_id} is not a model candidate")
+            fact.statement = statement.strip()
+            fact.provenance.kind = "curated-statement"
+            fact.provenance.review_status = "human-reviewed"
+            fact.provenance.reviewed_on = date.today()
+            fact.provenance.reviewed_by = actor
+
+        write_curation(pack, mutate, actor, f"accept model candidate {fact_id}", expected_sha256=sha256,
+                       ids=[fact_id])
+        record_governed_review(governed, [fact_id])
     return RedirectResponse(f"/packs/{pack.pack}/review?notice=accepted+{fact_id}", status_code=303)
 
 

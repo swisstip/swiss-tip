@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swisstip-mcp-server"
-version = "0.3.0"
+version = "0.4.0"
 description = "Swiss TIP MCP server: the four tools over stdio or Streamable HTTP on a validated knowledge release"
 requires-python = ">=3.14"
 dependencies = [
     "mcp>=1.29,<2",
-    "pydantic>=2.11,<3",
+    "pydantic>=2.12,<3",
     "starlette>=0.48",
     "uvicorn>=0.31.1",
     "swisstip-core",

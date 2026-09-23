@@ -117,6 +117,15 @@ class ReleaseTests(unittest.TestCase):
                     "place_register"):
             self.assertNotIn(f'"{key}"', dumped)
 
+    def test_release_v1_remains_readable_but_cannot_claim_a_v2_suite_binding(self):
+        release = sample_release()
+        release.manifest.schema_version = "swiss-tip-release/v1"
+        dumped = dump_release(release)
+        self.assertEqual(Release.model_validate_json(dumped), release)
+        release.manifest.acceptance_suite_sha256 = "a" * 64
+        with self.assertRaisesRegex(ValueError, "requires swiss-tip-release/v2"):
+            Release.model_validate(release.model_dump(mode="python"))
+
     def test_the_place_register_is_hashed_and_validated(self):
         def with_places(places: list[Place]) -> Release:
             release = sample_release()

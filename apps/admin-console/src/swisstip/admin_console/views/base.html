@@ -20,7 +20,7 @@
 
 {% if pack_name %}
 <nav class="tabs" aria-label="Screens of this pack">
-  {% set screens = [('sources', 'Sources'), ('runs', 'Runs'), ('documents', 'Documents'),
+  {% set screens = [('workflow', 'Workflow'), ('sources', 'Sources'), ('runs', 'Runs'), ('documents', 'Documents'),
                     ('workbench', 'Workbench'), ('review', 'Review'), ('release', 'Release'),
                     ('sandbox', 'Sandbox'), ('operations', 'Operations')] %}
   <a href="/" class="{{ 'current' if active == 'packs' }}">Packs</a>

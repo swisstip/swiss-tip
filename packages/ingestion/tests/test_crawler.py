@@ -372,8 +372,8 @@ class SafeCrawlerTests(unittest.TestCase):
         )
         self.assertEqual(report.skipped[0].reason, "robots-disallowed")
 
-    def test_redirect_checks_policy_for_each_host_and_scheme(self) -> None:
-        for origin in ("https://secondary.example", "http://official.example"):
+    def test_redirect_checks_policy_for_each_host(self) -> None:
+        for origin in ("https://secondary.example",):
             with self.subTest(origin=origin):
                 crawler, opener = crawler_for(
                     {
@@ -397,6 +397,19 @@ class SafeCrawlerTests(unittest.TestCase):
                 self.assertEqual(report.pages, [])
                 self.assertEqual(report.skipped[0].url, f"{origin}/allowed/blocked")
                 self.assertEqual(report.skipped[0].reason, "robots-disallowed")
+
+    def test_https_redirect_cannot_downgrade_to_http(self) -> None:
+        crawler, opener = crawler_for({
+            "https://official.example/robots.txt": FakeResponse(404),
+            "https://official.example/allowed/start": FakeResponse(
+                302, headers={"Location": "http://official.example/allowed/plain"}),
+        })
+        report = crawler.crawl()
+        self.assertEqual(opener.requested,
+                         ["https://official.example/robots.txt", "https://official.example/allowed/start"])
+        self.assertEqual(report.pages, [])
+        self.assertEqual(report.skipped[0].reason,
+                 "redirect-out-of-scope: redirect downgrades HTTPS to HTTP")
 
     def test_secondary_robots_failure_is_cached_and_fail_closed(self) -> None:
         crawler, opener = crawler_for(

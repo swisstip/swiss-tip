@@ -245,14 +245,18 @@ def regression_run(report: dict) -> dict:
                 unjudged_steps=sum(1 for c in cases for s in c["searches"] if not s["judged"]), results=cases)
 
 
-def regression_report(reports: dict[str, dict | str], acceptance_sha256: str, regression_sha256: str) -> dict:
+def regression_report(reports: dict[str, dict | str], acceptance_sha256: str, regression_sha256: str,
+                      semantic_index: dict | None = None) -> dict:
     """`releases/<pack>/regression-report.json`: the regression pack replayed per retrieval mode.
 
     `reports` maps a mode (lexical, hybrid) to its check_acceptance report, or to the reason it was not run. `passed`
     is true when every mode ran and no blocking case failed in any of them."""
+    if isinstance(reports.get("hybrid"), dict) and semantic_index is None:
+        raise ValueError("a hybrid regression run requires its semantic index and retrieval settings")
     first = next(r for r in reports.values() if isinstance(r, dict))
     runs = {mode: regression_run(r) if isinstance(r, dict) else dict(skipped=r) for mode, r in reports.items()}
     return dict(schema_version=REGRESSION_REPORT_SCHEMA_VERSION, pack=first["pack"], release_id=first["release_id"],
                 content_sha256=first["content_sha256"], acceptance_sha256=acceptance_sha256,
                 regression_sha256=regression_sha256, checked_at=datetime.now(UTC).isoformat(), as_of=first["as_of"],
+                semantic_index=semantic_index,
                 passed=all("skipped" not in run and not run["failed"] for run in runs.values()), runs=runs)

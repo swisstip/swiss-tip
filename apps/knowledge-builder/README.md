@@ -17,6 +17,25 @@ change and records the outcome. The serving side never imports it.
 ./.venv/Scripts/python.exe -m swisstip.builder.cli <pack> --packs-dir ../swiss-tip-mvp --until validate-text --workers 4
 ```
 
+The governed coordinator above these deterministic stages is
+`swisstip-autopilot`. It keeps verified state under
+`<packs-dir>/.local/<pack>/autopilot/`; Claude or another coordinator can
+initialize, inspect, submit and promote proposals, record measurable progress,
+checkpoint deterministic phases and prepare narrow fast-track delegations.
+Human approval, fact-review completion and attestation are intentionally absent
+from its CLI and belong to the admin console.
+
+```shell
+./.venv/Scripts/python.exe -m swisstip.builder.autopilot.cli init \
+	--packs-dir ../swiss-tip-mvp --pack <pack> --topic "<topic>" \
+	--review-mode full-review
+./.venv/Scripts/python.exe -m swisstip.builder.autopilot.cli status \
+	--packs-dir ../swiss-tip-mvp --pack <pack> --json
+```
+
+Architecture and integrity rules:
+[autopilot-workflow.md](../../docs/architecture/autopilot-workflow.md).
+
 The packs live in their own repository,
 [swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp): `--packs-dir`
 (or the environment variable `SWISSTIP_PACKS`) names the folder that holds

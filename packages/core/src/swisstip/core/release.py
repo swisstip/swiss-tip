@@ -231,7 +231,7 @@ class EvidenceRecord(Strict):
 
 
 class Manifest(Strict):
-    schema_version: Literal["swiss-tip-release/v1"] = RELEASE_SCHEMA_VERSION
+    schema_version: Literal["swiss-tip-release/v1", "swiss-tip-release/v2"] = RELEASE_SCHEMA_VERSION
     release_id: str
     pack: str
     title: str
@@ -251,7 +251,15 @@ class Manifest(Strict):
     ranking_policy: RankingPolicy | None = Field(default=None, exclude_if=absent,
                                                   description="The weights the server ranks with; never served.")
     limitations: list[str]
+    acceptance_suite_sha256: str | None = Field(default=None, exclude_if=absent,
+                                                 description="Digest of the acceptance suite this release was built for.")
     content_sha256: str = Field(description="SHA-256 over the canonical JSON of documents, topics, concepts, facts and evidence.")
+
+    @model_validator(mode="after")
+    def version_matches_fields(self) -> "Manifest":
+        if self.schema_version == "swiss-tip-release/v1" and self.acceptance_suite_sha256 is not None:
+            raise ValueError("acceptance_suite_sha256 requires swiss-tip-release/v2")
+        return self
 
 
 class Release(Strict):

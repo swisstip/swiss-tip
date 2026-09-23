@@ -264,7 +264,8 @@ def accessed_on(record: dict):
 
 
 def build_release(curation: Curation, text_dir: Path, release_id: str, *, created_at: datetime | None = None,
-                  update_citations: bool = False, place_register: PlaceRegister | None = None) -> tuple[Release, dict]:
+                  update_citations: bool = False, place_register: PlaceRegister | None = None,
+                  acceptance_suite_sha256: str | None = None) -> tuple[Release, dict]:
     """`place_register` is the register the curation names, loaded by the caller, who knows where the curation file
     lies (`swisstip.build.places.place_register_for`); without one the release accepts jurisdiction codes only."""
     dataset = TextDataset(text_dir)
@@ -387,7 +388,8 @@ def build_release(curation: Curation, text_dir: Path, release_id: str, *, create
         institution_levels=dict(Counter(institutions[d.institution_id].level for d in documents.values() if d.institution_id)),
         basis_kinds=dict(Counter(f.provenance.basis.kind for f in facts if f.provenance.basis)),
         ranking_policy=policy if (institutions or curation.ranking_policy) else None,
-        limitations=curation.limitations, content_sha256="0" * 64)
+        limitations=curation.limitations, acceptance_suite_sha256=acceptance_suite_sha256,
+        content_sha256="0" * 64)
     release = Release(manifest=manifest, documents=sorted(documents.values(), key=lambda d: d.document_id),
                       topics=topics, concepts=concepts, facts=facts, evidence=evidence,
                       institutions=sorted(institutions.values(), key=lambda i: i.institution_id),

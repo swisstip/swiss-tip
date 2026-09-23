@@ -22,6 +22,8 @@ SCHEMA_VERSION = "swiss-tip-semantic-index/v1"
 INPUT_VERSION = "concept-text/v1"
 QUERY_VERSION = "qwen3-retrieval/v1"
 QUERY_PREFIX = "Instruct: Given a query, retrieve relevant Swiss public-information concepts.\nQuery: "
+DEFAULT_MIN_SCORE = 0.5
+DEFAULT_CANDIDATE_LIMIT = 10
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 MAX_INDEX_BYTES = 32 * 1024 * 1024
 
@@ -263,8 +265,36 @@ def load_index(path: Path, release: Release) -> EmbeddingIndex:
         raise SemanticError(f"Cannot load semantic index ({type(exc).__name__}).") from exc
 
 
+def semantic_index_binding(path: Path, index: EmbeddingIndex, *,
+                           min_score: float = DEFAULT_MIN_SCORE,
+                           candidate_limit: int = DEFAULT_CANDIDATE_LIMIT) -> dict:
+    """Identity of the exact index bytes and retrieval settings used by a hybrid replay."""
+    _validate_index(index)
+    if isinstance(min_score, bool) or not isinstance(min_score, (int, float)) \
+            or not math.isfinite(min_score) or not -1 <= min_score <= 1:
+        raise SemanticError("Semantic minimum score must be between -1 and 1.")
+    if not isinstance(candidate_limit, int) or isinstance(candidate_limit, bool) or candidate_limit < 1:
+        raise SemanticError("Semantic candidate limit must be a positive integer.")
+    raw = Path(path).read_bytes()
+    return {
+        "file_sha256": hashlib.sha256(raw).hexdigest(),
+        "content_sha256": index.content_sha256,
+        "release_id": index.release_id,
+        "release_content_sha256": index.release_content_sha256,
+        "model": index.model,
+        "model_digest": index.model_digest,
+        "dimension": index.dimension,
+        "input_version": index.input_version,
+        "query_version": index.query_version,
+        "query_prefix_sha256": _sha256(index.query_prefix),
+        "min_score": float(min_score),
+        "candidate_limit": candidate_limit,
+    }
+
+
 class SemanticSearch:
-    def __init__(self, index: EmbeddingIndex, embedder: OllamaEmbedder, min_score: float = 0.5, candidate_limit: int = 10):
+    def __init__(self, index: EmbeddingIndex, embedder: OllamaEmbedder,
+                 min_score: float = DEFAULT_MIN_SCORE, candidate_limit: int = DEFAULT_CANDIDATE_LIMIT):
         _validate_index(index)
         if embedder.model != index.model:
             raise SemanticError("Semantic index and query embedder must use the same model tag.")

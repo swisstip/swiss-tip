@@ -14,6 +14,7 @@ saved response that is an error page served with HTTP 200.
 import argparse
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import nullcontext
 import hashlib
 import json
 from pathlib import Path
@@ -22,8 +23,8 @@ from typing import Sequence
 from urllib.parse import urlsplit
 
 from .acquisition import (
-    PLAN_SCHEMA, PRINT_LOCK, catalogue_targets, error_page, now, read_json, saved_and_intact, snapshot, summary,
-    write_json,
+    PLAN_SCHEMA, PRINT_LOCK, NetworkBudgetLock, catalogue_targets, complete_network_attempt,
+    error_page, now, read_json, reserve_network_attempt, saved_and_intact, snapshot, summary, write_json,
 )
 from .catalog import load_source_catalog, select_sources
 from .plugins import load_source_plugins
@@ -43,12 +44,16 @@ def build_plan(catalogue: Path, markdown: Path | None, *, scan_set: str | None, 
     data = load_source_catalog(catalogue)
     entries = select_sources(data, scan_set=scan_set, source_ids=source_ids)
     targets = catalogue_targets(catalogue, entries, markdown)
-    hosts = {urlsplit(t["url"]).hostname for t in targets}
     for target in targets:
+        hosts = {urlsplit(target["url"]).hostname}
+        prefixes = set()
         for entry in target.get("registry_entries", []):
             hosts.update(entry["definition"]["allowed_hosts"])
-    # Explicit www aliases allow ordinary official-site redirects. No link crawling.
-    hosts |= {host[4:] if host.startswith("www.") else "www." + host for host in list(hosts)}
+            prefixes.update(entry["definition"]["allowed_path_prefixes"])
+        # Explicit www aliases allow ordinary official-site redirects. No link crawling.
+        hosts |= {host[4:] if host.startswith("www.") else "www." + host for host in list(hosts) if host}
+        target["allowed_redirect_hosts"] = sorted(hosts)
+        target["allowed_path_prefixes"] = sorted(prefixes) or [urlsplit(target["url"]).path or "/"]
     return {"schema_version": PLAN_SCHEMA, "created_at": now(),
             "catalogue": str(catalogue.resolve()), "catalogue_sha256": hashlib.sha256(catalogue.read_bytes()).hexdigest(),
             "markdown": str(markdown.resolve()) if markdown else None,
@@ -56,7 +61,7 @@ def build_plan(catalogue: Path, markdown: Path | None, *, scan_set: str | None, 
             "catalog_ref": {"artifact_id": data["artifact_id"], "version": data["version"]},
             "selection": {"scan_set": scan_set if source_ids is None else None, "source_ids": source_ids,
                           "selected_source_count": len(entries)},
-            "targets": targets, "allowed_redirect_hosts": sorted(hosts),
+            "targets": targets,
             "scope": "Exact catalogue URL inventory, depth zero; no recursive crawling",
             "workers": workers, "robots_policy": "required; fail closed",
             "max_response_bytes": MAX_RESPONSE_BYTES}
@@ -108,6 +113,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.download:
         summary(args.output, plan)
         return 0
+    if (args.output / "autopilot" / "workflow.json").is_file() and not plan.get("network_budget"):
+        parser.error("governed download requires human confirmation of the plan and network budget")
+    if plan.get("network_budget") and plugin_plan["sources"]:
+        parser.error("a confirmed governed plan cannot enable unbudgeted source plugins")
 
     groups: dict[str, list[dict]] = defaultdict(list)
     for target in plan["targets"]:
@@ -130,19 +139,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         for index, target in enumerate(targets):
             if index:
                 time.sleep(max(2, result.get("report", {}).get("effective_delay_seconds", 2)))
-            result = snapshot(target, args.output, tuple(plan["allowed_redirect_hosts"]), args.transport)
+            if plan.get("network_budget"):
+                reservation_id, limits = reserve_network_attempt(args.output, plan, target)
+                result = snapshot(target, args.output, transport=args.transport, limits=limits)
+                complete_network_attempt(args.output, plan, reservation_id, result)
+            else:
+                result = snapshot(target, args.output, transport=args.transport)
             with PRINT_LOCK:
                 print(f"{result['status']}: {target['url']}", flush=True)
 
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = [pool.submit(download_group, targets) for targets in groups.values()]
-        for future in as_completed(futures):
-            future.result()
-            summary(args.output, plan)
-    from .plugin_downloads import run_source_plugins
+    budget_lock = NetworkBudgetLock(args.output) if plan.get("network_budget") else nullcontext()
+    with budget_lock:
+        if plan.get("network_budget"):
+            for targets in groups.values():
+                download_group(targets)
+                summary(args.output, plan)
+        else:
+            with ThreadPoolExecutor(max_workers=args.workers) as pool:
+                futures = [pool.submit(download_group, targets) for targets in groups.values()]
+                for future in as_completed(futures):
+                    future.result()
+                    summary(args.output, plan)
+        from .plugin_downloads import run_source_plugins
 
-    plugin_reports = run_source_plugins(args.output, registry, transport=args.transport, retry_failed=args.retry_failed)
-    result = summary(args.output, plan)
+        plugin_reports = run_source_plugins(args.output, registry, transport=args.transport,
+                                            retry_failed=args.retry_failed)
+        result = summary(args.output, plan)
     print(json.dumps({key: result[key] for key in ("target_count", "counts", "saved_bytes")}), flush=True)
     return int(result["counts"].get("saved", 0) != result["target_count"] or any(
         r["counts"].get("saved", 0) != r["target_count"] or r.get("resolution_errors") for r in plugin_reports))

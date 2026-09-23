@@ -11,8 +11,9 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).parent))
 
 from swisstip.core.release import content_hash
-from swisstip.runtime.semantic import (OllamaEmbedder, QUERY_PREFIX, SemanticError, SemanticSearch, _NoRedirects,
-                                      _index_hash, build_index, concept_texts, load_index, save_index)
+from swisstip.runtime.semantic import (DEFAULT_CANDIDATE_LIMIT, DEFAULT_MIN_SCORE, OllamaEmbedder, QUERY_PREFIX,
+                                      SemanticError, SemanticSearch, _NoRedirects, _index_hash, build_index,
+                                      concept_texts, load_index, save_index, semantic_index_binding)
 from test_service import sample_release
 
 
@@ -136,6 +137,19 @@ class SemanticIndexTests(unittest.TestCase):
             path = Path(temporary) / "index.json"
             save_index(self.index, path)
             self.assertEqual(load_index(path, self.release), self.index)
+
+    def test_regression_binding_names_exact_index_bytes_and_retrieval_settings(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "index.json"
+            save_index(self.index, path)
+            binding = semantic_index_binding(path, self.index)
+            self.assertEqual(binding["file_sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertEqual(binding["content_sha256"], self.index.content_sha256)
+            self.assertEqual(binding["model_digest"], self.index.model_digest)
+            self.assertEqual((binding["min_score"], binding["candidate_limit"]),
+                             (DEFAULT_MIN_SCORE, DEFAULT_CANDIDATE_LIMIT))
+            changed = semantic_index_binding(path, self.index, min_score=0.6, candidate_limit=5)
+            self.assertNotEqual(changed, binding)
 
     def test_release_changes_and_rehashed_input_substitution_are_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:

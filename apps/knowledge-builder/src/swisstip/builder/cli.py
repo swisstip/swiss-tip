@@ -41,6 +41,8 @@ def main(argv=None) -> int:
     parser.add_argument("--until", choices=STAGES, default="accept")
     parser.add_argument("--download", action="store_true", help="make requests in the acquire stage")
     parser.add_argument("--retry-failed", action="store_true", help="with --download, retry failed targets")
+    parser.add_argument("--no-source-plugins", action="store_true",
+                        help="disable Fedlex and every other source plugin for this run")
     parser.add_argument("--workers", type=int, default=1, help="workers for download host groups and extraction")
     parser.add_argument("--scope", choices=("attributed", "all"), default="attributed", help="extraction scope")
     parser.add_argument("--thorough", action="store_true", help="re-hash every saved response in the validation stages")
@@ -55,7 +57,8 @@ def main(argv=None) -> int:
     try:
         pipeline = Pipeline(args.packs_dir, args.pack, run_dir=args.run_dir, release_id=args.release_id, download=args.download,
                             retry_failed=args.retry_failed, workers=workers, scope=args.scope, thorough=args.thorough,
-                            update_curation=args.update_curation, attested_by=args.attested_by)
+                    update_curation=args.update_curation, attested_by=args.attested_by,
+                    source_plugins=not args.no_source_plugins)
         report = pipeline.run_stages(args.start, args.until)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)

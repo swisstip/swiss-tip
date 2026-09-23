@@ -584,6 +584,27 @@ class ReviewTests(ConsoleTestCase):
         self.assertEqual(fact.provenance.review_status, "assistant-authored-unreviewed")
         self.assertIsNone(fact.provenance.reviewed_by)
 
+    def test_editing_confirmed_applicability_or_evidence_clears_review(self):
+        fact_id = "registration-deadline-2"
+        self.post(f"/packs/test-pack/review/{fact_id}/confirm", dict(sha256=self.curation_sha()))
+        self.post("/packs/test-pack/workbench/facts", dict(
+            fact_id=fact_id, statement="Register before starting work.", language="en",
+            jurisdiction="CH-ZH", valid_from="", valid_through="", kind="curated-statement", author="test",
+            source="", reviewed_on="", notes="", condition="population=eu_efta", sha256=self.curation_sha()))
+        fact = self.facts_by_id()[fact_id]
+        self.assertEqual(fact.provenance.review_status, "assistant-authored-unreviewed")
+        self.assertIsNone(fact.provenance.reviewed_by)
+
+        self.post(f"/packs/test-pack/review/{fact_id}/confirm", dict(sha256=self.curation_sha()))
+        document_id = self.facts_by_id()["registration-deadline-1"].evidence[0].document_id
+        self.post(f"/packs/test-pack/workbench/facts/{fact_id}/evidence", dict(
+            action="replace", number=1, document_id=document_id, first_block=4, last_block=4,
+            basis_kind="", basis_level="", basis_norm="", basis_refers_to="",
+            sha256=self.curation_sha()))
+        fact = self.facts_by_id()[fact_id]
+        self.assertEqual(fact.provenance.review_status, "assistant-authored-unreviewed")
+        self.assertIsNone(fact.provenance.reviewed_by)
+
     def test_flag_leaves_the_status_and_adds_a_note(self):
         self.post("/packs/test-pack/review/registration-deadline-3/flag",
                   dict(note="check the cantonal wording", sha256=self.curation_sha()))
@@ -760,6 +781,19 @@ class RelocationTests(ConsoleTestCase):
         fact = next(f for c in curation.concepts for f in c.facts if f.fact_id == "registration-deadline-2")
         self.assertEqual((fact.evidence[0].first_block, fact.evidence[0].last_block), (4, 4))
         self.assertIn("Register within 14 days", fact.evidence[0].anchor.excerpt)
+
+    def test_relocation_clears_a_prior_human_review(self):
+        fact_id = "registration-deadline-2"
+        self.post(f"/packs/test-pack/review/{fact_id}/confirm", dict(sha256=self.curation_sha()))
+        document_id = self.fixture.document("registration")
+        self.post("/packs/test-pack/runs/relocation/pick",
+                  dict(fact_id=fact_id, number=1, document_id=document_id,
+                       first_block=4, last_block=4, sha256=self.curation_sha()))
+        fact = next(fact for concept in load_curation(self.pack.curation_path).concepts
+                    for fact in concept.facts if fact.fact_id == fact_id)
+        self.assertEqual(fact.provenance.review_status, "assistant-authored-unreviewed")
+        self.assertIsNone(fact.provenance.reviewed_by)
+        self.assertIsNone(fact.provenance.reviewed_on)
 
     def test_dropping_a_fact_needs_a_note_and_records_it(self):
         self.post("/packs/test-pack/runs/relocation/drop",
@@ -983,6 +1017,23 @@ class HostedModeTests(ConsoleTestCase):
     def test_a_wrong_password_is_refused(self):
         response = self.client.get("/", auth=("anna", "wrong"))
         self.assertEqual(response.status_code, 401)
+
+    def test_cross_origin_writes_are_refused_in_hosted_and_local_modes(self):
+        data = dict(sha256=self.pack.curation.sha256)
+        hosted = self.client.post("/packs/test-pack/review/registration-deadline-1/confirm",
+                                  data=data, auth=("anna", "secret"),
+                                  headers={"Origin": "https://attacker.example"})
+        self.assertEqual(hosted.status_code, 403)
+        local = TestClient(create_app(self.fixture.root, actor="Anna Meier"))
+        response = local.post("/packs/test-pack/review/registration-deadline-1/confirm",
+                              data=data, headers={"Origin": "https://attacker.example"})
+        self.assertEqual(response.status_code, 403)
+        rebound = local.post("/packs/test-pack/review/registration-deadline-1/confirm",
+                     data=data, headers={"Host": "attacker.example",
+                             "Origin": "http://attacker.example"})
+        self.assertEqual(rebound.status_code, 400)
+        read = local.get("/packs/test-pack/workflow", headers={"Host": "attacker.example"})
+        self.assertEqual(read.status_code, 400)
 
 
 # --- calls -------------------------------------------------------------------

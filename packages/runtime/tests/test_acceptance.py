@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from swisstip.core.acceptance import AcceptanceFile  # noqa: E402
-from swisstip.runtime.acceptance import check_acceptance, issues_of  # noqa: E402
+from swisstip.runtime.acceptance import check_acceptance, issues_of, regression_report  # noqa: E402
 from swisstip.runtime.service import ReleaseService  # noqa: E402
 from test_service import SNAPSHOT, release_with_basis, release_with_places, sample_release  # noqa: E402
 
@@ -184,6 +184,15 @@ class AcceptanceCheckTests(unittest.TestCase):
         report = self.check(case(language="fr", steps=[dict(search=translated), dict(resolve=EU_EFTA)]))
         self.assertTrue(report["passed"])
         self.assertTrue(report["results"][0]["steps"][0]["translated"])
+
+    def test_a_hybrid_regression_report_requires_its_semantic_binding(self):
+        checked = self.check(case())
+        reports = {"lexical": checked, "hybrid": checked}
+        with self.assertRaisesRegex(ValueError, "requires its semantic index"):
+            regression_report(reports, "a" * 64, "b" * 64)
+        binding = {"file_sha256": "c" * 64, "min_score": 0.5, "candidate_limit": 10}
+        report = regression_report(reports, "a" * 64, "b" * 64, binding)
+        self.assertEqual(report["semantic_index"], binding)
 
     def test_a_search_step_can_send_the_users_place_and_pin_what_is_published_elsewhere(self):
         service = ReleaseService(release_with_places())

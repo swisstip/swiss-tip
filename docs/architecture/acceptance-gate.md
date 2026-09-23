@@ -14,7 +14,7 @@ for both packs until the first graded runs on the current releases exist
 what remains.<br>
 **Schema versions:** `swiss-tip-acceptance/v1`,
 `swiss-tip-acceptance-report/v1`, `swiss-tip-acceptance-answers/v1`,
-`swiss-tip-readiness/v1`<br>
+`swiss-tip-readiness/v2` (legacy v1 remains readable for lexical-only serving)<br>
 **Relation to the other documents:** the cases restate the scenarios of
 [user-acceptance-tests.md](../product/user-acceptance-tests.md) and
 [wallisellen-user-acceptance-tests.md](../product/wallisellen-user-acceptance-tests.md)
@@ -170,7 +170,7 @@ earlier run, and writes `releases/<pack>/readiness.json` only when all pass:
 | # | Gate | How it is checked | Status |
 | --- | --- | --- | --- |
 | G1 | The release validates thoroughly | `validate_release` against the text dataset and the run, so every cited saved response is re-hashed | implemented |
-| G2 | The build dropped no fact | `build-report.json` names this release ID and lists no dropped fact | implemented |
+| G2 | The build report is current and dropped no fact | `build-report.json` binds the current release bytes and content digest, curation bytes, text index and acceptance-suite digest and lists no dropped fact | implemented |
 | G3 | Every blocking case passes the model-free check | the suite is replayed again; quarantined cases are listed in the record | implemented |
 | G4 | The release has runway | `stale_from` lies at least `policy.min_runway_days` (default 14) after the attestation date and after the policy date | implemented |
 | G5 | The graded live-caller sessions meet the answer policy | `acceptance-answers.json` carries this release's content digest and this suite's digest, and every blocking case with an `answer` block meets the policy (section 4); `advisory` records the shortfall and passes, `off` skips | implemented |
@@ -221,7 +221,7 @@ is clean under `enforce`.
 | Unit test | The same test fails when a committed `release.json` has no `readiness.json` naming its bytes and the current suite | implemented |
 | MCP server | `--require-ready` refuses to start, or to report healthy, without a matching record; without the flag it serves a candidate with a warning, and `--health` and `/health` carry `readiness` (`ready` with the attestation, or `candidate` with the reason) | implemented |
 | Dockerfile | Copies `readiness.json` next to the release, runs the build-time `--health` and the entry point with `--require-ready`, so no image is built from or serves a candidate; `build_image.py` refuses a candidate before the build starts | implemented |
-| Regression pack | `scripts/test/regression/run_regression.py` replays `acceptance.yaml` and `regression.yaml` lexically and with hybrid search into `regression-report.json`; the committed-pack test replays both files lexically and requires the committed report, with its hybrid run, to name the current release and suites (section 10) | implemented |
+| Regression pack | `scripts/test/regression/run_regression.py` replays `acceptance.yaml` and `regression.yaml` lexically and with hybrid search into `regression-report.json`; the report binds the current release and suites plus the exact semantic-index bytes and retrieval settings used by its hybrid run (section 10) | implemented |
 | Admin console | The release screen shows readiness and the gate table; the sandbox saves its checks into `acceptance.yaml`, and `checks.yaml` goes away | planned |
 | `COVERAGE.md`, `LIMITATIONS.md` | Take the attested case counts and the quarantined cases from `readiness.json` | planned |
 
@@ -284,7 +284,7 @@ must be declined, in the languages users write in.
 | --- | --- |
 | `releases/<pack>/regression.yaml` | The questions beyond the acceptance-test document, in the suite format of section 2. Not a readiness gate: its digest is not in `readiness.json`, so adding a case needs no attestation |
 | The pack | `acceptance.yaml` and `regression.yaml` replayed together (`swisstip.build.acceptance.load_regression`), the acceptance cases first, under the acceptance suite's policy; a UAT case is referenced, never copied, and a case ID may appear in one file only |
-| `releases/<pack>/regression-report.json` | Schema `swiss-tip-regression-report/v1`: the release's content digest, the digests of both suites, and one run per retrieval mode (`lexical`, `hybrid`), each with the pass count, the failed blocking cases, the quarantined cases still failing and those now passing, the number of hybrid-only steps a lexical run did not judge, and per case its issues and the query, hits and match strength of every search |
+| `releases/<pack>/regression-report.json` | Schema `swiss-tip-regression-report/v1`: the release's content digest, both suite digests, the semantic-index file and content digests, release binding, model digest, query/input versions, query-prefix digest, score threshold and candidate limit, and one run per retrieval mode (`lexical`, `hybrid`) with per-case results |
 | `releases/<pack>/test-cases.md` | The readable page of the pack, rendered by `swisstip.build.case_catalogue` from the two suites, the report and `acceptance-answers.json`: every group of cases opens with an overview table (one row per case: question, language, status, outcome per retrieval mode, live-caller grades, a link to the case), then every case with its question, expected answer, trap, steps, claims, facts that must not be served and quarantine reason, followed by its latest results per retrieval mode (outcome, first hits, match strength, issues) and, for an acceptance case, its graded live-caller sessions with the release they ran on |
 | `scripts/test/regression/run_regression.py` | Writes the report and the page (`--render-only` rewrites the page alone from the committed files). The hybrid run uses the release's `semantic-index.json` and the local Ollama model it names, as the container does; it exits 2 when semantic search is unavailable or a query fell back to lexical search, and 1 when a blocking case fails |
 | Committed-pack test | Replays the pack lexically with no blocking issue, and requires the committed report to name the current release and both suites, to hold a hybrid run and to have passed, and the committed page to equal the page the committed files render |

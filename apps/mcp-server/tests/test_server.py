@@ -18,6 +18,7 @@ from mcp.client.streamable_http import streamable_http_client
 from swisstip.core.readiness import Gate, Readiness, dump_readiness, readiness_path, sha256_file
 from swisstip.core.release import load_release
 from swisstip.mcp_server.server import client_config, create_http_app, health, main, remote_client_config
+from swisstip.runtime.semantic import build_index, save_index, semantic_index_binding
 from swisstip.runtime.service import ReleaseService
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -34,7 +35,9 @@ def attest(release_path: Path) -> None:
     manifest = load_release(release_path).manifest
     record = Readiness(pack=manifest.pack, release_id=manifest.release_id, release_sha256=sha256_file(release_path),
                        content_sha256=manifest.content_sha256, suite_sha256="0" * 64, attested_at="2026-09-12T12:00:00Z",
-                       attested_by="Test", gates=[Gate(gate="G1", title="test", status="passed")],
+                      attested_by="Test",
+                      gates=[Gate(gate=f"G{number}", title=f"test {number}", status="passed")
+                          for number in range(1, 7)],
                        cases=dict(total=0, blocking=0), review_statuses=manifest.review_statuses,
                        snapshot_date=manifest.freshness.snapshot_date, stale_from=manifest.freshness.stale_from,
                        min_runway_days=0)
@@ -87,6 +90,69 @@ class ServerTests(unittest.TestCase):
             with redirect_stdout(output):
                 self.assertEqual(main(["--release", str(copy), "--health", "--require-ready"]), 2)
             self.assertIn("another release file", json.loads(output.getvalue())["error"])
+
+    def test_require_ready_binds_the_exact_semantic_index_and_settings(self):
+        class Embedder:
+            model = "test-model"
+
+            def model_digest(self):
+                return "d" * 64
+
+            def embed(self, texts):
+                if len(texts) == 1:
+                    return [[1.0, 1.0]]
+                return [[1.0, float(number + 1)] for number, _ in enumerate(texts)]
+
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            release_path = folder / "release.json"
+            shutil.copyfile(FIXTURE, release_path)
+            release = load_release(release_path)
+            index_path = folder / "semantic-index.json"
+            index = build_index(release, Embedder())
+            save_index(index, index_path)
+            manifest = release.manifest
+            binding = semantic_index_binding(index_path, index)
+            record = Readiness(
+                pack=manifest.pack, release_id=manifest.release_id, release_sha256=sha256_file(release_path),
+                content_sha256=manifest.content_sha256, suite_sha256="0" * 64,
+                attested_at="2026-09-12T12:00:00Z", attested_by="Test",
+                gates=[Gate(gate=f"G{number}", title=f"test {number}", status="passed")
+                       for number in range(1, 7)], cases=dict(total=0, blocking=0),
+                review_statuses=manifest.review_statuses, snapshot_date=manifest.freshness.snapshot_date,
+                stale_from=manifest.freshness.stale_from, min_runway_days=0, semantic_index=binding)
+            readiness_path(release_path).write_text(dump_readiness(record), encoding="utf-8")
+            runtime_embedder = Embedder()
+            output = StringIO()
+            with patch("swisstip.mcp_server.server.OllamaEmbedder", return_value=runtime_embedder), \
+                    redirect_stdout(output):
+                self.assertEqual(main(["--release", str(release_path), "--semantic-index", str(index_path),
+                                       "--health", "--require-ready"]), 0)
+            output = StringIO()
+            with patch("swisstip.mcp_server.server.OllamaEmbedder", return_value=runtime_embedder), \
+                    redirect_stdout(output):
+                self.assertEqual(main(["--release", str(release_path), "--semantic-index", str(index_path),
+                                       "--semantic-min-score", "0.6", "--health", "--require-ready"]), 2)
+            self.assertIn("semantic index or retrieval settings changed", json.loads(output.getvalue())["error"])
+
+            runtime_embedder.digest = "e" * 64
+            runtime_embedder.model_digest = lambda: runtime_embedder.digest
+            output = StringIO()
+            with patch("swisstip.mcp_server.server.OllamaEmbedder", return_value=runtime_embedder), \
+                    redirect_stdout(output):
+                self.assertEqual(main(["--release", str(release_path), "--semantic-index", str(index_path),
+                                       "--health", "--require-ready"]), 2)
+            self.assertIn("model digest differs", json.loads(output.getvalue())["error"])
+
+            runtime_embedder.digest = "d" * 64
+            runtime_embedder.model_digest = lambda: runtime_embedder.digest
+            runtime_embedder.embed = lambda texts: [[1.0, 1.0, 1.0]]
+            output = StringIO()
+            with patch("swisstip.mcp_server.server.OllamaEmbedder", return_value=runtime_embedder), \
+                    redirect_stdout(output):
+                self.assertEqual(main(["--release", str(release_path), "--semantic-index", str(index_path),
+                                       "--health", "--require-ready"]), 2)
+            self.assertIn("dimensions", json.loads(output.getvalue())["error"])
 
     def test_release_comes_from_the_option_or_the_variable(self):
         with patch.dict(os.environ, {"SWISSTIP_RELEASE": ""}):

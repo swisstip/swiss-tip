@@ -370,6 +370,13 @@ def provenance_from_form(fact, kind: str, author: str, source: str, reviewed_on:
                       reviewed_by=current.reviewed_by if current else None, notes=lines(notes))
 
 
+def clear_human_review(fact) -> None:
+    if fact.provenance.review_status == "human-reviewed":
+        fact.provenance.review_status = "assistant-authored-unreviewed"
+        fact.provenance.reviewed_by = None
+        fact.provenance.reviewed_on = None
+
+
 @write_router.post("/packs/{pack}/workbench/facts")
 def save_fact(request: Request, pack: PackData = Depends(get_pack), actor: str = Depends(require_editor),
               fact_id: str = Form(...), statement: str = Form(...), language: str = Form("en"),
@@ -386,25 +393,35 @@ def save_fact(request: Request, pack: PackData = Depends(get_pack), actor: str =
     if existing is None:
         raise WriteRefused(f"fact {fact_id} does not exist; a fact is created from a reading view selection so "
                            "that it has a citation from the start")
-    changed_statement = statement.strip() != existing.statement.strip()
+    new_values = dict(
+        statement=statement.strip(), language=language.strip() or "en", jurisdiction=jurisdiction.strip(),
+        condition=parsed_condition or None,
+        valid_from=date.fromisoformat(valid_from) if valid_from.strip() else None,
+        valid_through=date.fromisoformat(valid_through) if valid_through.strip() else None,
+        kind=kind, author=author.strip() or existing.provenance.author,
+        source=source.strip() or None, notes=lines(notes),
+    )
+    changed = (
+        existing.statement != new_values["statement"] or existing.language != new_values["language"]
+        or existing.jurisdiction != new_values["jurisdiction"] or existing.condition != new_values["condition"]
+        or existing.valid_from != new_values["valid_from"] or existing.valid_through != new_values["valid_through"]
+        or existing.provenance.kind != new_values["kind"] or existing.provenance.author != new_values["author"]
+        or existing.provenance.source != new_values["source"] or existing.provenance.notes != new_values["notes"])
 
     def mutate(curation) -> None:
         for concept in curation.concepts:
             for fact in concept.facts:
                 if fact.fact_id != fact_id:
                     continue
-                fact.statement = statement.strip()
-                fact.language = language.strip() or "en"
-                fact.jurisdiction = jurisdiction.strip()
-                fact.condition = parsed_condition or None
-                fact.valid_from = date.fromisoformat(valid_from) if valid_from.strip() else None
-                fact.valid_through = date.fromisoformat(valid_through) if valid_through.strip() else None
+                fact.statement = new_values["statement"]
+                fact.language = new_values["language"]
+                fact.jurisdiction = new_values["jurisdiction"]
+                fact.condition = new_values["condition"]
+                fact.valid_from = new_values["valid_from"]
+                fact.valid_through = new_values["valid_through"]
                 fact.provenance = provenance_from_form(fact, kind, author, source, reviewed_on, notes)
-                if changed_statement and fact.provenance.review_status == "human-reviewed":
-                    # An edited statement is no longer the text a person confirmed (section 4.6).
-                    fact.provenance.review_status = "assistant-authored-unreviewed"
-                    fact.provenance.reviewed_by = None
-                    fact.provenance.reviewed_on = None
+                if changed:
+                    clear_human_review(fact)
 
     write_curation(pack, mutate, actor, f"save fact {fact_id}", expected_sha256=sha256 or None, ids=[fact_id])
     return RedirectResponse(f"/packs/{pack.pack}/workbench/facts/{fact_id}?notice=fact+saved", status_code=303)
@@ -442,6 +459,7 @@ def edit_evidence(request: Request, fact_id: str, pack: PackData = Depends(get_p
                         fact.evidence.append(citation)
                     else:
                         fact.evidence[number - 1] = citation
+                clear_human_review(fact)
 
     write_curation(pack, mutate, actor, f"{action} citation of fact {fact_id}", expected_sha256=sha256 or None,
                    ids=[fact_id])

@@ -1,6 +1,6 @@
 # Swiss TIP OpenCode image: the demo's web interface for a server elsewhere
 
-**Last update:** 21 September 2026
+**Last update:** 23 September 2026
 
 A test image, not a release image. It is the [OpenCode](https://opencode.ai)
 agent and its web interface and nothing else: no MCP server, no knowledge
@@ -71,6 +71,23 @@ coverage text and sample questions) is the pack's demo image's; on a server
 with another pack than the panel's, the start script keeps the note and the
 registration of the workspace as the browser's project and leaves the rest
 out.
+
+## Opening the interface with a question ready
+
+`?ask=<n>` opens a new session and puts sample question `<n>` of the panel,
+counting from one, into the prompt without sending it, so that a
+demonstration starts with the question in place and one key sends it.
+`?ask=<text>` takes the text itself, for a question that is not among the
+samples, and `&send=1` sends it on load as a click on the sample would.
+
+The panel's own script does the typing, so what it needs holds here too: the
+question waits for the model selector, and an editable element takes text
+only while its document has the focus. A page that embeds the interface in a
+frame focuses that frame as it loads; in a tab of its own there is nothing to
+do. A browser that reopens an earlier session sees neither the home screen
+nor a new-session view, and nothing is armed. A number that no sample
+question has is named in the browser's console, and the interface opens as
+it otherwise would.
 
 ## Variables
 

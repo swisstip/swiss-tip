@@ -50,7 +50,8 @@ from swisstip.core.contracts import ToolError, tool_output_schema
 from swisstip.core.readiness import readiness_status
 from swisstip.core.validation import ReleaseInvalid
 from swisstip.runtime.connectors import ConnectorRegistry
-from swisstip.runtime.semantic import OllamaEmbedder, SemanticError, SemanticSearch, load_index
+from swisstip.runtime.semantic import (OllamaEmbedder, SemanticError, SemanticSearch, load_index,
+                                       semantic_index_binding)
 from swisstip.runtime.service import ALL_TOOL_CONTRACTS, ReleaseService
 
 from . import SERVER_NAME, SERVER_VERSION
@@ -224,17 +225,40 @@ def main(argv=None) -> int:
     except (OSError, ValueError, ReleaseInvalid) as exc:
         print(json.dumps(dict(status="error", release=str(args.release), error=str(exc))), file=sys.stderr if not args.health else sys.stdout)
         return 2
-    readiness = readiness_status(args.release)
+    index = None
+    embedder = None
+    semantic_binding = None
+    if args.semantic_index is not None:
+        try:
+            index = load_index(args.semantic_index, service.release)
+            semantic_binding = semantic_index_binding(
+                args.semantic_index, index, min_score=args.semantic_min_score,
+                candidate_limit=args.semantic_candidates)
+            embedder = OllamaEmbedder(model=index.model, base_url=args.ollama_url,
+                                      timeout_seconds=args.semantic_timeout)
+            if args.require_ready and embedder.model_digest() != index.model_digest:
+                raise SemanticError("Local Ollama model digest differs from the attested semantic index.")
+            if args.require_ready:
+                probe = SemanticSearch(index, embedder, min_score=args.semantic_min_score,
+                                       candidate_limit=args.semantic_candidates)
+                probe.scores("Swiss TIP semantic readiness probe")
+        except (OSError, ValueError, SemanticError) as exc:
+            if args.require_ready:
+                print(json.dumps(dict(status="error", release=str(args.release),
+                                      error=f"the release is not ready: semantic search is unavailable: {exc}")),
+                      file=sys.stderr if not args.health else sys.stdout)
+                return 2
+            service.semantic_error = str(exc)
+            logging.getLogger(SERVER_NAME).warning("semantic search unavailable; lexical fallback: %s", exc)
+    readiness = readiness_status(args.release, semantic_index=semantic_binding)
     if args.require_ready and readiness["status"] != "ready":
         print(json.dumps(dict(status="error", release=str(args.release), error=f"the release is not ready: {readiness['reason']}")),
               file=sys.stderr if not args.health else sys.stdout)
         return 2
     if readiness["status"] != "ready" and not args.health:
         logging.getLogger(SERVER_NAME).warning("serving a candidate release, not a ready one: %s", readiness["reason"])
-    if args.semantic_index is not None:
+    if args.semantic_index is not None and index is not None and embedder is not None:
         try:
-            index = load_index(args.semantic_index, service.release)
-            embedder = OllamaEmbedder(model=index.model, base_url=args.ollama_url, timeout_seconds=args.semantic_timeout)
             service.semantic_search = SemanticSearch(index, embedder, min_score=args.semantic_min_score,
                                                      candidate_limit=args.semantic_candidates)
         except (OSError, ValueError, SemanticError) as exc:

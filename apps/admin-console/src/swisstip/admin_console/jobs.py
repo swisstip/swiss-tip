@@ -22,7 +22,7 @@ from swisstip.builder.pipeline import STAGES, Pipeline
 from swisstip.core.release import load_release
 
 from .data import PackData
-from .writes import LOCKS
+from .writes import LOCKS, pack_file_lock
 
 
 @dataclass
@@ -125,7 +125,7 @@ class JobRunner:
 
         def run() -> None:
             try:
-                with LOCKS.lock(pack.pack):
+                with pack_file_lock(pack), LOCKS.lock(pack.pack):
                     job.result = target(log)
                 job.status = "finished"
             except Exception as exc:
@@ -188,7 +188,9 @@ def pipeline_job(pack: PackData, options: dict):
                             download=bool(options.get("download")), retry_failed=bool(options.get("retry_failed")),
                             workers=int(options.get("workers") or 1), scope=options.get("scope") or "attributed",
                             thorough=bool(options.get("thorough")),
-                            update_curation=bool(options.get("update_curation")), log=log)
+                            update_curation=bool(options.get("update_curation")),
+                            source_plugins=not bool(options.get("no_source_plugins")),
+                            lock_pack=False, log=log)
         report = pipeline.run_stages(options.get("start") or STAGES[0], options.get("until") or STAGES[-1])
         archive_run(pack, report)
         archive_release(pack)

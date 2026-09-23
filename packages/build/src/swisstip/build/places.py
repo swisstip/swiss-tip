@@ -76,8 +76,16 @@ def load_place_register(register_path: Path, aliases_path: Path | None = None) -
 
 def place_files(curation: Curation, curation_path: Path) -> list[Path]:
     """The files the curation names, resolved against the folder of the curation file; empty when it names none."""
-    base = Path(curation_path).resolve().parent
-    return [(base / name).resolve() for name in (curation.place_register, curation.place_aliases) if name]
+    curation_path = Path(curation_path).resolve()
+    base = curation_path.parent
+    candidates = [(base / name).resolve() for name in (curation.place_register, curation.place_aliases) if name]
+    # Canonical layout: <workspace>/releases/<pack>/curation.yaml. Standalone builds are contained by their
+    # curation tree as well; place inputs never become arbitrary host-file reads.
+    workspace = curation_path.parents[2] if base.parent.name == "releases" else base.parent
+    for path in candidates:
+        if not path.is_relative_to(workspace):
+            raise PlaceFileError(f"place file leaves the packs workspace: {path}")
+    return candidates
 
 
 def place_register_for(curation: Curation, curation_path: Path) -> PlaceRegister | None:

@@ -15,6 +15,12 @@ from urllib.parse import urljoin
 
 from lxml import html
 
+# Publishers put soft hyphens (&shy;) inside long German compounds as hyphenation hints. Left in,
+# they corrupt the word exactly as the PDF artifact does: the search tokeniser reads two halves,
+# and an excerpt copied from the page is not a verbatim substring of it. On 23 September 2026, 730
+# of these sat inside words across 57 pages of this corpus. Only the mid-word case is joined.
+from swisstip.extraction.pdf_text import join_soft_hyphens
+
 IGNORED = {"script", "style", "noscript", "svg", "canvas", "template", "head"}
 STRUCTURAL = {"address", "article", "aside", "blockquote", "button", "caption", "dd", "details",
               "div", "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form", "header",
@@ -67,7 +73,7 @@ def digest(raw: bytes) -> str:
 
 
 def clean(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"\s+", " ", join_soft_hyphens(text)).strip()
 
 
 def fold(text: str) -> str:

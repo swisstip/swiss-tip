@@ -3,6 +3,17 @@
 PDFium supplies the page text; pypdf reads AcroForm fields. Pages without
 text are reported, never recognised: there is no OCR here. Lines that repeat
 at the top or bottom of most pages are labelled as page furniture and kept.
+
+Soft hyphens are removed. Where a PDF breaks a word across lines, PDFium hands
+back the hyphenation point as U+0002 (or U+00AD) inside the word, so
+"Einwohnerkontrollbehoerde" arrives with a control character in the middle. Left
+in, it corrupts the word three ways: an excerpt copied from it is not a verbatim
+substring of the source, the search tokeniser reads two broken halves instead of
+one word, and the control character is served to the caller. Twenty-two of the
+twenty-five cantonal statutes catalogued on 23 September 2026 carried it, 413
+times in one act, and every one of the 270 occurrences checked in another sat
+between two letters. Only that case is joined, so a soft hyphen used as real
+punctuation is left alone.
 """
 
 import io
@@ -14,6 +25,13 @@ import pypdfium2 as pdfium
 from pypdf import PdfReader
 
 PARAGRAPH_BREAK = re.compile(r"\n[ \t]*\n+")
+# A soft hyphen between two letters is a line-break artifact, not content: join the word.
+SOFT_HYPHEN_IN_WORD = re.compile(r"(?<=\w)[\u0002­](?=\w)")
+
+
+def join_soft_hyphens(text: str) -> str:
+    """Remove the hyphenation points PDFium leaves inside words broken across lines."""
+    return SOFT_HYPHEN_IN_WORD.sub("", text)
 
 
 def page_texts(raw: bytes) -> list[str]:
@@ -24,7 +42,8 @@ def page_texts(raw: bytes) -> list[str]:
             try:
                 textpage = page.get_textpage()
                 try:
-                    texts.append(textpage.get_text_bounded().replace("\r\n", "\n").replace("\r", "\n").strip())
+                    texts.append(join_soft_hyphens(
+                        textpage.get_text_bounded().replace("\r\n", "\n").replace("\r", "\n").strip()))
                 finally:
                     textpage.close()
             finally:
