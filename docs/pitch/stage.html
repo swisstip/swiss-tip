@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Swiss TIP - stage</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  The stage screen for the one-minute pitch: the slides on the left, the
+  demonstration on the right, in one document so that moving between slides
+  never reloads or interrupts it.
+
+  The right pane replays a recorded run. Nothing is called: no server, no
+  model, no network, and the same seconds every time. Nothing on the screen
+  says so - the panel carried a "recorded run" badge until 23 September 2026,
+  when it was dropped because the speaker says it out loud instead. That
+  spoken line is now the only disclosure; do not present this panel without
+  it.
+
+  What is replayed is a real exchange, recorded on 23 September 2026 through
+  the OpenCode interface of the pack image against the Swiss TIP MCP server,
+  on the free model, in 12 seconds. The record, the transcripts and the
+  screenshots this panel is drawn from are in
+  .local/experiments/2026-09-23-stage-replay.md. The two queries, the resolve,
+  the answer, its dates and its sources below are that run's. Two sections of
+  the answer are left out for the minute, "What you'll need" and "Important
+  notes"; no word of what is kept was changed.
+
+  The dates are the model's arithmetic over the served rules, not served
+  facts, which is the division of labour the pitch describes. One run in
+  three during recording put that arithmetic a day wrong (see the record), so
+  re-read the dates of any rerun before replacing this one.
+
+  Scale the panel with --ui on #replay; everything in it is sized from that.
+
+  The screen is the jury's by default. "p", or ?rehearse in the address,
+  shows the presenter's aids - the time mark and stage direction on each
+  slide, the key hints and the arrows - and makes the clock legible.
+-->
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #2b3440;
+    --ink: #e8edf3; --dim: #93a1b1; --accent: #d33b3b; --ok: #4ea87a;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    display: grid; grid-template-columns: 1fr minmax(440px, 37%);
+    /* minmax(0, 1fr), not 1fr: a grid item's min-height is auto, so without
+       it the panes grow to fit their content, the thread never gets a height
+       to scroll inside, and the composer is pushed off the screen. */
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  /* ---------------------------------------------------------- the slides */
+  #stage { position: relative; display: flex; flex-direction: column;
+           padding: clamp(28px, 4vh, 64px) clamp(32px, 4vw, 80px) 0;
+           min-width: 0; min-height: 0; overflow: hidden; }
+  #slides { flex: 1; position: relative; min-height: 0; }
+  .slide {
+    position: absolute; inset: 0; opacity: 0; pointer-events: none;
+    transition: opacity .18s ease; display: flex; flex-direction: column;
+    justify-content: center; gap: clamp(14px, 2.2vh, 30px);
+  }
+  .slide.on { opacity: 1; pointer-events: auto; }
+
+  /* The time marks, the hint and the buttons are the presenter's, not the
+     jury's: hidden by default, shown with "p" or ?rehearse for a run-through.
+     The default is the clean screen, so forgetting the key costs nothing. */
+  .mark { font-family: var(--mono); font-size: 13px; color: var(--dim);
+          letter-spacing: .08em; text-transform: uppercase; display: none; }
+  body.rehearse .mark { display: block; }
+  #hint, button.nav { display: none; }
+  body.rehearse #hint { display: inline; }
+  body.rehearse button.nav { display: inline-block; }
+  h1 { font-size: clamp(30px, 3.4vw, 58px); line-height: 1.12; margin: 0;
+       font-weight: 650; letter-spacing: -.02em; }
+  h2 { font-size: clamp(22px, 2.2vw, 36px); line-height: 1.2; margin: 0; font-weight: 600; }
+  p  { font-size: clamp(17px, 1.35vw, 25px); line-height: 1.45; margin: 0;
+       color: var(--dim); max-width: 26ch; }
+  .wide { max-width: 34ch; }
+  .kill { color: var(--accent); }
+  .good { color: var(--ok); }
+  #slides ul { margin: 0; padding-left: 1.1em; font-size: clamp(16px, 1.25vw, 23px);
+               line-height: 1.7; color: var(--dim); }
+  .split { display: grid; grid-template-columns: auto 1fr; gap: clamp(20px, 2.5vw, 48px);
+           align-items: center; min-height: 0; }
+  .split img { max-height: min(52vh, 520px); width: auto; border-radius: 10px;
+               border: 1px solid var(--line); display: block; }
+  .split h2 { margin-bottom: .35em; text-wrap: balance; }
+  pre.run { font-family: var(--mono); font-size: clamp(9.5px, .7vw, 14px);
+            line-height: 1.75; color: var(--ink); background: var(--panel);
+            border: 1px solid var(--line); border-radius: 8px;
+            padding: .9em 1.1em; margin: 1em 0 .9em; white-space: pre;
+            overflow-x: auto; max-width: 100%; }
+  .split p + p { margin-top: .7em; }
+  .cite { font-family: var(--mono); font-size: clamp(12px, .95vw, 16px);
+          color: var(--dim); border-left: 3px solid var(--ok); padding-left: 14px;
+          line-height: 1.6; }
+
+  pre.card { font-family: var(--mono); font-size: clamp(11px, .92vw, 17px);
+             line-height: 1.75; color: var(--ink); background: var(--panel);
+             border: 1px solid var(--line); border-radius: 10px;
+             padding: clamp(16px, 2vw, 30px); margin: 0; white-space: pre; overflow: auto; }
+  pre.card b { color: var(--dim); font-weight: 400; }
+
+  /* -------------------------------------------------------- the controls */
+  #bar { display: flex; align-items: center; gap: 16px;
+         padding: 18px 0 20px; border-top: 1px solid var(--line); margin-top: 18px; }
+  button.nav { font: inherit; font-size: 15px; background: var(--panel); color: var(--ink);
+               border: 1px solid var(--line); border-radius: 7px; padding: 7px 15px; cursor: pointer; }
+  button.nav:hover { border-color: var(--dim); }
+  #dots { display: flex; gap: 7px; margin-left: 4px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); cursor: pointer; }
+  .dot.on { background: var(--ink); }
+  #clock { margin-left: auto; font-family: var(--mono); font-size: 14px;
+           color: #46525f; font-variant-numeric: tabular-nums; cursor: pointer; }
+  body.rehearse #clock { font-size: 22px; color: var(--dim); }
+  #clock.warn { color: #e0a33e; }
+  #clock.over { color: var(--accent); }
+  #hint { font-size: 13px; color: var(--dim); }
+
+  /* ------------------------------------------------------ the right pane */
+  #demo { display: flex; flex-direction: column; min-width: 0; min-height: 0;
+          overflow: hidden; background: transparent;
+          padding: clamp(20px, 2.8vh, 40px) clamp(20px, 1.8vw, 40px)
+                   clamp(20px, 2.8vh, 40px) clamp(8px, .8vw, 18px); }
+
+  /* --------------------------------- the interface, drawn from the shots */
+  #replay {
+    --ui: 15px;                      /* the whole panel scales from here */
+    --edge: #e6e4e1; --face: #ffffff; --chrome: #f4f3f1;
+    --text: #1c1b1a; --muted: #6f6b66; --query: #a08b6e; --link: #2563c9;
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    background: var(--face); color: var(--text);
+    font-family: var(--sans); font-size: var(--ui); line-height: 1.5;
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .45);
+  }
+
+
+  #frame { flex: 1; min-height: 0; display: flex; flex-direction: column;
+           background: var(--face); overflow: hidden; }
+  /* The title is the session's, fixed above the thread as the interface
+     keeps it: the content scrolls under it, the title does not. */
+  #title { flex: none; display: flex; align-items: center; gap: .6em;
+           padding: 1.1em 1.2em .3em; font-size: .85em; font-weight: 600; }
+  #title .dots { margin-left: auto; color: var(--muted); letter-spacing: .1em; }
+
+  #thread { flex: 1; overflow-y: auto; padding: .6em 1.2em 1em;
+            display: flex; flex-direction: column; gap: .9em; font-size: .9em; }
+  #thread::-webkit-scrollbar { width: 7px; }
+  #thread::-webkit-scrollbar-thumb { background: #dcdad6; border-radius: 4px; }
+
+  .ask { align-self: flex-end; max-width: 72%; background: #f1efed;
+         border-radius: .8em; padding: .65em .9em; }
+
+  .call { font-size: .95em; }
+  .call .verb { font-weight: 640; }
+  .call code { font-family: var(--mono); font-size: .95em; font-weight: 640; }
+  .call .q { color: var(--query); margin-left: .45em; }
+
+  .think { color: var(--muted); font-weight: 600; }
+  .think::after { content: ""; animation: dots 1.2s steps(4, end) infinite; }
+  @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+
+  .say { }
+  .say.h { font-weight: 660; margin-top: .3em; }
+  .say.li { padding-left: 1.3em; position: relative; }
+  .say.li::before { content: "\2022"; position: absolute; left: .45em; color: var(--muted); }
+  .say.num::before { content: attr(data-n); left: .15em; color: var(--text); }
+  .say.quote { border-left: 3px solid var(--edge); padding-left: .9em; margin: .1em 0; }
+  .say.note { border-left: 3px solid var(--edge); padding-left: .9em; color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr auto auto; gap: .55em 1.4em;
+           margin: .1em 0 .2em; max-width: 92%; }
+  .grid2 > div { border-bottom: 1px solid var(--edge); padding-bottom: .5em; }
+  .grid2 .th { font-weight: 600; }
+  .say i { font-style: italic; }
+  .say b { font-weight: 660; }
+  .say .src { font-weight: 660; }
+  .say .src + a, .say a { color: var(--link); text-decoration: none; }
+  .foot { color: var(--muted); font-size: .85em; margin-top: .4em; }
+
+  #composer { flex: none; margin: .2em 1.2em 1.2em; background: var(--face);
+              border: 1px solid var(--edge); border-radius: .6em; padding: .8em .9em .6em; }
+  #composer .ph { color: var(--text); font-size: .9em; }
+  #composer .ph.empty { color: #a5a19c; }
+  #composer .row { display: flex; align-items: center; gap: 1.1em; margin-top: 1.6em;
+                   font-size: .8em; color: #57534e; }
+  #composer .row .plus { color: var(--muted); font-size: 1.2em; }
+  #composer .row .caret { color: #a5a19c; }
+  #go { margin-left: auto; width: 2em; height: 2em; border-radius: .45em;
+        background: #1c1b1a; color: #fff; border: 0; cursor: pointer;
+        padding: 0; line-height: 0; display: grid; place-items: center; }
+  #go svg { display: block; width: 1.15em; height: 1.15em; }
+  #go.busy { background: #1c1b1a; }
+  #go:disabled { cursor: default; }
+
+  @media (max-width: 1150px) { body { grid-template-columns: 1fr 400px; } }
+  @media (max-height: 950px) { #replay { --ui: 13.5px; } }
+  @media (max-height: 820px) { #replay { --ui: 12.5px; } }
+</style>
+</head>
+<body>
+
+<main id="stage">
+  <div id="slides">
+
+    <section class="slide on">
+      <div class="mark">0:00 &middot; send the question, then turn to the room</div>
+      <h1>You landed on Wednesday.<br>You start work on Monday.</h1>
+      <p class="wide">By when do you have to register?</p>
+    </section>
+
+    <section class="slide">
+      <div class="mark">0:05 &middot; while it runs</div>
+      <h2>A normal assistant gave<br>
+        <span class="kill">one deadline. The wrong one.</span></h2>
+      <ul>
+        <li>fourteen days from arrival &mdash; <b>the legal deadline</b></li>
+        <li>before your first working day &mdash; <b>a recommendation</b></li>
+      </ul>
+      <p class="wide">The law binds on both.<br>You start work unregistered.</p>
+    </section>
+
+    <section class="slide">
+      <div class="mark">0:22 &middot; the answer stands</div>
+      <h2 class="good">Before Monday.<br>Not in two weeks.</h2>
+      <div class="cite">14 days from arrival &nbsp;&rarr;&nbsp; the later limit<br>
+before your first working day &nbsp;&rarr;&nbsp; the one that binds<br>
+both quoted from the page they came from<br>
+SEM &middot; Canton of Zurich &middot; as_of the day it ran</div>
+      <p class="wide">The rules come from the server.<br>The date is the model's arithmetic.</p>
+    </section>
+
+    <section class="slide">
+      <div class="mark">0:42 &middot; what it is</div>
+<pre class="card">Swiss TIP - MCP server - contract swiss-tip/v4
+
+  <b>4 tools     </b> get_coverage - search - resolve - get_evidence
+               + lookup, where a dataset connector is registered
+  <b>4 statuses  </b> SUPPORTED - NEEDS_CONTEXT - OUT_OF_COVERAGE - STALE
+               the server never composes the answer
+
+  <b>every fact  </b> jurisdiction - validity dates - reviewer
+               excerpt + source URL + access date + hash
+  <b>release     </b> content-hashed, attested, stale from 22 Nov 2026
+  <b>search      </b> lexical + embeddings, source terms in DE, EN, FR, IT
+
+  <b>Zurich      </b> 20 topics - 211 concepts - 1,268 facts - 334 documents
+  <b>cantons     </b> registering on arrival in all 26 - Zurich in full
+  <b>datasets    </b> 5 waste calendars - 4,547 collection dates</pre>
+    </section>
+
+    <section class="slide">
+      <div class="mark">0:55 &middot; close</div>
+      <h1>The evidence layer<br>your assistant can cite.</h1>
+      <p class="wide">Zurich, from the residence permit<br>to the rubbish calendar.<br>Same pipeline for any canton.</p>
+    </section>
+
+    <section class="slide backup">
+      <div class="mark">backup &middot; for questions, not for the minute</div>
+      <div class="split">
+        <img src="screenshot-agent-map.png" alt="Agent map: 63 agents under one build">
+        <div>
+          <h2>How the knowledge base was built</h2>
+          <p class="wide">One coordinator holding the plan, 63 agents under it:
+          scouts per group of cantons, curators per topic.</p>
+          <p class="wide">The agents draft. A person confirms every fact
+          against its cited excerpt before it is served.</p>
+<pre class="run">/plugin install swisstip-kb-builder@swisstip
+
+&gt; Build a knowledge base about AHV and pensions
+  for the Canton and City of Zurich.</pre>
+          <p class="wide">A Claude Code plugin. Eleven steps,
+          four subagents, two gates that stay human.</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div id="bar">
+    <button class="nav" id="prev" title="Left arrow">&larr;</button>
+    <button class="nav" id="next" title="Right arrow or space">&rarr;</button>
+    <div id="dots"></div>
+    <span id="hint">Enter sends &middot; f finishes at once &middot; double-click the thread to reset</span>
+    <span id="clock" title="click to start, stop, reset">0:00</span>
+  </div>
+</main>
+
+<aside id="demo">
+  <div id="replay">
+    <div id="frame">
+      <div id="title">
+        <span id="sessiontitle">New session</span>
+        <span class="dots">&hellip;</span>
+      </div>
+      <div id="thread"></div>
+
+      <div id="composer">
+      <div class="ph" id="ph"></div>
+      <div class="row">
+        <span class="plus">+</span>
+        <span>Residence-Assistant <span class="caret">&#9662;</span></span>
+        <span>Ling 3.0 Flash Fin Free <span class="caret">&#9662;</span></span>
+        <span>Default <span class="caret">&#9662;</span></span>
+        <button id="go" title="send the question (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6M6 12l6-6 6 6"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<script>
+(function () {
+  "use strict";
+
+  if (/[?&]rehearse/.test(location.search)) document.body.classList.add('rehearse');
+
+  /* ------------------------------------------------------------- slides */
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var dots = document.getElementById('dots');
+  var at = 0;
+
+  // The backup slide is reachable but not counted: the deck still reads as
+  // five slides, and one more press brings it up for questions.
+  slides.forEach(function (slide, i) {
+    if (slide.classList.contains('backup')) return;
+    var d = document.createElement('span');
+    d.className = 'dot' + (i ? '' : ' on');
+    d.onclick = function () { show(i); };
+    dots.appendChild(d);
+  });
+  var pips = Array.prototype.slice.call(dots.children);
+
+  function show(i) {
+    at = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (s, n) { s.classList.toggle('on', n === at); });
+    pips.forEach(function (p, n) { p.classList.toggle('on', n === at); });
+  }
+  document.getElementById('prev').onclick = function () { show(at - 1); };
+  document.getElementById('next').onclick = function () { show(at + 1); };
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { show(at + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(at - 1); e.preventDefault(); }
+    else if (e.key === 'Home') { show(0); }
+    else if (e.key === 'End') { show(slides.length - 1); }
+    else if (e.key === 'Enter') { e.preventDefault(); start(); }
+    else if (e.key === 'f') { finish(); }
+    else if (e.key === 'p') { document.body.classList.toggle('rehearse'); }
+  });
+
+  /* -------------------------------------------------------------- clock */
+  var clock = document.getElementById('clock'), t0 = null, tick = null;
+  function paint() {
+    var s = Math.floor((Date.now() - t0) / 1000);
+    clock.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    clock.className = s >= 60 ? 'over' : (s >= 50 ? 'warn' : '');
+  }
+  function startClock() { if (!tick) { t0 = Date.now(); paint(); tick = setInterval(paint, 250); } }
+  clock.onclick = function () {
+    if (tick) { clearInterval(tick); tick = null; return; }
+    if (t0) { t0 = null; clock.textContent = '0:00'; clock.className = ''; return; }
+    startClock();
+  };
+
+  /* ------------------------------------------------- the recorded run */
+  // The interface names a session from its first exchange, so the title
+  // carries "New session" until the question goes.
+  var TITLE = "Czech citizen registration deadline in Zurich before starting work";
+
+  var QUESTION = "I'm a Czech citizen. I arrived in Zurich on Wednesday this week " +
+                 "and I start work next Monday on an open-ended contract. By when at " +
+                 "the latest do I have to register?";
+
+  var CALLS = [
+    ['swiss_tip_search', 'registration deadline residence permit EU/EFTA citizen start work Zurich Canton'],
+    ['swiss_tip_search', 'Czech citizen EU free movement registration obligation Zurich municipality'],
+    ['swiss_tip_resolve', 'as_of=2026-09-23']
+  ];
+
+  var TABLE =
+    '<div class="th">Limit</div><div class="th">Source</div><div class="th">Date</div>' +
+    '<div>(A) Within 14 days of arrival</div><div>SEM (federal)</div>' +
+    '<div>7 October 2026</div>' +
+    '<div>(B) Before starting work</div><div>SEM + Canton of Zurich</div>' +
+    '<div><b>Before Monday, 28 September 2026</b></div>';
+
+  // The answer as it came. **bold**, _italic_ and [link] are marked up when a
+  // block finishes, so it streams as plain text first.
+  var SAID = [
+    ['p', "Here's what I found based on the published rules for EU/EFTA nationals in Switzerland:"],
+    ['h', "Registration Deadline"],
+    ['p', "Two limits apply, and the earlier one is binding:"],
+    ['table', ''],
+    ['p', "The binding deadline is **before your first working day — Monday, 28 September 2026**. You must be registered by then (practically, at the latest by **Friday 25 September**, the last working day before Monday)."],
+    ['p', "The 14-day rule is federal, but you must also not start work before registration — so the first-working-day limit is what bites here."],
+    ['note', "**Note:** If you live specifically in the City of Zurich (municipality CH-ZH-261), there are additional local procedures published on the City of Zurich's arrival pages. If that's your case, I can look those up too."],
+    ['p', "**Sources:**"],
+    ['li', "[SEM FAQ – Free Movement of Persons] (federal rule)"],
+    ['li', "[Aufenthalt für EU/EFTA-Staatsangehörige – Kanton Zürich] (cantonal guidance)"],
+    ['foot', "Residence-assistant · Ling 3.0 Flash Fin Free · 12s"]
+  ];
+
+  var thread = document.getElementById('thread');
+  var go = document.getElementById('go');
+  var ph = document.getElementById('ph');
+  var sessiontitle = document.getElementById('sessiontitle');
+
+  function name(on) { sessiontitle.textContent = on ? TITLE : 'New session'; }
+  var PLACEHOLDER = 'Ask anything, / for commands, @ for context…';
+
+  // The prompt starts with the question in it, as ?ask=5 leaves it in the
+  // real interface, and falls back to the placeholder once it is sent.
+  function prompt(text) {
+    ph.textContent = text || PLACEHOLDER;
+    ph.classList.toggle('empty', !text);
+  }
+  var timers = [], running = false, done = false;
+
+  function scroll() { thread.scrollTop = thread.scrollHeight; }
+  function wait(ms, fn) { timers.push(setTimeout(fn, ms)); }
+
+  function marked(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+               .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+               .replace(/_(.+?)_/g, '<i>$1</i>')
+               .replace(/\[(.+?)\]/g, '<a href="#">$1</a>');
+  }
+  function plain(text) {
+    return text.replace(/\*\*|_|[\[\]]/g, '');
+  }
+
+  function add(cls, html) {
+    var n = document.createElement('div');
+    n.className = cls;
+    if (html !== undefined) n.innerHTML = html;
+    thread.appendChild(n);
+    scroll();
+    return n;
+  }
+
+  function addCall(call) {
+    add('call', '<span class="verb">Called</span> <code>`' + call[0] + '`</code>' +
+                (call[1] ? '<span class="q">' + call[1] + '</span>' : ''));
+  }
+
+  function block(kind, text) {
+    if (kind === 'foot') return add('foot', text);
+    if (kind === 'table') return add('grid2', TABLE);
+    var numbered = /^n[0-9]+$/.test(kind);
+    var node = add('say ' + (kind === 'h' ? 'h' : numbered ? 'li num' : kind), '');
+    if (numbered) node.setAttribute('data-n', kind.slice(1) + '.');
+    return node;
+  }
+
+  // Blocks arrive one after another; a paragraph fills a word at a time and
+  // takes its bold type when it is finished, as a streamed answer does.
+  function say(i, rate, whenDone) {
+    if (i >= SAID.length) { if (whenDone) whenDone(); return; }
+    var kind = SAID[i][0], text = SAID[i][1];
+    if (kind === 'foot' || kind === 'table') {
+      block(kind, text);
+      wait(rate * 6, function () { say(i + 1, rate, whenDone); });
+      return;
+    }
+    var node = block(kind, text);
+    var words = plain(text).split(' '), w = 0;
+    (function step() {
+      if (w >= words.length) {
+        node.innerHTML = marked(text);
+        scroll();
+        wait(rate * 4, function () { say(i + 1, rate, whenDone); });
+        return;
+      }
+      node.textContent += (w ? ' ' : '') + words[w++];
+      scroll();
+      wait(rate, step);
+    })();
+  }
+
+  var ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6M6 12l6-6 6 6"/></svg>';
+  var STOP = '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.6" fill="currentColor"/></svg>';
+
+  function busy(on) {
+    go.disabled = on;
+    go.classList.toggle('busy', on);
+    go.innerHTML = on ? STOP : ARROW;
+  }
+
+  function start() {
+    if (running || done) return;
+    running = true; busy(true); startClock();
+    prompt(null);
+    wait(500, function () { name(true); });   // as the session is named
+    add('ask', QUESTION);
+
+    wait(900, function () { addCall(CALLS[0]); });
+    wait(2100, function () { addCall(CALLS[1]); });
+    wait(3300, function () { addCall(CALLS[2]); });
+    wait(4100, function () { add('think', 'Thinking'); });
+    wait(5000, function () {
+      var t = thread.querySelector('.think');
+      if (t) t.remove();
+      say(0, 38, function () { done = true; running = false; busy(false); });
+    });
+  }
+
+  // "f" ends the exchange at once, for a minute that is running late.
+  function finish() {
+    if (done) return;
+    timers.forEach(clearTimeout); timers = [];
+    thread.innerHTML = '';
+    name(true);
+    prompt(null);
+    add('ask', QUESTION);
+    CALLS.forEach(addCall);
+    SAID.forEach(function (b) {
+      if (b[0] === 'foot' || b[0] === 'table') block(b[0], b[1]);
+      else block(b[0], b[1]).innerHTML = marked(b[1]);
+    });
+    scroll();
+    done = true; running = false; busy(false);
+  }
+
+  function reset() {
+    timers.forEach(clearTimeout); timers = [];
+    thread.innerHTML = '';
+    name(false);
+    prompt(QUESTION);
+    running = false; done = false; busy(false);
+  }
+
+  name(false);
+  prompt(QUESTION);
+  go.onclick = start;
+  thread.addEventListener('dblclick', reset);
+})();
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swisstip-concepts"
-version = "0.4.0"
+version = "0.3.0"
 description = "Resumable concept proposals and separate model review over Swiss TIP text records"
 requires-python = ">=3.14"
 dependencies = ["swisstip-extraction", "swisstip-build"]

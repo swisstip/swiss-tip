@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swisstip-core"
-version = "0.4.0"
+version = "0.3.0"
 description = "Swiss TIP knowledge release format: Pydantic models and the release validator"
 requires-python = ">=3.14"
 dependencies = [
