@@ -19,8 +19,13 @@ distribution `swisstip-calendar-connector`, the workflow steps that build,
 test and publish both, and the `lookup` step kind of the acceptance suite.
 In the packs repository the five curation files and their bundles (built
 on 23 September 2026), the pack's calendar Dockerfile and the drafted
-acceptance cases exist; the cases are not in the suite yet, the images are
-not built, nothing is published, and the harness case is open. The
+acceptance cases exist; the cases are not in the suite yet. The whole chain
+was rehearsed on 23 September 2026: the four distributions as 0.3.0rc4 on
+TestPyPI, the connector image and the Zurich calendar image built, tested
+and pushed by both workflows, and the demo with the profiles `calendar` and
+`demo` answered the next organic-waste collection day for 8001 with the
+published date and the citation; the final publication under a release
+version is open. The
 first connector type is the collection calendar, the first datasets are the
 five waste-collection calendars of the City of Zurich on
 data.stadt-zuerich.ch, and everything else in this document is either a
