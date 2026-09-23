@@ -98,6 +98,18 @@
             overflow-x: auto; max-width: 100%; }
   .split p + p { margin-top: .7em; }
   body.backup .split img { max-height: min(76vh, 800px); }
+  /* Two agent maps layered: the tall knowledge-base build on the right, the
+     wide waste-calendar build over its empty left half, clear of the root
+     card at the bottom and the connector lines. Sized from --h so the pair
+     keeps its proportions (1063x1329 and 1040x406) at any screen size. */
+  .shots { --h: min(80vh, 900px, 44vw); position: relative;
+           width: calc(var(--h) * 1.22); height: var(--h); }
+  .split .shots img.shot { position: absolute; max-height: none; }
+  .shots img.shot-kb { right: 0; top: 0; height: var(--h); width: auto;
+                    box-shadow: 0 6px 24px rgba(28, 27, 26, .07); }
+  .split.maps > div:last-child { justify-self: end; padding-right: clamp(0px, 2vw, 40px); }
+  .shots img.shot-waste { left: 0; top: calc(var(--h) * .3); width: calc(var(--h) * .8);
+                    height: auto; box-shadow: 0 14px 40px rgba(28, 27, 26, .18); }
   body.backup pre.run { width: fit-content; font-size: clamp(12px, .95vw, 18px); }
   .cite { font-family: var(--mono); font-size: clamp(13px, 1.15vw, 22px);
           color: var(--dim); border-left: 3px solid var(--ok); padding-left: 14px;
@@ -354,8 +366,11 @@ SEM &middot; Canton of Zurich &middot; as_of the day it ran</div>
 
     <section class="slide backup">
       <div class="mark">backup &middot; how the knowledge base was built</div>
-      <div class="split">
-        <img src="screenshot-agent-map.png" alt="Agent map: 63 agents under one build">
+      <div class="split maps">
+        <div class="shots">
+          <img class="shot shot-kb" src="screenshot-agent-map.png" alt="Agent map: 63 agents under one build">
+          <img class="shot shot-waste" src="screenshot-agent-map-2.png" alt="Agent map: 3 agents building the waste calendars of nine cities">
+        </div>
         <div>
           <h2>How the knowledge base was built</h2>
           <p class="wide">One coordinator holding the plan, 63 agents under it:
