@@ -1,12 +1,12 @@
 configs:
   opencode-apertus:
     harness: opencode
-    model: swiss-ai/Apertus-v1.5-70B
-    command: [opencode, run, "{question}"]
+    model: gpt-5
+    command: [opencode, run, "--format", "json", "--model", "{model}", "{question}"]
   codex-gpt:
     harness: codex
     model: gpt-5.5
-    command: [codex, --config, web_search="disabled", exec, --model, "{model}", "{question}"]
+    command: [codex, --config, web_search="disabled", exec, --json, --model, "{model}", "{question}"]
 benchmark:
   trials: 1
   concurrency: 1

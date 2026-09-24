@@ -15,3 +15,4 @@ node_modules/
 # Working data of the packs' runs and the console (job logs, audit files)
 .local/
 results/
+.deepeval/

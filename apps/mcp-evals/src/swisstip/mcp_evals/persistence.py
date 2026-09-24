@@ -16,3 +16,9 @@ def save_case(root: Path, case: EvalCase, result: AgentResult, score: CaseScore,
     (folder / "tool_calls.json").write_text(json.dumps([call.model_dump() for call in result.tool_calls], indent=2), encoding="utf-8")
     (folder / "result.json").write_text(json.dumps(result.model_dump(), indent=2), encoding="utf-8")
     (folder / "scores.json").write_text(json.dumps(score.model_dump(), indent=2), encoding="utf-8")
+
+
+def save_score(root: Path, case: EvalCase, configuration: str, score: CaseScore, trial: int = 1) -> None:
+    """Rewrite just `scores.json`, e.g. after judge metrics are merged in."""
+    folder = artifact_path(root, case, configuration) / f"trial-{trial:03d}"
+    (folder / "scores.json").write_text(json.dumps(score.model_dump(), indent=2), encoding="utf-8")

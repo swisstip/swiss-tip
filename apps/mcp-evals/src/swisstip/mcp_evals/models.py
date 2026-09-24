@@ -54,7 +54,6 @@ class AgentResult(Strict):
 class CaseScore(Strict):
     case_id: str
     configuration: str
-    fact_accuracy: float
     citation_precision: float
     citation_recall: float
     tool_selection: float
@@ -62,6 +61,12 @@ class CaseScore(Strict):
     mcp_calls: int
     latency_ms: float
     reasons: list[str] = Field(default_factory=list)
+    # Populated only when `--judge` runs DeepEval's LLM-judge metrics.
+    fact_accuracy: float | None = None
+    answer_relevancy: float | None = None
+    faithfulness: float | None = None
+    contextual_precision: float | None = None
+    contextual_recall: float | None = None
 
 
 class RunConfig(Strict):

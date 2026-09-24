@@ -1,4 +1,15 @@
 #!/bin/sh
+if [ -z "${OPENAI_API_KEY:-}" ] && [ -f .env ]; then
+	set -a
+	. ./.env
+	set +a
+fi
+
+if [ -z "${OPENAI_API_KEY:-}" ]; then
+	echo "OPENAI_API_KEY must be set before running ./eval" >&2
+	exit 1
+fi
+
 PYTHONPATH="apps/mcp-evals/src${PYTHONPATH:+:$PYTHONPATH}" \
 	exec .venv/bin/python -m swisstip.mcp_evals.runner \
 	--config apps/mcp-evals/evals/config.yaml \

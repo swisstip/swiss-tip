@@ -1,4 +1,4 @@
-"""Run a local agent CLI and normalize its JSON response."""
+"""Run a local agent CLI and normalize its structured output."""
 
 import json
 import os
@@ -6,6 +6,9 @@ import subprocess
 import time
 
 from ..models import AgentResult, EvalCase, HarnessConfig, ToolCall
+from .events import parse_codex_events, parse_opencode_events
+
+_EVENT_PARSERS = {"codex": parse_codex_events, "opencode": parse_opencode_events}
 
 
 class CommandAdapter:
@@ -27,8 +30,14 @@ class CommandAdapter:
                            stdout=completed.stdout, stderr=completed.stderr, duration_ms=duration_ms,
                            exit_code=completed.returncode)
 
+    def _parse_output(self, stdout: str) -> tuple[str, list[ToolCall], list[str], list[str]]:
+        event_parser = _EVENT_PARSERS.get(self.config.harness)
+        if event_parser:
+            return event_parser(stdout)
+        return self._parse_generic_json(stdout)
+
     @staticmethod
-    def _parse_output(stdout: str) -> tuple[str, list[ToolCall], list[str], list[str]]:
+    def _parse_generic_json(stdout: str) -> tuple[str, list[ToolCall], list[str], list[str]]:
         try:
             payload = json.loads(stdout)
         except json.JSONDecodeError:

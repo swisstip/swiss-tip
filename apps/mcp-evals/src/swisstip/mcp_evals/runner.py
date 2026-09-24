@@ -9,8 +9,8 @@ from pathlib import Path
 from .adapters import CommandAdapter
 from .loader import load_cases, load_config
 from .metrics import (default_deepeval_metrics, deepeval_test_case, evaluate_with_deepeval,
-                      score_case)
-from .persistence import save_case
+                      judge_result_to_dict, merge_judge_scores, score_case)
+from .persistence import save_case, save_score
 
 
 def run(config_path: Path, cases_path: Path, selected_configs: list[str], case_ids: list[str], category: str | None,
@@ -40,6 +40,7 @@ def run(config_path: Path, cases_path: Path, selected_configs: list[str], case_i
     print(f"Starting evaluation: {len(config.configs)} configuration(s), {len(cases)} case(s), "
           f"{total_trials} trial(s)", flush=True)
     scores = []
+    trial_records = []
     judge_cases = []
     completed_trials = 0
     for harness in config.configs.values():
@@ -51,7 +52,8 @@ def run(config_path: Path, cases_path: Path, selected_configs: list[str], case_i
                 result = adapter.run(case)
                 score = score_case(case, result)
                 save_case(run_dir, case, result, score, trial)
-                scores.append(score.model_dump())
+                scores.append(score)
+                trial_records.append((case, harness.name, trial))
                 completed_trials += 1
                 print(f"Completed {harness.name}/{case.case_id} trial {trial}/{trials or config.trials} "
                       f"({result.duration_ms:.0f} ms, {completed_trials}/{total_trials})", flush=True)
@@ -60,11 +62,16 @@ def run(config_path: Path, cases_path: Path, selected_configs: list[str], case_i
     if judge and judge_cases:
         print(f"Running judge metrics for {len(judge_cases)} result(s)...", flush=True)
         judge_result = evaluate_with_deepeval(judge_cases, default_deepeval_metrics())
-        (run_dir / "deepeval.json").write_text(json.dumps(str(judge_result), indent=2), encoding="utf-8")
+        merge_judge_scores(scores, judge_result)
+        for score, (case, configuration, trial) in zip(scores, trial_records):
+            save_score(run_dir, case, configuration, score, trial)
+        (run_dir / "deepeval.json").write_text(json.dumps(judge_result_to_dict(judge_result), indent=2),
+                                               encoding="utf-8")
         print("Judge metrics completed", flush=True)
     (run_dir / "config.json").parent.mkdir(parents=True, exist_ok=True)
     (run_dir / "config.json").write_text(config.model_dump_json(indent=2), encoding="utf-8")
-    (run_dir / "comparison.json").write_text(json.dumps(scores, indent=2), encoding="utf-8")
+    (run_dir / "comparison.json").write_text(json.dumps([score.model_dump() for score in scores], indent=2),
+                                             encoding="utf-8")
     print(f"Evaluation completed: {run_dir}", flush=True)
     return run_dir
 
