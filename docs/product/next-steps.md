@@ -117,18 +117,25 @@ procedures, from the text of the law itself.
 
 ## 7. Sharper orientation for everyday wording
 
-**Today.** The graph's selection matches the question's words against the
-domains' names and keywords. Incidental words pull in neighbouring domains:
-"a new job" reaches unemployment, and when three domains match, the office at
-the user's place can fall outside the 8 KB result.
+**Today.** The graph matches the question's words against the domains' names
+and keywords, without the place names, and with the local embedding model as
+well when the server runs hybrid search. Its own regression replays every
+question of the acceptance suite and regression pack against the graph: with
+words only, 448 of 546 questions reach a domain of their topic, but only 8 of
+28 off-topic questions are kept away from a covered topic. The embedding
+thresholds (0.45 and 0.6) are first settings, not yet measured.
 
-**Next.** Use the release's optional semantic index for the graph as well,
-weigh the question's main verb and object above incidental words, and
-measure the selection on the orientation checks and on the regression pack's
-questions.
+**Next.**
+- Calibrate the embedding thresholds on the graph regression's recorded
+  cosines, and keep the setting that declines best without losing subject
+  questions.
+- Grade whole conversations: the team's DeepEval evaluator (OpenCode and the
+  pi agent, several models) runs each question with and without the graph
+  tool (`--no-knowledge-graph`), so the effect of the graph on the final
+  answer is measured, not only the retrieval.
 
-**Why.** The first call of every conversation lands on the right domain
-more often.
+**Why.** The first call of every conversation lands on the right domain more
+often, and a question the service does not cover is declined at once.
 
 ## 8. Widen the knowledge graph beyond the Zurich packs
 
