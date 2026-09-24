@@ -1,6 +1,6 @@
 # Dataset connectors
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
 **Status:** steps 1 to 4 of section 9 implemented and tested: the
 dataset bundle and its validator (`swisstip.core.datasets`), the
@@ -17,9 +17,12 @@ Of step 5 the code side exists: the generic connector image
 (`docker/calendar-connector`), the compose profile `calendar`, the PyPI
 distribution `swisstip-calendar-connector`, the workflow steps that build,
 test and publish both, and the `lookup` step kind of the acceptance suite.
-In the packs repository the five curation files and their bundles (built
-on 23 September 2026), the pack's calendar Dockerfile and the drafted
-acceptance cases exist; the cases are not in the suite yet. The whole chain
+In the packs repository the five Zurich curation files and their bundles
+(built on 23 September 2026), the ten zone-keyed ones of Basel and
+St. Gallen (built on 24 September 2026), the pack's calendar Dockerfile and
+the lookup cases LOOKUP-1 to 6 of the acceptance suite exist; the `accept`
+stage takes no connector, so those lookup steps are recorded as not judged
+there and were judged against a running connector instead. The whole chain
 was rehearsed on 23 September 2026: the four distributions as 0.3.0rc4 on
 TestPyPI, the connector image and the Zurich calendar image built, tested
 and pushed by both workflows, and the demo with the profiles `calendar` and
@@ -30,7 +33,11 @@ first connector type is the collection calendar, the first datasets are the
 five waste-collection calendars of the City of Zurich on
 data.stadt-zuerich.ch, and everything else in this document is either a
 constraint the first connector must respect or an explicitly deferred
-extension (section 10).<br>
+extension (section 10). On 24 September 2026 the calendar type gained a
+second key, the publisher's collection zone (section 7), implemented and
+tested in the models, the build, the connector and the server; the first
+zone datasets are the collection calendars of Basel and St. Gallen, whose
+open data is keyed by zone, not by postal code.<br>
 **Schema versions proposed:** `swiss-tip-dataset/v1` (the dataset release),
 `swiss-tip-connector/v1` (the manifest and the lookup exchange between the
 server and a connector). The caller-facing change is additive on
@@ -142,8 +149,9 @@ what they are; the calendar image is built from `datasets/<pack>/`.
 | `licence` | The licence the portal states: `CC0-1.0` |
 | `refresh` | `bundled`: the rows are what the build downloaded; a newer file means a new build. The only value now (section 10 names the other) |
 | `sources` | One entry per file: `url` (the portal's download URL, redirects followed), `sha256`, `bytes` and `downloaded_on` as the build recorded them. An entry without a hash is a first download; the build fills it in and the curator commits it. A later build that finds a different hash fails, so an upstream change is a deliberate refresh |
-| `importer` | `name` `csv-columns`, with `columns`: which column holds the postal code, the date and, optionally, the location. The delimiter, the encoding (UTF-8 with or without a byte-order mark) and the date format (ISO, `dd.mm.yyyy`, `dd/mm/yyyy`) are detected; a repeated row is dropped and counted in the build report |
+| `importer` | `name` `csv-columns`, with `columns`: which column holds the key - `postal_code` or `zone`, exactly one - the date and, optionally, the location. The delimiter, the encoding (UTF-8 with or without a byte-order mark) and the date format (ISO, `dd.mm.yyyy`, `dd/mm/yyyy`) are detected; a repeated row is dropped and counted in the build report |
 | `period` | `start`, `end`: the calendar dates the file is published for, from the portal's description: `2026-01-01` to `2026-12-31`. Every row must fall inside |
+| `zone_lookup_url` | For a dataset keyed by zone only, and then required: the publisher's https page where a resident finds their zone from the address (`https://www.bs.ch/apps/zonensuche`) |
 | `notes` | Free text for the curator; not served |
 
 The five Zurich datasets differ only in `dataset_id`, `title`, `label`,
@@ -170,8 +178,8 @@ no other file to serve it.
 
 | Part | Content |
 | --- | --- |
-| `manifest` | Every field of the curation file except `importer` and `notes`, plus `schema` (`swiss-tip-dataset/v1`), `dataset_version` (`<downloaded_on>-v<n>`, the way a release ID is formed), `created_at`, `postal_codes` (sorted, as found in the rows), `row_count`, `period` and `content_sha256` over the canonical JSON of `rows` |
-| `rows` | The normalised rows, sorted by postal code and date: `postal_code` (four digits), `date` (ISO), optional `location` (free text as published, `8001, Neumarkt: Parkplatz am Hirschengraben 13 (vor kantonalem Obergericht)`) |
+| `manifest` | Every field of the curation file except `importer` and `notes`, plus `schema` (`swiss-tip-dataset/v1`), `dataset_version` (`<downloaded_on>-v<n>`, the way a release ID is formed), `created_at`, `postal_codes` (sorted, as found in the rows; empty for a dataset keyed by zone), and for a dataset keyed by zone `key` (`zone`), `zones` (sorted, as published) and `zone_lookup_url` - absent otherwise, so a postal-code bundle keeps its bytes - `row_count`, `period` and `content_sha256` over the canonical JSON of `rows` |
+| `rows` | The normalised rows, sorted by key and date: `postal_code` (four digits) or `zone` (as published, runs of whitespace collapsed), exactly one, `date` (ISO), optional `location` (free text as published, `8001, Neumarkt: Parkplatz am Hirschengraben 13 (vor kantonalem Obergericht)`) |
 
 ### Build and validation
 
@@ -266,7 +274,7 @@ DatasetSummary:
 | `period` | Period | `start`, `end`, both inclusive |
 | `postal_codes` | list of string | The codes the rows hold, so the server can answer a code outside them without a round trip |
 | `row_count` | integer | |
-| `requires` | list of string | The input fields a lookup must carry: `["postal_code"]` for `calendar` |
+| `requires` | list of string | The input fields a lookup must carry: `["postal_code"]` or `["zone"]` for `calendar` |
 | `accepts` | list of string | The optional input fields: `["start", "end", "limit"]` |
 | `status` | string | `ok` or `invalid` |
 | `issue` | string or absent | The validator's first message when `invalid` |
@@ -298,7 +306,7 @@ Request:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `dataset_id` | string | One dataset of the manifest |
-| `postal_code` | string | Four digits |
+| `postal_code`, `zone` | string | Exactly one, the dataset's key: four digits, or a zone as the user gave it (matched ignoring case, spaces, hyphens and a leading "Zone", "Gebiet" or "Kreis"); the other key is a 400 |
 | `start` | date or null | First date to return; the server sends its `as_of`; null means the start of the published period |
 | `end` | date or null | Last date to return, inclusive; null means the end of the published period |
 | `limit` | integer | 1 to 60; the server passes the caller's value or its default |
@@ -343,10 +351,11 @@ empty:
 | `type` | string | `calendar` |
 | `title`, `label` | string | `Organic waste collection days, City of Zurich` |
 | `jurisdiction` | string | `CH-ZH-261` |
-| `requires` | list of string | `["postal_code"]` |
+| `requires` | list of string | `["postal_code"]`, or `["zone"]` for a dataset keyed by zone |
 | `accepts` | list of string | `["start", "end", "limit"]` |
 | `period` | Period | The published range, so the caller can tell the user before asking for a postal code that next year is not published yet |
 | `publisher` | string | |
+| `zones`, `zone_lookup_url` | list of string, string | For a dataset keyed by zone only: the zones as published and the publisher's page that finds a zone from the address; `guidance_for_caller` tells the caller to give the user that page and never to guess a zone |
 
 The offer appears only when the concept resolved `SUPPORTED` or `STALE`
 for a place the dataset's jurisdiction contains: a caller that asked for
@@ -395,6 +404,7 @@ one vocabulary:
 | `dimension` | When | `published_values` holds |
 | --- | --- | --- |
 | `postal_code_not_covered` | The dataset holds no row for the code | The codes it holds |
+| `zone_not_covered` | The dataset holds no row for the zone | The zones it holds; the message names the zone finder |
 | `period_not_published` | The range asked for lies wholly outside the published period, typically a date in the next year before its file exists | The published period as two dates |
 | `no_dates_in_range` | The postal code is held and the range overlaps the period, but no date of the dataset falls into it: the hazardous-waste van has passed for the year | The published period as two dates |
 | `connector_unavailable` | The connector did not answer, or answered something other than the contract | Empty; the message names the connector and says the release is unaffected |
@@ -470,9 +480,15 @@ because the offer says what is required.
 
 The only connector type. It fixes what section 5 and 6 leave open:
 
-- **Input:** a four-digit postal code and a date range. Nothing finer
-  (street, area) and nothing coarser (a municipality), because the first
-  datasets are keyed by postal code and a type is as narrow as its data.
+- **Input:** one key and a date range. The key is the dataset's: a
+  four-digit postal code (Zurich), or the publisher's collection zone
+  (Basel: A to H and GUF; St. Gallen: A to K, L Ost, L West), because
+  those cities publish their dates by zone and a resident's postal code
+  spans several zones. The zone is the user's statement: the offer names
+  the publisher's page that finds it from the address, and nothing checks
+  that it is the zone of the user's address. Nothing finer (a street) and
+  nothing coarser (a municipality); a street key would need the
+  publisher's street-to-zone list in the bundle and is deferred.
 - **Row:** a date, the dataset's label, an optional location. A dataset
   holds one kind of event, so the label is the dataset's, not the row's:
   three datasets with three labels rather than one with a type column,
@@ -573,15 +589,14 @@ case that does not exist yet.
   should not touch the server, its code moves to a repository of its own,
   `swiss-tip-connectors`; the contract and the conformance test stay here.
   Not before one of the three is the case.
-- **Other cities.** A city whose portal publishes the same shape is five
-  more curation files in the packs repository and nothing else; one with
-  another shape is one more importer name. Neither is planned before the
-  Zurich datasets are served. A survey on 23 September 2026 of the ten
-  largest cities after Zurich
+- **Other cities.** A survey on 23 September 2026 of the ten largest
+  cities after Zurich
   (`.local/experiments/2026-09-23-waste-calendars-other-cities.md`) found
-  none that publishes the same shape. Basel and St. Gallen publish licensed
-  open data keyed by collection zone, and the others publish feeds without
-  a licence, PDFs, or no dates at all. A second city therefore needs a zone key:
-  rows keyed by zone, a street-to-zone index in the bundle, and `lookup`
-  taking a street. The record drafts this; St. Gallen is the first
-  candidate.
+  none that publishes dates by postal code. Basel and St. Gallen publish
+  licensed open data keyed by collection zone and are served since
+  24 September 2026 through the zone key. Winterthur and Lucerne key their
+  calendars by a tour per street or per waste type that residents do not
+  know, so they need a street key (the publisher's street list in the
+  bundle); Bern, Biel/Bienne and Lausanne publish weekly rules rather than
+  dates and need an importer that expands them; Geneva and Thun publish
+  PDFs or an app only. None of these is planned.

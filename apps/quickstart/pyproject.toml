@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-quickstart"
+version = "0.3.1"
+description = "Swiss TIP quickstart: fetch a published knowledge pack, verify it against its readiness record and run the first tests"
+requires-python = ">=3.14"
+dependencies = [
+    "pyyaml>=6,<7",
+    "swisstip-core",
+    "swisstip-runtime",
+    "swisstip-mcp-server",
+]
+
+[project.scripts]
+swisstip-quickstart = "swisstip.quickstart.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true

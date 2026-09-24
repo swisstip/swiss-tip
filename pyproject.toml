@@ -1,0 +1,56 @@
+# The checkout as one uv workspace: "uv run <command>" creates .venv with a
+# Python that satisfies requires-python (downloaded when the machine has none),
+# installs the components of this checkout as editable packages from uv.lock
+# and runs the command. The serving side is what a plain "uv run" installs;
+# the build-side components are the dependency group "build":
+#
+#   uv run swisstip-quickstart <pack>     fetch a pack, check it, run the first tests
+#   uv sync --group build                 the whole checkout, for the pipeline and the console
+#   uv lock                               after a change to a component's dependencies
+#
+# The root is a virtual project: nothing is built from it, and each component
+# keeps its own pyproject.toml as the one source of its metadata, which the
+# PyPI build (scripts/pypi) reads unchanged. The pip installation of the
+# README remains valid; uv.lock is the resolution both share when uv is used.
+[project]
+name = "swiss-tip"
+version = "0.3.1"
+description = "Swiss TIP workspace: the MCP server, the knowledge-base pipeline and the tooling around them"
+requires-python = ">=3.14"
+dependencies = [
+    "swisstip-core",
+    "swisstip-runtime",
+    "swisstip-mcp-server",
+    "swisstip-quickstart",
+]
+
+[dependency-groups]
+build = [
+    "swisstip-ingestion",
+    "swisstip-extraction[office]",
+    "swisstip-build",
+    "swisstip-concepts",
+    "swisstip-knowledge-builder",
+    "swisstip-admin-console",
+    "swisstip-calendar-connector",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*", "apps/*"]
+
+# Every component comes from this checkout, never from PyPI; the members inherit these sources.
+[tool.uv.sources]
+swisstip-core = { workspace = true }
+swisstip-runtime = { workspace = true }
+swisstip-mcp-server = { workspace = true }
+swisstip-quickstart = { workspace = true }
+swisstip-ingestion = { workspace = true }
+swisstip-extraction = { workspace = true }
+swisstip-build = { workspace = true }
+swisstip-concepts = { workspace = true }
+swisstip-knowledge-builder = { workspace = true }
+swisstip-admin-console = { workspace = true }
+swisstip-calendar-connector = { workspace = true }

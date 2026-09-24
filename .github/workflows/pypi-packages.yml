@@ -1,4 +1,4 @@
-# Build the four PyPI distributions (swisstip-core, swisstip-mcp,
+# Build the five PyPI distributions (swisstip-core, swisstip-mcp, swisstip-quickstart,
 # swisstip-calendar-connector, swisstip-builder) from the component source trees, test them, and publish
 # them with PyPI trusted publishing, so no token is stored anywhere.
 #
@@ -80,7 +80,7 @@ jobs:
       - name: Install the components and the build tools
         run: |
           python -m pip install build twine \
-            -e packages/core -e packages/runtime -e apps/mcp-server -e apps/calendar-connector \
+            -e packages/core -e packages/runtime -e apps/mcp-server -e apps/quickstart -e apps/calendar-connector \
             -e packages/ingestion -e "packages/extraction[office]" -e packages/build -e packages/concepts \
             -e apps/knowledge-builder -e "apps/admin-console[test]"
 
@@ -112,6 +112,17 @@ jobs:
           "$RUNNER_TEMP/serve/bin/swisstip-mcp" --release apps/mcp-server/tests/fixtures/release.json --health > /dev/null
           # The round trip starts the server with the interpreter that runs it, so it tests the installed wheel.
           "$RUNNER_TEMP/serve/bin/python" scripts/test/mcp/check_wheel.py
+
+      - name: Test the quickstart wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/quick"
+          "$RUNNER_TEMP/quick/bin/python" -m pip install \
+            "dist/swisstip_core-$VERSION-py3-none-any.whl" "dist/swisstip_mcp-$VERSION-py3-none-any.whl" \
+            "dist/swisstip_quickstart-$VERSION-py3-none-any.whl"
+          # The synthetic release as a fetched pack, checked and tested offline: no request and no knowledge base.
+          # The round trip inside starts the server of the same environment, so it tests the installed wheels.
+          "$RUNNER_TEMP/quick/bin/python" scripts/test/container/synthetic_pack.py --out "$RUNNER_TEMP/quick-packs/test"
+          "$RUNNER_TEMP/quick/bin/swisstip-quickstart" test --no-fetch --packs-dir "$RUNNER_TEMP/quick-packs"
 
       - name: Test the connector wheel in a clean environment
         run: |
@@ -152,7 +163,7 @@ jobs:
   # One job per distribution, each in its own environment (pypi-core,
   # testpypi-mcp, ...): PyPI accepts a pending trusted publisher for a
   # repository, workflow and environment for one project name only. The core
-  # goes first, because the other two require it at the same version.
+  # goes first, because the others require it at the same version.
   publish-core:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     needs: build
@@ -181,7 +192,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [mcp, calendar-connector, builder]
+        package: [mcp, quickstart, calendar-connector, builder]
     environment:
       name: ${{ needs.build.outputs.index }}-${{ matrix.package }}
       url: ${{ needs.build.outputs.index == 'testpypi' && 'https://test.pypi.org' || 'https://pypi.org' }}/project/swisstip-${{ matrix.package }}/

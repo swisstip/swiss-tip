@@ -647,7 +647,7 @@ ConceptResolution:
 | `missing_context` | list of MissingContext | `field`, `options`, `hint`; non-empty only on `NEEDS_CONTEXT` |
 | `gaps` | list of CoverageGap | Named reasons and published values; see below |
 | `not_served` | list of string, absent when empty | What users commonly ask about the concept that the release does not publish (for example a fee, a document list or live availability); the caller says so instead of filling it in |
-| `lookups` | list of LookupOffer, absent when empty | Datasets a registered connector serves behind the concept for the resolved place (section 10): `dataset_id`, `type`, `title`, `label`, `jurisdiction`, `requires`, `accepts`, `period`, `publisher`. Only on `SUPPORTED` and `STALE`; `guidance_for_caller` then says to ask for the postal code and call `lookup` |
+| `lookups` | list of LookupOffer, absent when empty | Datasets a registered connector serves behind the concept for the resolved place (section 10): `dataset_id`, `type`, `title`, `label`, `jurisdiction`, `requires` (`postal_code` or `zone`), `accepts`, `period`, `publisher`, and for a dataset keyed by zone `zones` and `zone_lookup_url`, the publisher's page that finds a zone from the address. Only on `SUPPORTED` and `STALE`; `guidance_for_caller` then says to ask for what `requires` names and call `lookup`, and for a zone to give the user `zone_lookup_url` and never guess the zone |
 
 Fact:
 
@@ -703,7 +703,7 @@ CoverageGap:
 | `concept_not_published` | Unknown `concept_id` | The published concept IDs |
 | `context_not_covered` | A context value has no published facts, or a context field is unknown | The context values the concept is published for |
 | `review_status_not_met` | `reviewed_only` was set and no fact of the concept is human-reviewed | The review statuses the concept's facts actually carry |
-| `postal_code_not_covered`, `period_not_published`, `no_dates_in_range`, `connector_unavailable` | Only in a `lookup` result ([dataset-connectors.md](dataset-connectors.md), section 6); never on `resolve` | See there |
+| `postal_code_not_covered`, `zone_not_covered`, `period_not_published`, `no_dates_in_range`, `connector_unavailable` | Only in a `lookup` result ([dataset-connectors.md](dataset-connectors.md), section 6); never on `resolve` | See there |
 
 `published_values` are always codes. The `message` of a jurisdiction gap
 names up to six places with their level and the register's name (`published
@@ -979,11 +979,15 @@ field tables are in [dataset-connectors.md](dataset-connectors.md), section
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `dataset_id` | string | required | From a `resolve` result's `lookups` |
-| `postal_code` | string | required | Four digits, as the user gave it; never guessed from the municipality |
+| `postal_code` | string or null | | Four digits, as the user gave it, when the offer requires `postal_code`; never guessed from the municipality |
+| `zone` | string or null | | The publisher's collection zone as the user gave it, when the offer requires `zone`; matched ignoring case, spaces, hyphens and a leading "Zone" (`zone l-west` finds `L West`); never guessed from an address |
 | `as_of` | date or null | today | The date "next" counts from |
 | `start`, `end` | date or null | `as_of`, end of the published period | The range wanted, both inclusive |
 | `limit` | integer | 3 | 1 for the next date only, up to 60 for a whole year |
 | `release_id` | string or null | | As on the other tools |
+
+Exactly one of `postal_code` and `zone` is given, the one the offer's `requires` names; the other one is an
+`INVALID_ARGUMENT` error.
 
 ### Result: LookupResult
 
@@ -995,8 +999,8 @@ field tables are in [dataset-connectors.md](dataset-connectors.md), section
 | `events` | list of LookupEvent | `date`, `label`, optional `location`; oldest first, at most `limit` |
 | `truncated` | boolean | More dates than `limit` fell into the range |
 | `provenance` | LookupProvenance | `publisher`, `publisher_url` (cite it), `licence`, `sources` (`url`, `sha256`, `bytes`, `downloaded_on`), `period`, `dataset_version` |
-| `gaps` | list of CoverageGap | `postal_code_not_covered` (the codes the dataset holds), `period_not_published` and `no_dates_in_range` (the published period), `connector_unavailable` (empty; the facts are unaffected) |
-| `guidance_for_caller` | string | On `SUPPORTED`: state the dates as published by the named publisher for that postal code, cite the publisher's page, say they are unreviewed rows and name the published period; on `OUT_OF_COVERAGE`: say what the gap says and derive no date from the facts |
+| `gaps` | list of CoverageGap | `postal_code_not_covered` (the codes the dataset holds), `zone_not_covered` (the zones it holds; the message names the zone finder), `period_not_published` and `no_dates_in_range` (the published period), `connector_unavailable` (empty; the facts are unaffected) |
+| `guidance_for_caller` | string | On `SUPPORTED`: state the dates as published by the named publisher for that postal code or zone, cite the publisher's page, say they are unreviewed rows and name the published period; on `OUT_OF_COVERAGE`: say what the gap says and derive no date from the facts |
 | `limitations` | list of string | The release's two standing lines, then the dataset's own |
 
 An unknown `dataset_id` and a malformed request are `INVALID_ARGUMENT`

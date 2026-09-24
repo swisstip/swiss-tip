@@ -30,11 +30,23 @@ RefreshPolicy = Literal["bundled"]
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 JURISDICTION = re.compile(r"^CH(?:-[A-Z]{2}(?:-\d{1,4})?)?$")
 POSTAL_CODE = r"^\d{4}$"
+# A collection zone as its publisher names it ("A", "GUF", "L West"); matched by zone_key, served as published.
+ZONE = r"^\S(?:.{0,38}\S)?$"
+DatasetKey = Literal["postal_code", "zone"]
 SHA256 = r"^[0-9a-f]{64}$"
 
 
 def absent(value) -> bool:
     return value is None
+
+
+def zone_key(text: str) -> str:
+    """How a zone is matched: case, spaces, hyphens and a leading "Zone" or "Gebiet" do not count.
+
+    "zone l-west", "L West" and "LWest" name the same zone; the row keeps the publisher's spelling.
+    """
+    folded = re.sub(r"[\s\-_.]+", "", text.casefold())
+    return re.sub(r"^(?:abfuhrzone|abfuhrgebiet|abfuhrkreis|zone|gebiet|kreis|secteur|settore)(?=.)", "", folded)
 
 
 class Strict(BaseModel):
@@ -67,12 +79,27 @@ class DatasetSource(Strict):
 
 
 class DatasetRow(Strict):
-    """One event: a date for a postal code, with the location the publisher names when it names one."""
+    """One event: a date for a postal code or a collection zone, with the location the publisher names when it names one.
 
-    postal_code: str = Field(pattern=POSTAL_CODE)
+    A row carries exactly one key, the one its dataset's manifest names.
+    """
+
+    postal_code: str | None = Field(default=None, pattern=POSTAL_CODE, exclude_if=absent)
+    zone: str | None = Field(default=None, pattern=ZONE, exclude_if=absent, description=(
+        "The collection zone as the publisher names it, for a dataset keyed by zone."))
     date: date
     location: str | None = Field(default=None, exclude_if=absent, description=(
         "Free text as published, for a dataset whose events happen at a named place (a collection point)."))
+
+    @model_validator(mode="after")
+    def one_key(self) -> "DatasetRow":
+        if (self.postal_code is None) == (self.zone is None):
+            raise ValueError("a row carries exactly one of postal_code and zone")
+        return self
+
+    @property
+    def key(self) -> str:
+        return self.postal_code if self.postal_code is not None else self.zone
 
 
 class DatasetManifest(Strict):
@@ -91,11 +118,26 @@ class DatasetManifest(Strict):
     refresh: RefreshPolicy = Field(default="bundled", description="bundled: the rows are what the build downloaded.")
     sources: list[DatasetSource] = Field(min_length=1)
     period: Period
-    postal_codes: list[str] = Field(description="Sorted, as found in the rows.")
+    postal_codes: list[str] = Field(description="Sorted, as found in the rows; empty for a dataset keyed by zone.")
+    key: DatasetKey | None = Field(default=None, exclude_if=absent, description=(
+        "What a row is keyed by; absent means postal_code, the key of the first datasets."))
+    zones: list[str] | None = Field(default=None, exclude_if=absent, description=(
+        "For a dataset keyed by zone: the zones as published, sorted, as found in the rows."))
+    zone_lookup_url: str | None = Field(default=None, exclude_if=absent, description=(
+        "For a dataset keyed by zone: the publisher's page where a resident finds their zone from the address."))
     row_count: int = Field(ge=0)
     created_at: datetime
     limitations: list[str]
     content_sha256: str = Field(pattern=SHA256, description="SHA-256 over the canonical JSON of the rows.")
+
+    @property
+    def lookup_key(self) -> str:
+        return self.key or "postal_code"
+
+    @property
+    def keys(self) -> list[str]:
+        """The postal codes or zones the dataset holds."""
+        return (self.zones or []) if self.lookup_key == "zone" else self.postal_codes
 
 
 class Dataset(Strict):
@@ -119,7 +161,7 @@ def content_hash(dataset: Dataset) -> str:
 
 
 def row_key(row: DatasetRow) -> tuple[str, date, str]:
-    return row.postal_code, row.date, row.location or ""
+    return row.key, row.date, row.location or ""
 
 
 def source_filename(url: str) -> str:
@@ -147,17 +189,33 @@ def validate_dataset(dataset: Dataset, sources_dir: Path | None = None) -> list[
         issues.append("manifest content_sha256 does not match the rows")
     if not dataset.rows:
         issues.append("the dataset has no rows")
+    key = manifest.lookup_key
     keys = [row_key(row) for row in dataset.rows]
     if keys != sorted(keys):
-        issues.append("rows are not sorted by postal code and date")
+        issues.append(f"rows are not sorted by {'zone' if key == 'zone' else 'postal code'} and date")
     if len(set(keys)) != len(keys):
         issues.append("rows are repeated")
+    if any((row.zone if key == "zone" else row.postal_code) is None for row in dataset.rows):
+        issues.append(f"a row lacks the dataset's key {key}")
     outside = sorted({row.date for row in dataset.rows if not manifest.period.holds(row.date)})
     if outside:
         issues.append(f"{len(outside)} date(s) lie outside the published period, first {outside[0].isoformat()}")
-    codes = sorted({row.postal_code for row in dataset.rows})
-    if codes != manifest.postal_codes:
-        issues.append("manifest postal_codes differ from the rows")
+    if key == "zone":
+        zones = sorted({row.zone for row in dataset.rows if row.zone is not None})
+        if zones != (manifest.zones or []):
+            issues.append("manifest zones differ from the rows")
+        if manifest.postal_codes:
+            issues.append("a dataset keyed by zone lists postal codes")
+        if len({zone_key(zone) for zone in zones}) != len(zones):
+            issues.append("two zones differ only in case, spaces or hyphens")
+        if not (manifest.zone_lookup_url or "").startswith("https://"):
+            issues.append("a dataset keyed by zone needs an https zone_lookup_url")
+    else:
+        codes = sorted({row.postal_code for row in dataset.rows if row.postal_code is not None})
+        if codes != manifest.postal_codes:
+            issues.append("manifest postal_codes differ from the rows")
+        if manifest.zones is not None or manifest.zone_lookup_url is not None:
+            issues.append("a dataset keyed by postal code carries zones")
     if manifest.row_count != len(dataset.rows):
         issues.append(f"manifest row_count is {manifest.row_count}, the bundle holds {len(dataset.rows)} rows")
     if len({source.url for source in manifest.sources}) != len(manifest.sources):

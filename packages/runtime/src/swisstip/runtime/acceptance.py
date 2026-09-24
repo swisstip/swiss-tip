@@ -168,7 +168,7 @@ def check_resolve(service: ReleaseService, step: ResolveStep, as_of: date, prefi
 
 def check_lookup(service: ReleaseService, step: LookupStep, as_of: date, prefix: str, issues: list[str]) -> dict:
     """A lookup step, judged only when a registered connector serves the dataset in this replay."""
-    record = dict(tool="lookup", dataset_id=step.dataset_id, postal_code=step.postal_code)
+    record = dict(tool="lookup", dataset_id=step.dataset_id, **({"zone": step.zone} if step.zone is not None else {"postal_code": step.postal_code}))
     connectors = service.connectors
     if connectors is None or step.dataset_id not in connectors.datasets:
         record.update(passed=True, judged=False, reason="no registered connector serves the dataset in this replay")
@@ -182,11 +182,11 @@ def check_lookup(service: ReleaseService, step: LookupStep, as_of: date, prefix:
     named = [gap.dimension for gap in result.gaps]
     dates = [event.date.isoformat() for event in result.events]
     if step.expect_status is not None and result.status != step.expect_status:
-        found.append(f"{prefix}: lookup of {step.dataset_id} for {step.postal_code} expected {step.expect_status.value}, got {result.status.value}")
+        found.append(f"{prefix}: lookup of {step.dataset_id} for {step.key_label} expected {step.expect_status.value}, got {result.status.value}")
     if step.expect_gap is not None and step.expect_gap not in named:
-        found.append(f"{prefix}: lookup of {step.dataset_id} for {step.postal_code} expected a {step.expect_gap} gap, got {named or 'none'}")
+        found.append(f"{prefix}: lookup of {step.dataset_id} for {step.key_label} expected a {step.expect_gap} gap, got {named or 'none'}")
     if step.expect_first_date is not None and (not dates or dates[0] != step.expect_first_date.isoformat()):
-        found.append(f"{prefix}: lookup of {step.dataset_id} for {step.postal_code} expected the first date "
+        found.append(f"{prefix}: lookup of {step.dataset_id} for {step.key_label} expected the first date "
                      f"{step.expect_first_date.isoformat()}, got {dates[:1] or 'no date'}")
     issues.extend(found)
     return dict(record, as_of=request.as_of.isoformat(), status=result.status.value, gaps=named, dates=dates,

@@ -50,8 +50,9 @@ GapDimension = Literal[
     "concept_not_published",
     "context_not_covered",
     "review_status_not_met",
-    # The four of the lookup tool (docs/architecture/dataset-connectors.md, section 6).
+    # The five of the lookup tool (docs/architecture/dataset-connectors.md, section 6).
     "postal_code_not_covered",
+    "zone_not_covered",
     "period_not_published",
     "no_dates_in_range",
     "connector_unavailable",
@@ -386,24 +387,39 @@ class LookupOffer(Strict):
     """What resolve says about a dataset a caller can look up for the concept."""
 
     dataset_id: str = Field(description="What to send to lookup.")
-    type: str = Field(description="calendar: dates for a postal code.")
+    type: str = Field(description="calendar: dates for a postal code or a collection zone.")
     title: str
     label: str
     jurisdiction: str = Field(description="The municipality the dataset is published for.")
-    requires: list[str] = Field(description="Input fields lookup needs: ask the user for them when the conversation has not given them.")
+    requires: list[str] = Field(description=(
+        "Input fields lookup needs, postal_code or zone: ask the user for them when the conversation has not given them."))
     accepts: list[str] = Field(description="Optional input fields of lookup.")
     period: Period
     publisher: str
+    zones: list[str] | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "When requires names zone: the collection zones the publisher uses, as published."))
+    zone_lookup_url: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "When requires names zone: the publisher's page where the user finds their zone from the address. Give it to "
+        "the user; never guess a zone from an address."))
 
 
 class LookupRequest(Strict):
     dataset_id: str = Field(description="From a resolve result's lookups.")
-    postal_code: str = Field(pattern=r"^\d{4}$", description="Four digits, as the user gave it.")
+    postal_code: str | None = Field(default=None, pattern=r"^\d{4}$", description=(
+        "Four digits, as the user gave it, when the offer requires postal_code."))
+    zone: str | None = Field(default=None, pattern=r"^\S(?:.{0,38}\S)?$", description=(
+        "The collection zone as the user gave it, when the offer requires zone."))
     as_of: date | None = Field(default=None, description="The date the next dates count from; omit for today.")
     start: date | None = Field(default=None, description="First date wanted; omit for as_of.")
     end: date | None = Field(default=None, description="Last date wanted, inclusive; omit for the end of the published period.")
     limit: int = Field(default=3, ge=1, le=60, description="1 for the next date only, up to 60 for a whole year.")
     release_id: str | None = None
+
+    @model_validator(mode="after")
+    def one_key(self) -> "LookupRequest":
+        if (self.postal_code is None) == (self.zone is None):
+            raise ValueError("give exactly one of postal_code and zone, the one the offer's requires names")
+        return self
 
 
 class LookupEvent(Strict):
