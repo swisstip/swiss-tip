@@ -18,45 +18,33 @@ Built for the **[Swiss {ai} Weeks](https://zh.ai-weeks.ch/)** hackathon in Zuric
 
 ## Quick start
 
-One clone and one command. It needs [uv](https://docs.astral.sh/uv/) and
-nothing else: no Python has to be installed, uv fetches Python 3.14 when the
-machine has none. uv itself is one line (then open a new terminal):
-`curl -LsSf https://astral.sh/uv/install.sh | sh` on macOS and Linux,
-`powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
-on Windows.
+One command, and Docker is all you need. The image carries everything: the
+MCP server, the `mvp-zurich` knowledge base with its readiness attestation and
+semantic index, and a CPU-only Ollama with the `qwen3-embedding:0.6b` model,
+so search is hybrid (lexical plus embeddings) from the first request. No
+clone, no Python, no API key and no model download.
 
 ```shell
-git clone https://github.com/swisstip/swiss-tip.git && cd swiss-tip
-uv run swisstip-quickstart mvp-zurich
+docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
 ```
 
-The command installs the server from this checkout into `.venv`, downloads
-the current attested release of the `mvp-zurich` knowledge base from the
-packs repository into `.local/packs/mvp-zurich/` (outside Git), and runs the
-first tests on it with no model and no further network: the release
-validates and its readiness record attests exactly the downloaded file, the
-semantic index is bound to that release, the pack's acceptance suite and
-regression pack are replayed against it, and a client round trip over MCP
-runs against the server. It prints one line per check and ends with the
-commands that serve the pack and connect a client:
+The first run pulls about 850 MB, roughly three minutes on a normal
+connection; the server then answers within about 15 seconds of starting, once
+the model is loaded. Check it, and connect any MCP client to
+`http://127.0.0.1:8000/mcp` (Streamable HTTP, no authentication):
 
 ```shell
-uv run swisstip-quickstart mvp-zurich --serve                 # MCP on http://127.0.0.1:8000/mcp, /health beside it
-uv run swisstip-mcp --release .local/packs/mvp-zurich/release.json --require-ready --print-client-config opencode
-uv run swisstip-quickstart mvp-zurich --no-fetch              # the same checks again, offline
+curl -s http://127.0.0.1:8000/health
+claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
 ```
 
-`uv run swisstip-quickstart --help` lists the rest: another pack, a commit
-or tag of the packs repository, hybrid search beside the embedding sidecar,
-and `--url` for the round trip against a running container (the Docker route
-below). Details are in the [quickstart README](apps/quickstart/README.md).
+A healthy `/health` reports `"status": "ok"`, the release ID, the `readiness`
+record with status `ready`, and `search.configured_mode` set to `hybrid`. The
+tag `mvp-zurich` always serves the newest attested release of that pack; the
+packs repository also publishes a tag per release for pinning an exact one.
 
-Without a clone, the same from the published package `swisstip-quickstart`,
-in any directory; the checkout route above tests this source instead:
-
-```shell
-uvx swisstip-quickstart mvp-zurich
-```
+To develop the server, run it from source or build a knowledge base, see
+[developer setup](docs/developer-setup.md).
 
 ## How it works
 
@@ -112,115 +100,59 @@ the live numbers through `get_coverage` and `/health`.
 
 ## Run the server
 
-The server holds no knowledge: every way of running it names the release it
-serves. In the commands below, `<packs>` is a clone of the packs repository
-[swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) (or a directory of
-files downloaded from one of its GitHub releases) and `<pack>` is a pack name
-in it — the published one is **`mvp-zurich`**. A release is the pack directory
-`<packs>/releases/<pack>`, holding `release.json` and `readiness.json`.
+Every way of running the server names the release it serves; the server holds
+no knowledge of its own. Docker is the primary route, and the full pack image
+above is the whole server in one container. Two more images trade size for the
+bundled model:
 
-The quickest path needs **no clone**: a pack's own image from the packs
-repository carries its release, and Docker Compose adds the embedding sidecar
-for hybrid search (`/mcp` and `/health` on port 8000):
+| Image | Command | Search | Size |
+| --- | --- | --- | --- |
+| Full pack image, model inside | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` | hybrid | ~850 MB |
+| Slim server plus the embedding sidecar, two containers ([compose.yaml](compose.yaml)) | `SWISSTIP_PACK=mvp-zurich docker compose up -d --wait` | hybrid | ~165 MB + ~790 MB |
+| Slim pack image alone, no model | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich-slim` | lexical only | ~165 MB |
 
-```shell
-docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich          # one container, lexical search
-SWISSTIP_PACK=mvp-zurich docker compose up -d --wait                        # server + embedding sidecar, hybrid search
-claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
-```
+Each `search` result names its own `retrieval_mode`: `hybrid`, or
+`lexical-fallback` with the reason when a configured model is unreachable. The
+image family, the calendar connector and the OpenCode demo interface are
+described under [container images](docker/README.md).
 
-To serve a release directory instead — with [uv](https://docs.astral.sh/uv/)
-and the published package from PyPI, or with the slim MCP image and the pack
-mounted (here shown for the MVP pack after `git clone` of the packs repo into
-`../swiss-tip-mvp`):
-
-```shell
-git clone https://github.com/swisstip/swiss-tip-mvp ../swiss-tip-mvp
-uvx swisstip-mcp --release ../swiss-tip-mvp/releases/mvp-zurich/release.json --require-ready --transport streamable-http
-docker run --rm -p 8000:8000 -v "$PWD/../swiss-tip-mvp/releases/mvp-zurich:/srv/swiss-tip:ro" ghcr.io/swisstip/swiss-tip-mcp:latest-slim
-```
-
-The general form, for any `<packs>` clone and `<pack>` name — from this
-checkout, after the installation below (`.venv/Scripts/` on Windows,
-`.venv/bin/` on macOS and Linux); after the quick start, `<packs>/releases/<pack>`
-is `.local/packs/<pack>` of this checkout:
-
-```shell
-./.venv/Scripts/python.exe -m swisstip.mcp_server.server --release <packs>/releases/<pack>/release.json --transport streamable-http
-```
-
-Any MCP client connects to `http://127.0.0.1:8000/mcp` (Streamable HTTP, no
-authentication), and `/health` shows the release and its review status.
-Details, stdio, client configurations and hybrid search with a local
-embedding model are in the [server README](apps/mcp-server/README.md) and
-under [container images](docker/README.md).
-
-## Install and test
-
-You need Python 3.14 or newer. The tests take about a minute, use no
-network and depend on no knowledge base: they run on synthetic fixtures.
-
-```shell
-python -m venv .venv
-./.venv/Scripts/python.exe -m pip install -e packages/core -e packages/runtime -e packages/build -e packages/ingestion -e "packages/extraction[office]" -e packages/concepts -e apps/mcp-server -e apps/quickstart -e apps/knowledge-builder -e apps/admin-console -e apps/calendar-connector
-for t in packages/*/tests apps/*/tests; do ./.venv/Scripts/python.exe -m unittest discover -s "$t" || break; done
-./.venv/Scripts/python.exe scripts/test/mcp/check_wheel.py
-```
-
-The loop runs every unit test; the last command runs a client round trip
-over stdio against the real server on the synthetic release. On macOS or
-Linux, use `.venv/bin/`. The checks of the packs themselves (their suites,
-reports, readiness records and catalogues) live in the packs repository.
-
-With uv, the same environment comes from `uv.lock`: the root `pyproject.toml`
-is a workspace of every component, `uv run` installs the serving side, and
-the dependency group `build` adds the pipeline and the console:
-
-```shell
-uv sync --group build
-for t in packages/*/tests apps/*/tests; do uv run python -m unittest discover -s "$t" || break; done
-uv run python scripts/test/mcp/check_wheel.py
-```
-
-## Build a knowledge base
-
-The pipeline reads a pack's source catalogue, downloads the pages, extracts
-their text, builds the release from the curation file, validates it, replays
-the acceptance suite and writes the readiness record. It runs on a packs
-directory, a clone of the packs repository:
-
-```shell
-./.venv/Scripts/python.exe -m swisstip.builder.cli <pack> --packs-dir <packs>
-./.venv/Scripts/python.exe -m swisstip.admin_console.app --packs-dir <packs> --actor "A. Person"
-```
-
-The [knowledge builder](apps/knowledge-builder/README.md) describes the
-stages, the [admin console](apps/admin-console/README.md) the review
-screens, and the [pipeline document](docs/architecture/knowledge-base-pipeline.md)
-the route a pack takes from catalogue to served release.
+Running from source or from PyPI, with uv and a release directory, is in
+[developer setup](docs/developer-setup.md); those routes serve lexical search
+unless a local Ollama provides the model.
 
 ## Source etiquette
 
 Acquisition is operator-triggered and **build-time only**: the MCP server
 never crawls at request time, it serves a prebuilt, hashed release. The
-downloader (`swisstip-download`) respects `robots.txt` and its crawl delays,
-identifies itself, stays within a per-host rate limit and a declared budget,
-and **fails closed** when a robots policy cannot be read.
-
-This is the default and the recommended setting. An operator who is
-authorised to access a host — a data-sharing agreement, an authoritative
-mandate — can override it per run with `--no-obey-robots`; the run then
-records `robots_status: "overridden"` in its report so the decision is
-auditable rather than silent. The default (`--obey-robots`) leaves the
-fail-closed behaviour in place.
-
-```shell
-swisstip-download --catalogue releases/<pack>/sources.json --output releases/<pack> --download
-swisstip-download --catalogue releases/<pack>/sources.json --output releases/<pack> --download --no-obey-robots
-```
+downloader respects `robots.txt` and its crawl delays, identifies itself,
+stays within a per-host rate limit and a declared budget, and **fails closed**
+when a robots policy cannot be read. That is the default; an operator
+authorised to access a host can override it per run with `--no-obey-robots`,
+and the run records `robots_status: "overridden"` so the decision is auditable
+rather than silent. The commands are in
+[developer setup](docs/developer-setup.md#source-etiquette).
 
 Quoted official texts kept in a release remain the property of their
 publishers and are reproduced only as cited evidence, see [NOTICE](NOTICE).
+
+## Credentials and the prebuilt index
+
+**No credentials.** The server needs no API key, no token and no account, at
+build time or at run time, and it makes no call to any external service while
+answering: it serves a local release, and the embedding model runs locally
+(inside the full image, or in the sidecar beside the slim one). There is
+nothing to hand over in order to run or test it, and the repository holds no
+secrets.
+
+**The prebuilt index ships with the release.** `semantic-index.json` is part
+of a pack's release bundle, so every route above already has it: inside the
+image, or downloaded with the release. Nothing has to be embedded, crawled or
+fetched by hand before the first request. The index is bound to its release by
+the release ID, the release content hash, a hash of every embedded text and
+the model's own digest; the server refuses an index built for another release
+or another model. The script that builds it is in this repository and the
+command is in
+[developer setup](docs/developer-setup.md#rebuild-the-semantic-index).
 
 ## Repository
 
@@ -228,13 +160,16 @@ publishers and are reproduced only as cited evidence, see [NOTICE](NOTICE).
 | --- | --- |
 | `apps/` | `mcp-server`, `quickstart` (the [one command](apps/quickstart/README.md) that fetches and tests a pack), `knowledge-builder`, `admin-console`, `calendar-connector` (the first [dataset connector](apps/calendar-connector/README.md)) |
 | `packages/` | `core` (release format, validator, tool contracts), `runtime` (the four operations, lexical and hybrid search), `ingestion`, `extraction`, `build`, `concepts` |
-| `docs/` | [Functional specification](docs/product/functional-specification.md) and the architecture documents: [release format](docs/architecture/release-format.md), [tool contracts](docs/architecture/tool-contracts.md), [acceptance gate](docs/architecture/acceptance-gate.md), [extraction](docs/architecture/extraction.md), [concept extraction](docs/architecture/concept-extraction.md), [institutions and basis](docs/architecture/institutions-and-provenance-weights.md), [pipeline](docs/architecture/knowledge-base-pipeline.md), [admin console](docs/architecture/admin-console.md), [dataset connectors](docs/architecture/dataset-connectors.md) (proposal) |
+| `docs/` | [Developer setup](docs/developer-setup.md) (running from source, tests, building a pack), the [functional specification](docs/product/functional-specification.md) and the architecture documents: [release format](docs/architecture/release-format.md), [tool contracts](docs/architecture/tool-contracts.md), [acceptance gate](docs/architecture/acceptance-gate.md), [extraction](docs/architecture/extraction.md), [concept extraction](docs/architecture/concept-extraction.md), [institutions and basis](docs/architecture/institutions-and-provenance-weights.md), [pipeline](docs/architecture/knowledge-base-pipeline.md), [admin console](docs/architecture/admin-console.md), [dataset connectors](docs/architecture/dataset-connectors.md) (proposal) |
 | `docker/`, `compose.yaml`, `Dockerfile` | [Container images](docker/README.md): the MCP image, its slim variant without the model, the slim release image, the embedding sidecar and the OpenCode test image; the root Dockerfile builds the server from this source with a pack as build context. The workflow [container-images.yml](.github/workflows/container-images.yml) builds, tests and pushes the images that hold no release; the packs repository builds the ones that hold one |
 | `scripts/pypi/` | The PyPI distributions `swisstip-core`, `swisstip-mcp`, `swisstip-quickstart`, `swisstip-calendar-connector` and `swisstip-builder` ([publishing](scripts/pypi/README.md)) |
 | `pyproject.toml`, `uv.lock` | The uv workspace of the components, for `uv run` and `uv sync`; each component's own `pyproject.toml` stays the source of its metadata |
 | `config/` | Provider profiles of the concepts package |
 
-Contributor conventions are in [AGENTS.md](AGENTS.md).
+Running the server from source, the uv workflow, Python 3.14, the unit tests,
+building a knowledge base and rebuilding the semantic index are all in
+**[developer setup](docs/developer-setup.md)**. Contributor conventions are in
+[AGENTS.md](AGENTS.md).
 
 ## Licence
 

@@ -1,6 +1,11 @@
 # Container images
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
+
+**Start here:** `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` is the
+whole server in one command - the full pack image, with the release, the semantic index and
+the embedding model inside, so search is hybrid from the first request and nothing else has
+to be installed. The table below is the family of images around it.
 
 The images of the Swiss TIP MCP server with `swisstip-mcp` 0.3.1 from PyPI.
 The slim MCP image carries no knowledge release and no model; the MCP
