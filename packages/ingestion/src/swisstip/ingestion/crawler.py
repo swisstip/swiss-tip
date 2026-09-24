@@ -282,6 +282,7 @@ class SafeCrawler:
         user_agent: str = DEFAULT_USER_AGENT,
         allow_query_strings: bool = False,
         allow_private_networks: bool = False,
+        respect_robots: bool = True,
         opener: urllib.request.OpenerDirector | None = None,
         resolver: Callable[..., Iterable[tuple]] = socket.getaddrinfo,
         on_page: Callable[[CrawledPage, bytes], None] | None = None,
@@ -295,6 +296,12 @@ class SafeCrawler:
         self.user_agent = user_agent
         self.allow_query_strings = allow_query_strings
         self.allow_private_networks = allow_private_networks
+        # Source etiquette is on by default: the crawler fetches robots.txt, obeys its Disallow rules and crawl
+        # delays, and fails closed when it cannot read the policy. An operator with permission to access a host
+        # (a data-sharing agreement, an authoritative mandate) can set this False; the override is recorded in the
+        # report as robots_status "overridden" rather than silently dropped. Acquisition is operator-triggered and
+        # build-time only; the MCP server never crawls at request time.
+        self.respect_robots = respect_robots
         self._opener = opener or urllib.request.build_opener(_NoRedirectHandler())
         self._resolver = resolver
         self._on_page = on_page
@@ -333,10 +340,13 @@ class SafeCrawler:
                     "start_url contains a query string but query crawling is disabled"
                 )
             self._validate_network_target(start_url)
-            self._load_robots(start_url)
-            if self._report.robots_status == "unavailable-fail-closed":
-                self._report.stop_reason = "robots-unavailable"
-                return self._finish()
+            if self.respect_robots:
+                self._load_robots(start_url)
+                if self._report.robots_status == "unavailable-fail-closed":
+                    self._report.stop_reason = "robots-unavailable"
+                    return self._finish()
+            else:
+                self._report.robots_status = "overridden"
 
             frontier: deque[tuple[str, int]] = deque([(start_url, 0)])
             known = {start_url}
@@ -595,7 +605,9 @@ class SafeCrawler:
             )
             # Policy acquisition uses the same request, byte, duration and redirect
             # budgets, but must not recursively try to load its own robots policy.
-            if not allow_robots_path:
+            # With respect_robots off (an operator override), the Disallow gate is
+            # skipped entirely; crawl() has already recorded the "overridden" status.
+            if not allow_robots_path and self.respect_robots:
                 origin = self._origin(current_url)
                 policy_cached = origin in self._robots_by_origin
                 if not self._robots_can_fetch(current_url):
