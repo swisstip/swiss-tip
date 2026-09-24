@@ -1,6 +1,11 @@
 # Container images
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
+
+**Start here:** `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` is the
+whole server in one command - the full pack image, with the release, the semantic index and
+the embedding model inside, so search is hybrid from the first request and nothing else has
+to be installed. The table below is the family of images around it.
 
 The images of the Swiss TIP MCP server with `swisstip-mcp` 0.4.0 from PyPI.
 The slim MCP image carries no knowledge release and no model; the MCP
@@ -269,6 +274,12 @@ entrypoint is this directory's `with-ollama` (docker/mcp).
 docker run --rm -p 8000:8000 swiss-tip:<pack>       # MCP on http://127.0.0.1:8000/mcp, /health beside it
 docker run --rm -i swiss-tip:<pack> --transport stdio
 ```
+
+A pack image with datasets (`mvp-zurich`) also carries the calendar
+connector and its bundles: its entrypoint starts `with-calendar` first,
+which runs the connector on the container's loopback address, waits for it
+and registers it through `SWISSTIP_CONNECTORS`, so the server lists
+`lookup` from the first request; `-e SWISSTIP_CONNECTORS=` leaves it out.
 
 At start, `with-ollama` starts Ollama, checks the model digest and loads the
 model, which stays loaded (`OLLAMA_KEEP_ALIVE=-1`); then the server starts.

@@ -4,7 +4,8 @@ from unittest.mock import Mock
 from datetime import date, datetime, timedelta
 
 from swisstip.core.basis import make_basis, strongest_basis
-from swisstip.core.contracts import GetCoverageRequest, SearchRequest, Status, ToolError
+from swisstip.core.contracts import (SEARCH_DESCRIPTION_LANGUAGES, SEARCH_DESCRIPTION_LEAD, CoverageRoot,
+                                     GetCoverageRequest, SearchRequest, Status, ToolError, tool_output_schema)
 from swisstip.core.release import (Concept, ContextFieldSpec, DecisionRule, EvidenceRecord, FactRecord, Freshness, Institution,
                                    Manifest, Place, PlaceRegister, Provenance, Release, RequiredUserFact, SourceDocument, Topic,
                                    content_hash, sha256_text)
@@ -273,6 +274,11 @@ class ServiceTests(unittest.TestCase):
         # The root names no jurisdiction per topic; its own list carries them and the topic page has them per concept.
         self.assertEqual(root.topics[1].model_dump(), {"topic_id": "contacts", "title": "Contacts", "concept_count": 1})
         self.assertEqual(sorted(root.jurisdictions), ["CH", "CH-BE", "CH-ZH", "CH-ZH-261"])
+        # languages lists the languages of the cited pages; the schema and the tool description say that it is not
+        # the list to search in, so a caller that sees French there still translates a French question.
+        languages = tool_output_schema(CoverageRoot)["$defs"]["CoverageRoot"]["properties"]["languages"]["description"]
+        self.assertIn("not the languages to search in (see query_languages)", languages)
+        self.assertIn("the languages of the cited pages (not the search languages)", self.service.tool_description("get_coverage"))
         self.assertEqual(root.freshness.stale_from, date(2026, 11, 10))
         self.assertTrue(any("7 assistant-authored-unreviewed" in item for item in root.limitations))
         self.assertIn("Unreviewed.", root.limitations)  # the manifest's own list rides on the coverage pages
@@ -366,17 +372,29 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(languages[0].indexed, "4 search terms copied from the cited pages, on 3 of 5 concepts")
         self.assertEqual(languages[1].indexed, "the concept labels, sample questions and statements")
         self.assertFalse(any("not advertised" in item for item in service.limitations))
-        # One search, in either language, and the rule comes first: callers sent an English question in German as well.
-        note = ("Search ONCE per question, in German or English, never in more than one of them: a second search in "
-                "another language rarely finds other concepts. Write the search query in German or English: lexical "
-                "search matches only these languages. Send a question in one of them as asked, without translating "
-                "it; translate the key terms of a question in any other language into German before searching")
+        # The translation comes first, naming the other national languages: an untranslated French question read
+        # strong on the wrong concepts. Then one search, in either language: callers sent an English question in
+        # German as well.
+        note = ("Translate first: when a question is in a language other than German or English (French, Italian or "
+                "Romansh, for example), search with its key terms translated into German, and still answer in the "
+                "user's language; an untranslated query can match the wrong concept. Search ONCE per question, in "
+                "German or English, never in more than one of them: a second search in another language rarely finds "
+                "other concepts. Write the search query in German or English: lexical search matches only these "
+                "languages, and a question already in one of them is sent as asked.")
         self.assertIn(note, service.instructions)
         self.assertNotIn("preferred", service.tool_description("search").split("This server:")[1])
         self.assertIn("Residence permits and registration.", service.instructions)
         self.assertIn(note, service.tool_description("search"))
         self.assertNotIn(note, service.tool_description("resolve"))
         self.assertIn(note, service.tool_input_schema("search")["properties"]["query"]["description"])
+        # The release's note replaces the generic one right after the first sentence of the search description, and
+        # the rules come before the scope in the instructions: a client that keeps only the first 2,048 characters
+        # (Claude Code) still shows them.
+        description = service.tool_description("search")
+        self.assertTrue(description.startswith(SEARCH_DESCRIPTION_LEAD + " This server: Translate first"))
+        self.assertNotIn(SEARCH_DESCRIPTION_LANGUAGES, description)
+        self.assertLess(service.instructions.index("Translate first"), service.instructions.index("Scope:"))
+        self.assertLess(service.instructions.index("guidance_for_caller"), service.instructions.index("Scope:"))
         # Weak and empty results allow one translated search; a strong one does not invite another search.
         weak = service.search(SearchRequest(query="What will the weather be like in Zurich tomorrow?"))
         self.assertEqual(weak.match_strength, "weak")
@@ -392,10 +410,13 @@ class ServiceTests(unittest.TestCase):
         service = ReleaseService(with_aliases({"city-arrival": ["Personenmeldeamt", "Termin"]}))
         self.assertEqual([q.code for q in service.query_languages], ["en"])
         # A single query language needs no "one search" reminder: there is no other language to repeat the search in.
-        self.assertIn("Write the search query in English: lexical search matches only this language. Send a question "
-                      "in it as asked, without translating it; translate", service.instructions)
+        # German, not advertised, is named only as a language to translate from.
+        self.assertIn("Translate first: when a question is in a language other than English (German, French, Italian "
+                      "or Romansh, for example), search with its key terms translated into English", service.instructions)
+        self.assertIn("Write the search query in English: lexical search matches only this language, and a question "
+                      "already in it is sent as asked.", service.instructions)
         self.assertNotIn("Search ONCE", service.tool_description("search").split("This server:")[1])
-        self.assertNotIn("German", service.tool_description("search").split("This server:")[1])
+        self.assertNotIn("in German", service.tool_description("search").split("This server:")[1])
         self.assertIn("Search is not advertised in German (2 search terms on 1 of 5 concepts)", service.limitations[-1])
         self.assertIn(service.limitations[-1], service.get_coverage(GetCoverageRequest()).limitations)
         # The statements' language is listed however few of its terms occur in an excerpt: the labels carry it.

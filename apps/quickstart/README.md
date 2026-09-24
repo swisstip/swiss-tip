@@ -15,7 +15,7 @@ the argument, or `SWISSTIP_PACK`, the name `compose.yaml` takes as well.
 ./.venv/Scripts/python.exe -m pip install -e packages/core -e packages/runtime -e apps/mcp-server -e apps/quickstart
 ./.venv/Scripts/python.exe -m unittest discover -s apps/quickstart/tests
 ./.venv/Scripts/swisstip-quickstart mvp-zurich                                  # fetch into .local/packs/mvp-zurich, check, test
-./.venv/Scripts/swisstip-quickstart mvp-zurich --serve                          # then serve on http://127.0.0.1:8000/mcp
+./.venv/Scripts/swisstip-quickstart mvp-zurich --serve                          # then serve on http://127.0.0.1:8000/mcp, with the calendars
 ./.venv/Scripts/swisstip-quickstart mvp-zurich --no-fetch                       # the checks and tests again, offline
 ./.venv/Scripts/swisstip-quickstart mvp-zurich --ref mvp-zurich-2026-09-24-v5   # a tag or commit of the packs repository
 ./.venv/Scripts/swisstip-quickstart --url http://127.0.0.1:8000/mcp             # the round trip against a running server
@@ -33,7 +33,10 @@ ref itself and the hash checks still hold. It reads the readiness record
 first and takes what the record attests: `release.json` must hash to
 `release_sha256`, `semantic-index.json` to the index binding and
 `acceptance.yaml` to the suite binding; `regression.yaml` and the pack's
-README come along when the pack has them. The files land in
+README come along when the pack has them, and so do the pack's dataset
+bundles, `datasets/<pack>/<dataset>/dataset.json` at the same commit, listed
+through the GitHub API (when it does not answer, the bundles of an earlier
+fetch are kept). The files land in
 `<packs-dir>/<pack>/` (default `.local/packs/<pack>/`, outside Git) with a
 `source.json` naming the repository, the ref, the commit and the release;
 a file whose hash already matches is not downloaded again, so a second run
@@ -49,6 +52,8 @@ code (2 when the pack could not be fetched):
   exactly this file, the check `--require-ready` makes;
 - the attested semantic index, when there is one, is bound to exactly this
   release, the check the slim release image makes at build time;
+- the dataset bundles, when the pack has any, validate and bind to
+  concepts of the release, with the server's own registration;
 - the acceptance suite is the one the record attests, and it is replayed
   against the release with the code of the pipeline's `accept` stage; the
   regression pack, when the pack has one, is replayed lexically after it,
@@ -75,5 +80,7 @@ so the build depends on no knowledge base.
 | `--packs-dir DIR` | Where the pack lands, under `<packs-dir>/<pack>`; default `.local/packs` |
 | `--no-fetch` | No request: the checks and tests on the files fetched before |
 | `--url URL` | The round trip against a running Streamable HTTP endpoint, with `/health` beside it, and nothing else |
-| `--serve` | After the checks, serve the pack with `--require-ready` over Streamable HTTP; `--port`, default 8000 |
+| `--serve` | After the checks, serve the pack with `--require-ready` over Streamable HTTP; `--port`, default 8000. A pack with datasets gets its calendar connector first, on `127.0.0.1:8100`, and the server lists `lookup` |
+| `--connector-port` | With `--serve`: the loopback port of the calendar connector; default 8100 |
+| `--no-calendar` | With `--serve`: without the calendar connector, four tools |
 | `--hybrid` | With `--serve`: hybrid search with the attested index and a local Ollama that holds its model (`--ollama-url`, default `http://127.0.0.1:11434`), such as the embedding sidecar published on that port |

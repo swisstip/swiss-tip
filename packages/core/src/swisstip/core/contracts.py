@@ -181,10 +181,12 @@ class CoverageRoot(Strict):
     out_of_scope: list[str]
     out_of_scope_response: str
     jurisdictions: list[str]
-    languages: list[str]
+    languages: list[str] = Field(description=(
+        "The languages of the cited source pages, not the languages to search in (see query_languages); answers are "
+        "written in the user's language."))
     query_languages: list[QueryLanguage] | None = Field(default=None, description=(
-        "The languages to write search queries in, best first. Send a question in one of them as asked; translate "
-        "the key terms of a question in any other language into the first one before searching."))
+        "The languages to write search queries in, best first. Translate the key terms of a question in any other "
+        "language into the first one before searching; a question already in one of them is sent as asked."))
     freshness: FreshnessPolicy
     topics: list[TopicSummary]
     institution_levels: dict[str, int] | None = Field(default=None, description=(
@@ -225,10 +227,9 @@ class CoverageTopic(Strict):
 class SearchRequest(Placed):
     query: str = Field(min_length=1, description=(
         "Question or key terms to find published concepts, in one of the server's query languages (get_coverage "
-        "query_languages; English and German unless the server names others). Send a question in one of them as "
-        "asked, in one search; translate the key terms of a question in any other language into the first one named "
-        "before searching. Optional "
-        "local semantic search also accepts other languages, less reliably."))
+        "query_languages; English and German unless the server names others): translate the key terms of a question "
+        "in any other language into the first one named before searching; a question already in one of them is sent "
+        "as asked, in one search. Optional local semantic search also accepts other languages, less reliably."))
     limit: int = Field(default=3, ge=1, le=10, description=(
         "Maximum hits. Three is enough for a question about one subject; raise it only to explore, at most ten."))
     # No description of its own: next to the model's it would be inlined as an allOf, which small models read poorly.
@@ -695,6 +696,20 @@ class ToolError(Strict):
     error: ErrorBody
 
 
+# The search description in three parts, so that a server can put its own query-language note in place of the generic
+# one, right after the first sentence, where a client that cuts long descriptions short still shows it.
+SEARCH_DESCRIPTION_LEAD = (
+    "Find ranked published concepts for a question or key terms, in ONE call per user question: send one query, "
+    "never two searches side by side and never the same question again in another language or wording, which "
+    "rarely finds other concepts.")
+SEARCH_DESCRIPTION_LANGUAGES = (
+    "Translate first: lexical search matches only the server's query languages (named in the server instructions "
+    "and in get_coverage query_languages; English and German unless named otherwise), so translate the key terms of a "
+    "question in any other language into the first one named before searching, and still answer in the user's "
+    "language; an untranslated query can match the wrong concept. A question already in a query language is sent as "
+    "asked, in one search and not again in another query language. Optional local semantic search can also find "
+    "concepts in other languages, less reliably.")
+
 TOOL_DESCRIPTIONS = {
     "get_knowledge_graph": (
         "Call this FIRST for every new subject, before search: a small map of how Switzerland handles it. With the "
@@ -713,19 +728,14 @@ TOOL_DESCRIPTIONS = {
         "Discover what this server covers. A question normally needs two calls in total: search, then resolve. "
         "Call get_coverage with no arguments only when you are unsure whether the question is in scope at all: the "
         "root page (about 5 KB) returns the active release_id, a scope_statement, an out_of_scope list, the covered "
-        "jurisdictions and languages, the query languages for search, the freshness window and the topics. If the question matches out_of_scope "
+        "jurisdictions, the languages of the cited pages (not the search languages), the query languages for search, "
+        "the freshness window and the topics. If the question matches out_of_scope "
         "or lies outside the scope_statement (another topic, another country), follow out_of_scope_response and "
         "make no further calls. With parent_id set to a topic_id it lists that topic's concepts with their "
         "jurisdictions and required context fields; search is the shorter way to the same concept_ids."),
     "search": (
-        "Find ranked published concepts for a question or key terms, in ONE call per user question: send one query, "
-        "never two searches side by side and never the same question again in another language or wording, which "
-        "rarely finds other concepts. Lexical search matches only the server's query "
-        "languages (named in the server instructions and in get_coverage query_languages; English and German unless "
-        "named otherwise): send a question in one of them as asked, in one search and not again in another query "
-        "language, and translate the key terms of a question in any other language into the first one named before "
-        "searching. Optional local semantic search can also find "
-        "concepts in other languages, less reliably. When the user's canton or municipality is known, give it as "
+        SEARCH_DESCRIPTION_LEAD + " " + SEARCH_DESCRIPTION_LANGUAGES + " "
+        "When the user's canton or municipality is known, give it as "
         "jurisdiction, as for resolve: the hits are then the concepts that can apply there, and a concept published "
         "for other places only is named in published_elsewhere instead (do not resolve it; if no hit answers the "
         "question, say that this service does not publish it for the user's place). The result names retrieval_mode "

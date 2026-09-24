@@ -21,7 +21,8 @@ from pydantic import ValidationError
 
 from swisstip.core.basis import DEFAULT_RANKING_POLICY, basis_weight, concept_authority, fact_weight
 from swisstip.core.connector import ConnectorError, DatasetSummary
-from swisstip.core.contracts import (CONNECTOR_TOOL_CONTRACTS, SCHEMA_VERSION, TOOL_CONTRACTS, TOOL_DESCRIPTIONS, Citation,
+from swisstip.core.contracts import (CONNECTOR_TOOL_CONTRACTS, SCHEMA_VERSION, SEARCH_DESCRIPTION_LANGUAGES,
+                                     TOOL_CONTRACTS, TOOL_DESCRIPTIONS, Citation,
                                      ConceptResolution, ConceptSummary,
                                      ContextField, CoverageGap, CoverageRoot, CoverageTopic, DecisionRule, ErrorBody,
                                      ErrorCode, Evidence, ExecutedScope, Fact, FreshnessPolicy, GetCoverageRequest,
@@ -150,38 +151,48 @@ RESULT_LIMITATIONS_NOTE = ("Not a legal review: English paraphrases of the cited
 SEARCH_LANGUAGE_RETRY = (" One exception: if the question is in a language other than {languages} and this query was "
                          "not already translated, search once more with its key terms translated into {preferred} "
                          "before declining.")
-# With several query languages the note opens with the rule of one search: callers sent an English question in English
-# and in German, side by side, and both searches found the same concepts (mvp-zurich-2026-09-19-v15, lexical and
-# hybrid). The better-indexed language is named only as the target of a translation, no longer as "preferred". The
-# wording alone does not stop a caller that opens with two parallel calls; the caller's own prompt does
+# The note opens with the translation: an untranslated French question about a driving licence read strong on the
+# registration concepts whose few French terms it shared (mvp-zurich-2026-09-24-v5, hybrid), and a strong result
+# invites no second search. The other national languages are named, because the questions a Swiss server gets come in
+# them. With several query languages the rule of one search follows: callers sent an English question in English and
+# in German, side by side, and both searches found the same concepts (mvp-zurich-2026-09-19-v15, lexical and hybrid).
+# The better-indexed language is named only as the target of a translation, not as "preferred". The wording alone
+# does not stop a caller that opens with two parallel calls; the caller's own prompt does
 # (docs/architecture/tool-contracts.md, section 4.2).
-QUERY_LANGUAGE_NOTE = ("{one_search}Write the search query in {languages}: lexical search matches only {these}. Send a "
-                       "question in {one_of} as asked, without translating it; translate the key terms of a "
-                       "question in any other language into {preferred} before searching, and still answer in the "
-                       "user's language.")
+QUERY_LANGUAGE_NOTE = ("Translate first: when a question is in a language other than {languages}{others}, search with "
+                       "its key terms translated into {preferred}, and still answer in the user's language; an "
+                       "untranslated query can match the wrong concept. {one_search}Write the search query in "
+                       "{languages}: lexical search matches only {these}, and a question already in {one_of} is sent "
+                       "as asked.")
+QUERY_LANGUAGE_OTHERS = " ({languages}, for example)"
 QUERY_LANGUAGE_ONE_SEARCH = ("Search ONCE per question, in {languages}, never in more than one of them: a second "
                              "search in another language rarely finds other concepts. ")
+NATIONAL_LANGUAGES = ("de", "fr", "it", "rm")
+# The rules come before the scope: a client that cuts the instructions short (Claude Code keeps 2,048 characters)
+# keeps the two calls, the translation and the guidance, and the scope also reaches the caller through get_coverage
+# and every weak or empty search result.
+INSTRUCTIONS = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. "
+                "{languages} A question normally takes two calls: search with the question and, when known, the "
+                "user's canton or municipality as jurisdiction, then resolve the relevant concept_ids with the user's "
+                "jurisdiction, today's date and the context the question implies. Call get_coverage only when unsure "
+                "whether the question is in scope, and get_evidence only for a verbatim quote. Follow "
+                "guidance_for_caller in every result. Scope: {scope}")
 # With a knowledge graph the call pattern gains a first turn: orientation (which level decides, who carries the rules
-# out, the office at the user's place, the laws and their source), then search and resolve in the next turn.
-INSTRUCTIONS_GRAPH = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. Scope: "
-                      "{scope} Start every new subject with get_knowledge_graph, with the question and, when known, the "
-                      "user's canton or municipality as jurisdiction: it says which level of the state sets the rules, who "
-                      "carries them out and decides, the office at the user's place, the laws and the authoritative source, "
-                      "whether the answer depends on the canton or municipality, and what to search for. In the next turn "
-                      "search with its next_search.query unchanged, then resolve the relevant concept_ids with the user's jurisdiction, "
-                      "today's date and the context the question implies; a follow-up on the same subject needs no new "
-                      "graph call. The graph is orientation, not citable evidence: answer only from resolve's facts. Call "
-                      "get_coverage only when unsure whether the question is in scope, and get_evidence only for a "
-                      "verbatim quote. {languages} Follow guidance_for_caller in every result.")
+# out, the office at the user's place, the laws and their source), then search and resolve in the next turn. The rules
+# come before the scope, as in INSTRUCTIONS.
+INSTRUCTIONS_GRAPH = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. "
+                      "{languages} Start every new subject with get_knowledge_graph, with the question and, when known, "
+                      "the user's canton or municipality as jurisdiction: it says which level of the state sets the rules, "
+                      "who carries them out and decides, the office at the user's place, the laws and the authoritative "
+                      "source, whether the answer depends on the canton or municipality, and what to search for. In the "
+                      "next turn search with its next_search.query unchanged, then resolve the relevant concept_ids with "
+                      "the user's jurisdiction, today's date and the context the question implies; a follow-up on the "
+                      "same subject needs no new graph call. The graph is orientation, not citable evidence: answer only "
+                      "from resolve's facts. Call get_coverage only when unsure whether the question is in scope, and "
+                      "get_evidence only for a verbatim quote. Follow guidance_for_caller in every result. Scope: {scope}")
 GRAPH_FIRST = "For a new subject call get_knowledge_graph first and search in the next turn. "
 GRAPH_JURISDICTION_NOTE = ("Optional: give it when the question or the conversation says where the user lives, and omit "
                            "it otherwise; the result then says whether the answer depends on the place and what to ask.")
-INSTRUCTIONS = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. Scope: "
-                "{scope} A question normally takes two calls: search with the question and, when known, the user's "
-                "canton or municipality as jurisdiction, then resolve the relevant "
-                "concept_ids with the user's jurisdiction, today's date and the context the question implies. "
-                "Call get_coverage only when unsure whether the question is in scope, and get_evidence only for a "
-                "verbatim quote. {languages} Follow guidance_for_caller in every result.")
 # The release's context vocabulary, sent once per session with the instructions and again on the resolve schema,
 # because a client may drop either. A caller that knows the fields and their published values before its first call
 # fills the context on the first resolve instead of learning it from a NEEDS_CONTEXT round trip. The mapping from
@@ -430,8 +441,10 @@ class ReleaseService:
         codes = [item.code for item in self.query_languages]
         if codes:
             several = len(codes) > 1
+            others = [code for code in NATIONAL_LANGUAGES if code not in codes]
             self.query_language_note = QUERY_LANGUAGE_NOTE.format(
                 languages=language_list(codes), these="these languages" if several else "this language",
+                others=QUERY_LANGUAGE_OTHERS.format(languages=language_list(others)) if others else "",
                 one_search=QUERY_LANGUAGE_ONE_SEARCH.format(languages=language_list(codes)) if several else "",
                 one_of="one of them" if several else "it", preferred=language_name(codes[0]))
             retry = SEARCH_LANGUAGE_RETRY.format(languages=language_list(codes), preferred=language_name(codes[0]))
@@ -463,15 +476,15 @@ class ReleaseService:
         return names
 
     def tool_description(self, name: str) -> str:
-        """The contract's description, with this release's query languages on search and, when the release carries a
-        knowledge graph, the graph-first call pattern on every other tool."""
+        """The contract's description, with this release's query-language note in place of the generic one on search
+        and, when the release carries a knowledge graph, the graph-first call pattern on every other tool."""
         description = TOOL_DESCRIPTIONS[name]
         if self.graph_index is not None and name != "get_knowledge_graph":
             description = GRAPH_FIRST + description.replace(
                 "A question normally needs two calls in total: search, then resolve.",
                 "A question normally needs three calls: get_knowledge_graph, then search and resolve in the next turn.")
         if name == "search" and self.query_language_note:
-            description += " This server: " + self.query_language_note
+            description = description.replace(SEARCH_DESCRIPTION_LANGUAGES, "This server: " + self.query_language_note)
         return description
 
     def tool_input_schema(self, name: str) -> dict:

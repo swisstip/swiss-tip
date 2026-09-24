@@ -200,7 +200,7 @@ enough to refuse an outside question.
 | `out_of_scope` | list of string | Named exclusions |
 | `out_of_scope_response` | string | What to tell the user when the question is outside scope |
 | `jurisdictions` | list of string | Every jurisdiction with at least one concept |
-| `languages` | list of string | Evidence languages in the release |
+| `languages` | list of string | The languages of the cited pages (the evidence), not the languages to search in; its schema description and the `get_coverage` description say so, so that a caller that finds French here still translates a French question (section 4.2) |
 | `query_languages` | list of QueryLanguage, or absent | The languages to write `search` queries in, best first (section 4.2): `code`, `rank` (1 is preferred), `indexed` (what the release indexes in that language) |
 | `freshness` | FreshnessPolicy | |
 | `topics` | list of TopicSummary | `topic_id`, `title`, `concept_count`. The jurisdictions of a topic are not repeated here: `jurisdictions` above lists all of them and the topic page carries them per concept, which keeps the root small |
@@ -391,22 +391,31 @@ so the release and its readiness record stay as they are:
 On `mvp-zurich-2026-09-16-v2` German ranks first with 611 source terms on 76
 of 77 concepts and English second (2 source terms on 1 concept, and the
 authored fields); on `mvp-wallisellen` German has 119 on 27 of 30 concepts
-and English only the authored fields. Neither release cites a French or
-Italian excerpt, so nothing is left out yet. The server names the result in
-four places:
+and English only the authored fields. Neither release cited a French or
+Italian excerpt then; the current Zurich release carries French and Italian
+terms on a few concepts, too few to be listed, and its limitations name
+them. The server names the result in four places:
 
-1. the MCP `instructions` of the `initialize` result, with the scope
-   statement and the two-call pattern ("Search ONCE per question, in German
-   or English, never in more than one of them: a second search in another
-   language rarely finds other concepts. Write the search query in German or
-   English: lexical search matches only these languages. Send a question in
-   one of them as asked, without translating it; translate the key terms of
-   a question in any other language into German before searching, and still
-   answer in the user's language."); clients that do not pass instructions
-   to the model miss this one;
-2. the same sentence appended to the `search` description;
+1. the MCP `instructions` of the `initialize` result, first after the
+   one-line description of the server and before the two-call pattern and
+   the scope statement ("Translate first: when a question is in a language
+   other than German or English (French, Italian or Romansh, for example),
+   search with its key terms translated into German, and still answer in
+   the user's language; an untranslated query can match the wrong concept.
+   Search ONCE per question, in German or English, never in more than one
+   of them: a second search in another language rarely finds other
+   concepts. Write the search query in German or English: lexical search
+   matches only these languages, and a question already in one of them is
+   sent as asked."); clients that do not pass instructions to the model
+   miss this one;
+2. the same sentence in the `search` description, in place of the generic
+   language sentence and right after the description's first sentence;
 3. the same sentence as the description of the `query` field;
 4. `query_languages` on the coverage root.
+
+The languages named as examples are the national languages that are not
+query languages of the release. The coverage root's `languages`, the
+languages of the cited pages, says that it is not the list to search in.
 
 The committed schema bundle and the mock keep the generic text, which names
 English and German unless the server names others. When a search reads
@@ -427,6 +436,31 @@ same two concepts first, lexical and hybrid, so the second search only spent
 a call. The first language is now named only as the target of a translation,
 the rule of one search opens the sentence and the generic `search`
 description, and a release with a single query language gets no such rule.
+
+Until 2026-09-24 the sentence opened with that rule and put the translation
+last ("Send a question in one of them as asked, without translating it;
+translate the key terms ..."), at the end of the instructions behind a
+scope statement of 1,850 characters and at the end of the `search`
+description. On `mvp-zurich-2026-09-24-v5` in hybrid mode the challenge's
+sample question about exchanging a foreign driving licence in Vaud, sent in
+French as asked, read `strong` on the registration concepts, whose few
+French terms ("demande de permis de séjour") it shares, and a `strong`
+result invites no second search; its German key terms read `strong` on
+`foreign-licence-exchange`. The translation now opens the sentence, and the
+sentence stands before the scope in the instructions and after the first
+sentence of the `search` description, where a client that keeps only the
+first 2,048 characters (Claude Code) still shows it.
+
+Measured the same day with OpenCode 1.18.31, a neutral agent prompt, two
+free models and fifteen questions (the challenge's samples and French,
+Italian and Romansh probes), before and after the change, on 44 paired
+sessions (`.local/experiments/2026-09-24-translate-first-wording.md`):
+`mimo-v2.6-flash-free` translated every question before its first search
+under both wordings; `ling-3.0-flash-fin-free` sent 10 of 18 first searches
+untranslated before and 8 of 18 after, and recovered by searching again in
+both runs. The expected concept was resolved in 35 of 36 sessions both
+times. The wording is kept as a clarification that does no harm; it did not
+measurably change these callers.
 
 What the wording achieves was measured on 2026-09-21 with that question,
 OpenCode 1.18.31 and the working-tree server in hybrid mode; the samples are

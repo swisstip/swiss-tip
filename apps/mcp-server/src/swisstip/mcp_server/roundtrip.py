@@ -54,9 +54,13 @@ async def run(release: Path | None, url: str | None, report: Report = print_chec
         async with ClientSession(read, write) as session:
             init = await session.initialize()
             tools = [tool.name for tool in (await session.list_tools()).tools]
+            # lookup is listed while a dataset connector is registered, as in a pack image that carries its datasets;
+            # get_knowledge_graph comes first when the release carries a knowledge graph.
             four = ["get_coverage", "search", "resolve", "get_evidence"]
-            check(f"server {init.serverInfo.name} {init.serverInfo.version} lists the four tools, and the knowledge "
-                  "graph first when the release carries one", tools in (four, ["get_knowledge_graph", *four]))
+            base = tools[1:] if tools[:1] == ["get_knowledge_graph"] else tools
+            check(f"server {init.serverInfo.name} {init.serverInfo.version} lists the four tools"
+                  + (" and lookup" if base == four + ["lookup"] else "")
+                  + (", the knowledge graph first" if base is not tools else ""), base in (four, four + ["lookup"]))
             root = (await session.call_tool("get_coverage", {})).structuredContent
             check(f"coverage root of {root.get('release_id')} names topics and jurisdictions",
                   bool(root.get("topics")) and bool(root.get("jurisdictions")) and bool(root.get("scope_statement")))

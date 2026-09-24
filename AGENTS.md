@@ -57,7 +57,9 @@
 
 ## Writing conventions
 
-- Use the ASCII hyphen-minus (`-`) instead of en dashes or em dashes in repository text.
+- Never use en dashes (U+2013) or em dashes (U+2014) in repository text, including documents, docs pages,
+  help texts and commit messages; write the ASCII hyphen-minus (`-`) instead. The only exception is
+  text copied verbatim from an official source, such as excerpts and the test fixtures that mirror them.
 - Documentation states what is implemented and tested separately from what is planned.
 
 ## Dates and history in documents

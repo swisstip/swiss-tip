@@ -12,6 +12,7 @@ dependencies = [
     "swisstip-core",
     "swisstip-runtime",
     "swisstip-mcp-server",
+    "swisstip-calendar-connector",
 ]
 
 [project.scripts]

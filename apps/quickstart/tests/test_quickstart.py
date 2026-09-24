@@ -14,6 +14,7 @@ from unittest.mock import patch
 import yaml
 
 from swisstip.core.acceptance import AcceptanceFile
+from swisstip.core.datasets import dump_dataset, load_dataset
 from swisstip.core.readiness import Gate, Readiness, dump_readiness
 from swisstip.core.release import load_release
 from swisstip.quickstart import cli as quickstart
@@ -25,6 +26,11 @@ REPOSITORY = "example/packs"
 COMMIT = "a" * 40
 RAW = f"https://raw.githubusercontent.com/{REPOSITORY}/{COMMIT}/releases/test/"
 API = f"https://api.github.com/repos/{REPOSITORY}/commits/main"
+DATASETS_API = f"https://api.github.com/repos/{REPOSITORY}/contents/datasets/test?ref={COMMIT}"
+DATASETS_RAW = f"https://raw.githubusercontent.com/{REPOSITORY}/{COMMIT}/datasets/test/"
+# The calendar connector's synthetic bundle, bound here to a concept of the synthetic release; the content hash
+# covers the rows only, so the bundle stays valid.
+BUNDLE = Path(__file__).parents[2] / "calendar-connector" / "tests" / "fixtures" / "test-waste-bioabfall" / "dataset.json"
 # One case on the first concept of the synthetic release, in the suite format of docs/architecture/acceptance-gate.md.
 SUITE = dict(schema_version="swiss-tip-acceptance/v1", pack="test", cases=[dict(
     case_id="T-1", label="Registration deadline", question="How soon after arriving must I register?",
@@ -61,6 +67,19 @@ def repository(with_suite: bool = True) -> dict[str, bytes]:
         suite_bytes = yaml.safe_dump(SUITE, sort_keys=False).encode()
         files[RAW + "acceptance.yaml"] = suite_bytes
     files[RAW + "readiness.json"] = dump_readiness(record_for(release_bytes, suite_bytes)).encode()
+    return files
+
+
+def bundle(pack: str = "test", concept_id: str = "city-arrival") -> bytes:
+    dataset = load_dataset(BUNDLE)
+    manifest = dataset.manifest.model_copy(update=dict(pack=pack, concept_id=concept_id))
+    return dump_dataset(dataset.model_copy(update=dict(manifest=manifest))).encode("utf-8")
+
+
+def with_datasets(files: dict[str, bytes], data: bytes | None = None) -> dict[str, bytes]:
+    """The repository with one dataset bundle under datasets/test/, as the GitHub API lists it."""
+    files[DATASETS_API] = json.dumps([dict(name="test-waste-bioabfall", type="dir"), dict(name="README.md", type="file")]).encode()
+    files[DATASETS_RAW + "test-waste-bioabfall/dataset.json"] = data if data is not None else bundle()
     return files
 
 
@@ -101,6 +120,28 @@ class FetchTests(unittest.TestCase):
         again = fetch_pack("test", repository=REPOSITORY, ref="main", packs_dir=self.packs, fetch=fetcher(files, log))
         self.assertEqual((again.files["release.json"], again.files["acceptance.yaml"]), ("kept", "kept"))
         self.assertEqual(log.count(RAW + "release.json"), 1, "a file whose hash matches is not downloaded again")
+        self.assertEqual(again.datasets, [], "a pack without datasets/<pack> has none")
+
+    def test_the_dataset_bundles_are_fetched_at_the_same_commit(self):
+        stale = self.packs / "test" / "datasets" / "gone"
+        stale.mkdir(parents=True)
+        (stale / "dataset.json").write_text("{}", encoding="utf-8")
+        fetched = fetch_pack("test", repository=REPOSITORY, ref="main", packs_dir=self.packs,
+                             fetch=fetcher(with_datasets(repository())))
+        self.assertEqual(fetched.datasets, ["test-waste-bioabfall"])
+        self.assertEqual((self.packs / "test" / "datasets" / "test-waste-bioabfall" / "dataset.json").read_bytes(), bundle())
+        self.assertFalse(stale.exists(), "a bundle the pack no longer has is not kept")
+        source = json.loads((self.packs / "test" / "source.json").read_text(encoding="utf-8"))
+        self.assertEqual(source["datasets"], ["test-waste-bioabfall"])
+
+        def refused(url: str) -> bytes:
+            if url == DATASETS_API:
+                raise QuickstartError(f"{url}: HTTP 403 rate limit exceeded")
+            return fetcher(repository())(url)
+
+        again = fetch_pack("test", repository=REPOSITORY, ref="main", packs_dir=self.packs, fetch=refused)
+        self.assertIn("the datasets fetched before are kept", again.notes[-1])
+        self.assertTrue((self.packs / "test" / "datasets" / "test-waste-bioabfall" / "dataset.json").is_file())
 
     def test_a_release_that_does_not_match_its_record_is_refused(self):
         files = repository(with_suite=False)
@@ -165,6 +206,43 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertIn("the files fetched before, no request made", output)
         self.assertIn("\n0 failure(s)\n", output)
+
+    def test_the_datasets_are_checked_and_served_beside_the_server(self):
+        code, output = self.run_main(["test", "--repository", REPOSITORY, "--packs-dir", str(self.packs)],
+                                     with_datasets(repository()))
+        self.assertEqual(code, 0, output)
+        self.assertIn("info datasets: 1 bundles into", output)
+        self.assertIn("ok   datasets: 1 of 1 bundles validate and bind to concepts of the release", output)
+        started: list[tuple[Path, int]] = []
+        served: list[list[str]] = []
+
+        class Process:
+            def terminate(self):
+                started.append(("terminated", 0))
+
+            def wait(self, timeout=None):
+                return 0
+
+        def start(datasets: Path, port: int):
+            started.append((datasets, port))
+            return Process()
+
+        with patch.object(quickstart, "start_connector", start),                 patch.object(quickstart, "serve_main", lambda argv: served.append(argv) or 0):
+            code, output = self.run_main(["test", "--no-fetch", "--serve", "--packs-dir", str(self.packs)], None)
+        self.assertEqual(code, 0, output)
+        self.assertEqual(started, [(self.packs / "test" / "datasets", 8100), ("terminated", 0)])
+        self.assertEqual(served[0][-2:], ["--connector", "http://127.0.0.1:8100"])
+        self.assertIn("calendar connector on http://127.0.0.1:8100 with 1 datasets", output)
+        with patch.object(quickstart, "start_connector", start),                 patch.object(quickstart, "serve_main", lambda argv: served.append(argv) or 0):
+            self.run_main(["test", "--no-fetch", "--serve", "--no-calendar", "--packs-dir", str(self.packs)], None)
+        self.assertNotIn("--connector", served[1])
+
+    def test_a_bundle_of_another_pack_fails_its_check(self):
+        code, output = self.run_main(["test", "--repository", REPOSITORY, "--packs-dir", str(self.packs)],
+                                     with_datasets(repository(), bundle(pack="other")))
+        self.assertEqual(code, 1, output)
+        self.assertIn("FAIL datasets: 0 of 1 bundles validate and bind to concepts of the release", output)
+        self.assertIn("test-waste-bioabfall: bound to pack 'other', this server serves 'test'", output)
 
     def test_a_pack_without_a_suite_skips_the_replay(self):
         code, output = self.run_main(["test", "--repository", REPOSITORY, "--packs-dir", str(self.packs)],
