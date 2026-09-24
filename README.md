@@ -135,6 +135,45 @@ rather than silent. The commands are in
 Quoted official texts kept in a release remain the property of their
 publishers and are reproduced only as cited evidence, see [NOTICE](NOTICE).
 
+## Freshness, and what happens when it lapses
+
+Answers come from a **dated snapshot**, never from a live fetch at request
+time. For the current release the snapshot date is **23 September 2026**: every
+fact says what its official page published on or before that date, and every
+citation carries its own `accessed_on` date, so a caller can always tell how
+old the evidence is.
+
+The release declares a freshness window of 60 days, which runs out on
+**22 November 2026**. The server does not quietly keep serving after that. Once
+the window has passed, `resolve` returns the typed status `STALE` instead of
+`SUPPORTED`, and says so in its guidance:
+
+> The source snapshot of 2026-09-23 is older than 60 days on 2026-11-23. These
+> facts say what the official pages published on 2026-09-23, not what holds on
+> 2026-11-23: present them as published on 2026-09-23, do not confirm that
+> opening hours, availability, officeholders, rates, contacts or rules still
+> apply, and tell the user to check the cited page.
+
+So an assistant is told to present the facts as historical and to send the user
+to the source, rather than asserting that they are current. A caller cannot
+dodge this by asking for an earlier date: the guidance names that too. The
+window is a property of the release, so publishing a fresher release resets it,
+and `/health` and `get_coverage` both report the snapshot date and the date the
+release goes stale.
+
+This matters most for the values that move: fees, rates, opening hours,
+officeholders and deadlines. Two things keep those honest. Amounts and
+calculators are **out of scope** by declaration, not by omission — tariff
+tables, tax and pension amounts, premiums and every calculator are listed in
+`out_of_scope`, which `get_coverage` returns. And where a rate is published,
+the statement carries its own effective date rather than presenting it as
+timeless. The mortgage reference interest rate reads:
+
+> The mortgage reference interest rate (Referenzzinssatz) that governs rent
+> adjustments is 1.25 percent, valid since 2 September 2025; the Federal Office
+> for Housing's page, saved on 18 September 2026, states that it remains
+> unchanged from 2 September 2026.
+
 ## Credentials and the prebuilt index
 
 **No credentials.** The server needs no API key, no token and no account, at
