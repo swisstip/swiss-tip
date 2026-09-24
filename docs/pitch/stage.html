@@ -110,6 +110,15 @@
   .split.maps > div:last-child { justify-self: end; padding-right: clamp(0px, 2vw, 40px); }
   .shots img.shot-waste { left: 0; top: calc(var(--h) * .3); width: calc(var(--h) * .8);
                     height: auto; box-shadow: 0 14px 40px rgba(28, 27, 26, .18); }
+  /* The other assistant's answer, a phone screenshot (1080x2520) cut at 3:4
+     from the top: the question and the wrong date, not the steps below. */
+  .split.wrong ul { margin: .6em 0; }
+  .split.wrong p.fine { color: var(--accent); font-weight: 650; margin-top: .9em;
+                        padding: .35em .7em; border-left: 4px solid var(--accent);
+                        background: rgba(194, 47, 47, .07); width: fit-content; }
+  .split img.bad { height: min(74vh, 780px); max-height: none; aspect-ratio: 3 / 4;
+                   object-fit: cover; object-position: top;
+                   box-shadow: 0 10px 32px rgba(28, 27, 26, .12); }
   body.backup pre.run { width: fit-content; font-size: clamp(12px, .95vw, 18px); }
   .cite { font-family: var(--mono); font-size: clamp(13px, 1.15vw, 22px);
           color: var(--dim); border-left: 3px solid var(--ok); padding-left: 14px;
@@ -246,13 +255,20 @@
 
     <section class="slide">
       <div class="mark">0:05 &middot; while it runs</div>
-      <h2>A normal assistant gave<br>
-        <span class="kill">one deadline. The wrong one.</span></h2>
-      <ul>
-        <li>fourteen days from arrival &mdash; <b>the legal deadline</b></li>
-        <li>before your first working day &mdash; <b>a recommendation</b></li>
-      </ul>
-      <p class="wide">The law binds on both.<br>You start work unregistered.</p>
+      <div class="split wrong">
+        <img class="bad" src="../images/bad-example.jpg"
+             alt="Another chat assistant: register within 14 days of arrival, no later than September 30, 2026">
+        <div>
+          <h2>A normal assistant gave<br>
+            <span class="kill">a true rule. The wrong date.</span></h2>
+          <ul>
+            <li>it said: fourteen days from arrival &mdash; <b>September 30</b></li>
+            <li>it never said: <b>register before your first working day</b></li>
+          </ul>
+          <p class="wide">That is the limit that binds.<br>You start work unregistered.</p>
+          <p class="wide fine">And you can be fined for it.</p>
+        </div>
+      </div>
     </section>
 
     <section class="slide">
@@ -368,8 +384,8 @@ SEM &middot; Canton of Zurich &middot; as_of the day it ran</div>
       <div class="mark">backup &middot; how the knowledge base was built</div>
       <div class="split maps">
         <div class="shots">
-          <img class="shot shot-kb" src="screenshot-agent-map.png" alt="Agent map: 63 agents under one build">
-          <img class="shot shot-waste" src="screenshot-agent-map-2.png" alt="Agent map: 3 agents building the waste calendars of nine cities">
+          <img class="shot shot-kb" src="../images/screenshot-agent-map.png" alt="Agent map: 63 agents under one build">
+          <img class="shot shot-waste" src="../images/screenshot-agent-map-2.png" alt="Agent map: 3 agents building the waste calendars of nine cities">
         </div>
         <div>
           <h2>How the knowledge base was built</h2>
