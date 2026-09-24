@@ -18,8 +18,10 @@ from swisstip.mcp_evals.runner import run
 class EvaluationFrameworkTests(unittest.TestCase):
     def test_loads_yaml_cases_and_config(self):
         root = Path(__file__).parents[1] / "evals"
-        self.assertEqual(load_cases(root / "cases" / "benchmark.yaml")[0].case_id, "example")
-        self.assertEqual(load_config(root / "config.yaml").configs["codex-gpt"].model, "gpt-5.5")
+        self.assertEqual(load_cases(root / "cases" / "residence-permits.yaml")[0].case_id, "UAT-2e")
+        config = load_config(root / "config.yaml")
+        self.assertEqual(config.configs["codex-gpt-5-5"].model, "gpt-5.5")
+        self.assertEqual(len(config.case_files), 4)
 
     def test_command_adapter_normalizes_generic_json_output(self):
         config = HarnessConfig(name="test", harness="test", model="test",
@@ -30,7 +32,7 @@ class EvaluationFrameworkTests(unittest.TestCase):
         self.assertEqual(result.tool_calls[0].name, "search")
 
     def test_command_adapter_normalizes_codex_jsonl_output(self):
-        config = load_config(Path(__file__).parents[1] / "evals" / "config.yaml").configs["codex-gpt"]
+        config = load_config(Path(__file__).parents[1] / "evals" / "config.yaml").configs["codex-gpt-5-5"]
         script = ("import json, sys\n"
                   "print(json.dumps({'type': 'item.completed', 'item': {'type': 'agent_message', 'text': 'draft'}}))\n"
                   "print(json.dumps({'type': 'item.completed', 'item': {'type': 'mcp_tool_call', 'tool': 'resolve', "

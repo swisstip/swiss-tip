@@ -1,12 +1,17 @@
 configs:
-  opencode-apertus:
+  opencode-gpt-4-1:
     harness: opencode
-    model: gpt-5
+    model: openai/gpt-4
     command: [opencode, run, "--format", "json", "--model", "{model}", "{question}"]
-  codex-gpt:
+  codex-gpt-5-5:
     harness: codex
     model: gpt-5.5
     command: [codex, --config, web_search="disabled", exec, --json, --model, "{model}", "{question}"]
 benchmark:
-  trials: 1
+  trials: 3
   concurrency: 1
+  case_files:
+    - residence-permits.yaml
+    - work-and-insurance.yaml
+    - zurich-services.yaml
+    - cross-jurisdiction.yaml

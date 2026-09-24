@@ -1,0 +1,104 @@
+cases:
+  - case_id: UAT-18
+    category: zurich-services
+    difficulty: simple
+    question: "I need to go to the Migration Office of the Canton of Zurich in person. What is the address and when is it open?"
+    expected_answer: >-
+      Give Berninastrasse 45, Postfach, 8090 Zurich; counter-hall hours
+      Monday to Friday 08.00 to 16.30; and the telephone hours and number
+      +41 43 259 88 00. Do not invent directions or an email address.
+    expected_claims:
+      - The Migration Office is at Berninastrasse 45, Postfach, 8090 Zurich.
+      - The counter hall is open Monday to Friday from 08.00 to 16.30.
+      - The telephone number is +41 43 259 88 00.
+      - Telephone hours include a lunch break.
+    required_citations:
+      - https://www.zh.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The City of Zurich Population Office is the cantonal Migration Office.
+      - Directions, an email address, or other contact detail not served.
+
+  - case_id: UAT-19
+    category: zurich-services
+    difficulty: simple
+    question: "What is the e-mail address of the Migration Office of the Canton of Zurich?"
+    expected_answer: >-
+      Report the office's own statement that it has no email address. Point to
+      the online contact form and, if useful, the published telephone channel.
+      Do not present this as information merely missing from the search.
+    expected_claims:
+      - The Migration Office states that it has no email address.
+      - Written requests go through the online contact form.
+    required_citations:
+      - https://www.zh.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - An invented email address for the Migration Office.
+      - No information was found about whether the office has an email address.
+
+  - case_id: UAT-24
+    category: zurich-services
+    difficulty: standard
+    question: "I'm moving to the city of Zurich next month with my two-year-old dog. What do I have to do for the dog?"
+    expected_answer: >-
+      Explain the ten-day City of Zurich registration and AMICUS requirement,
+      liability insurance of at least CHF 1 million, and the annual dog tax
+      without inventing its amount. Since 1 June 2025 the cantonal training
+      duty also applies to people moving in: theory within two months and a
+      practical course of at least six lessons, subject to the published
+      exemptions.
+    expected_claims:
+      - The dog must be registered within ten days of moving in and in AMICUS.
+      - Liability insurance of at least CHF 1 million is required.
+      - The training duty also applies to people moving into the canton with a dog.
+      - The practical course has at least six lessons.
+    required_citations:
+      - https://www.zh.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - No dog course or training is required.
+      - A dog-tax amount not served by the release.
+
+  - case_id: UAT-27
+    category: zurich-services
+    difficulty: standard
+    question: "I want to drop off an old fridge at the Werdhölzli recycling centre in Zurich on Saturday afternoon and pay in cash. Is that possible?"
+    expected_answer: >-
+      Say no to both parts: Werdhölzli closes at 14.00 on Saturday and takes
+      cards and TWINT, not cash. The fridge is an electrical appliance and is
+      free. Mention Looacher only as the published alternative that accepts
+      cash.
+    expected_claims:
+      - Werdhölzli is open on Saturday only from 07.30 to 14.00.
+      - Werdhölzli does not accept cash.
+      - Electrical appliances are free.
+      - Looacher accepts cash.
+    required_citations:
+      - https://www.stadt-zuerich.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - Werdhölzli is open Saturday afternoon after 14.00.
+      - Werdhölzli accepts cash.
+      - A disposal fee for the fridge not served by the release.
+
+  - case_id: UAT-32
+    category: zurich-services
+    difficulty: simple
+    question: "I don't own a TV or a radio. Do I still have to pay the Serafe invoice, and how much is it?"
+    expected_answer: >-
+      Explain that the household fee is charged regardless of whether the
+      household owns a TV or radio. For a private household the served amount
+      is CHF 335 per year, with the published quarterly amount where relevant;
+      list the served exemptions and do not add having no device as one.
+    expected_claims:
+      - The household fee is charged regardless of devices.
+      - The private-household fee is CHF 335 per year.
+      - Having no TV or radio is not itself an exemption.
+      - The served exemptions include households receiving federal supplementary benefits.
+    required_citations:
+      - https://www.serafe.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - No TV or radio means no household fee is due.
+      - A different fee amount not stated by the served facts.

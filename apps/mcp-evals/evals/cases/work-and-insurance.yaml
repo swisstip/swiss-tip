@@ -1,0 +1,111 @@
+cases:
+  - case_id: UAT-10
+    category: work-and-insurance
+    difficulty: standard
+    question: "I'm a Spanish citizen with a B permit working in Zurich, gross salary CHF 135,000. Tax is deducted at source. Do I have to file a tax return?"
+    expected_answer: >-
+      Say yes: from CHF 120,000 gross employment income, the subsequent
+      ordinary assessment is mandatory. It covers the whole income and assets;
+      tax already withheld at source is credited. Do not provide a tariff, rate,
+      or tax amount.
+    expected_claims:
+      - The ordinary assessment is mandatory from CHF 120,000 gross employment income.
+      - The assessment covers the whole income and assets.
+      - Tax already paid at source is credited against the ordinary assessment.
+      - The assessment is not optional for this user.
+    required_citations:
+      - https://www.zh.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - Tax at source is final for this user.
+      - A tax rate, tariff code, or tax amount not served by the release.
+
+  - case_id: UAT-11
+    category: work-and-insurance
+    difficulty: standard
+    question: "Ich habe eine B-Bewilligung, arbeite in Zürich und heirate nächsten Monat einen Schweizer. Werde ich weiterhin an der Quelle besteuert?"
+    expected_answer: >-
+      Answer in German that tax-at-source liability ends with marriage to a
+      Swiss citizen. From the following month the ordinary assessment applies,
+      a tax return is required, and source tax already paid in the year is
+      credited in the final bill.
+    expected_claims:
+      - Marriage to a Swiss citizen ends tax-at-source liability.
+      - The ordinary assessment and tax return begin from the following month.
+      - Tax already withheld at source is credited in the final tax bill.
+    required_citations:
+      - https://www.zh.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - Tax at source continues until the user receives a C permit.
+      - The marriage automatically reduces or increases the tax amount.
+
+  - case_id: UAT-12
+    category: work-and-insurance
+    difficulty: standard
+    question: "I moved from California to Zurich 14 months ago and still drive on my US licence. Am I still allowed to, and can I still exchange it?"
+    expected_answer: >-
+      Explain that driving on the foreign licence is no longer permitted after
+      twelve months until it is exchanged. A US licence can still be exchanged;
+      for category B it needs no control drive or theory test. Mention the
+      published documents and that a later exchange may attract a fine, without
+      inventing the fine amount.
+    expected_claims:
+      - Driving on the foreign licence is not permitted after twelve months until exchange.
+      - A US licence can still be exchanged after twelve months.
+      - A US category B licence needs no control drive or theory test.
+      - A later exchange may attract a fine, but no amount is published.
+    required_citations:
+      - https://www.zh.ch
+      - https://www.ch.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The US licence remains valid for driving indefinitely.
+      - A specific fine amount not served by the release.
+
+  - case_id: UAT-14
+    category: work-and-insurance
+    difficulty: standard
+    question: "I arrived in Zurich from Canada two months ago on a B permit and haven't taken out health insurance yet. Is it too late, and from when will I pay?"
+    expected_answer: >-
+      Say it is not too late because the three-month period has not ended. If
+      the user joins within three months, cover and premiums run from the date
+      of residence. Explain that late joining starts cover at the joining date,
+      may incur a surcharge, and can lead the canton to assign an insurer.
+      Recommend no insurer and state no premium amount.
+    expected_claims:
+      - Residents must take out insurance within three months.
+      - Timely joining makes cover and premiums retroactive to the residence date.
+      - Late joining starts cover at the joining date and may incur a surcharge.
+      - The canton may assign an insurer when the person does not insure in time.
+    required_citations:
+      - https://www.bag.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - Premiums start only when the policy is signed.
+      - The first year of health insurance is optional.
+      - A particular insurer is the cheapest or recommended.
+
+  - case_id: UAT-15
+    category: work-and-insurance
+    difficulty: standard
+    question: "I moved from Italy to Zurich in May on a modest salary. Can I get help with my health insurance premiums, and from when?"
+    expected_answer: >-
+      Explain that premium reduction is a cantonal matter and, in Zurich, is
+      paid only after applying to the SVA Zurich. After arrival from abroad the
+      entitlement can start from the month after arrival and registration is
+      possible at once. Name the calculator if useful, but do not calculate an
+      amount or invent an income limit.
+    expected_claims:
+      - The canton decides entitlement to premium reduction.
+      - Zurich pays the reduction only after an application.
+      - The SVA Zurich administers the reduction.
+      - After arrival from abroad entitlement can start from the following month.
+    required_citations:
+      - https://www.svazurich.ch
+      - https://www.bag.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The premium reduction is automatic.
+      - The reduction starts only the following year after arrival from abroad.
+      - A specific income limit or amount not served by the release.

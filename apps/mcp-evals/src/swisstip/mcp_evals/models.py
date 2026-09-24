@@ -73,6 +73,7 @@ class RunConfig(Strict):
     configs: dict[str, HarnessConfig]
     trials: int = Field(default=1, ge=1)
     concurrency: int = Field(default=1, ge=1)
+    case_files: list[str] = Field(default_factory=list)
 
 
 def artifact_path(root: Path, case: EvalCase, configuration: str) -> Path:

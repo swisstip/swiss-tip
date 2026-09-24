@@ -1,0 +1,121 @@
+cases:
+  - case_id: UAT-35
+    category: cross-jurisdiction
+    difficulty: hard
+    question: "I'm a German citizen and have signed an eight-month employment contract with a company in Bern, where I will also live. Which permit will I get, and where do I apply for it?"
+    expected_answer: >-
+      Explain from federal facts that a contract longer than three months and
+      shorter than one year gives a short-stay permit L for the contract
+      duration. Registration is with the municipality of residence within 14
+      days and before work starts; permits are issued by cantonal migration
+      offices. Give Bern's published directory entry if useful, but say no
+      Bern procedure, fee, form, or opening hours are published and do not use
+      Zurich details.
+    expected_claims:
+      - A contract of more than three months and less than one year gives a permit for its duration.
+      - The permit is the short-stay permit L.
+      - Registration is with the municipality within 14 days and before work starts.
+      - Permits are issued by cantonal migration offices.
+      - The Bern migration office directory entry is published without opening hours.
+    required_citations:
+      - https://www.sem.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The Zurich Migration Office or Zurich's working-time condition applies in Bern.
+      - A Bern fee, form, or opening hours not published by the release.
+
+  - case_id: UAT-36
+    category: cross-jurisdiction
+    difficulty: hard
+    question: "I'm a French citizen. I have rented a flat in Baden in the Canton of Aargau and start a permanent job in Zurich next month. Where do I have to register, and which office issues my residence permit?"
+    expected_answer: >-
+      Explain that registration follows the place of residence, not the place
+      of work: register in Baden within 14 days of arrival and before starting
+      work. An open-ended contract leads to a B permit, issued by the cantonal
+      migration office. Name the Aargau directory entry if useful, ask for the
+      arrival date, and say no Aargau or Baden procedure is published.
+    expected_claims:
+      - Registration follows the municipality of residence, Baden, not the workplace in Zurich.
+      - Registration is due within 14 days and before starting work.
+      - An open-ended contract leads to a B permit.
+      - The Aargau migration office is the relevant cantonal authority.
+    required_citations:
+      - https://www.sem.admin.ch
+      - https://www.fedlex.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The Zurich Migration Office or City of Zurich office handles this resident.
+      - The City of Zurich appointment rule applies in Baden.
+      - A computed deadline before the arrival date is supplied.
+
+  - case_id: UAT-37
+    category: cross-jurisdiction
+    difficulty: hard
+    question: "Ich bin vor zehn Monaten aus Brasilien nach St. Gallen gezogen und fahre noch mit meinem brasilianischen Führerausweis. Wie lange darf ich das noch, und was muss ich für den Umtausch tun?"
+    expected_answer: >-
+      Answer in German from the federal facts: the foreign licence is usable
+      for twelve months, so two months remain; after that a Swiss licence is
+      needed and a later exchange may incur a fine. The original licence and
+      an eye test are required, and a licence from outside the EU/EEA requires
+      a control drive. Say that no St. Gallen procedure, office, form, or fee
+      is published and carry over nothing from Zurich.
+    expected_claims:
+      - A foreign licence may be used for twelve months after residence begins.
+      - A later exchange may incur a fine.
+      - The original licence and an eye test are required.
+      - A licence from outside the EU/EEA requires a control drive.
+      - The release publishes no St. Gallen procedure or office.
+    required_citations:
+      - https://www.ch.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The Zurich Road Traffic Office or Zurich control-drive procedure applies in St. Gallen.
+      - A specific exchange fee not served by the release.
+
+  - case_id: UAT-38
+    category: cross-jurisdiction
+    difficulty: hard
+    question: "I'm a Portuguese citizen with a C permit. I have lived in Switzerland for twelve years, the last three of them in the city of Bern. Can I apply for Swiss citizenship now, how long must I have lived in Bern, and what does it cost?"
+    expected_answer: >-
+      State the federal conditions: a C permit, ten years in Switzerland, and
+      three of the last five years, plus the published integration conditions.
+      Cantonal and municipal law requires two to five years, but the Bern
+      figure is not published here. The federal adult fee is CHF 100; Bern's
+      cantonal and municipal fees and filing office are not published. Do not
+      use Zurich's two-year figure, CHF 500 fee, or Gemeindeamt.
+    expected_claims:
+      - Ordinary naturalisation requires a C permit and ten years of residence.
+      - Three of the ten years must fall in the last five years.
+      - Cantonal law sets a two-to-five-year minimum in the canton and municipality.
+      - The federal adult fee is CHF 100 and cantonal and municipal fees are added.
+      - Bern's local figure and authority are not published by the release.
+    required_citations:
+      - https://www.sem.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - Bern requires exactly two years based on Zurich's rule.
+      - The City or Canton of Zurich fee or filing office applies in Bern.
+
+  - case_id: UAT-39
+    category: cross-jurisdiction
+    difficulty: hard
+    question: "I moved from Austria to Lucerne in June and earn a modest salary. Can I get a reduction of my health insurance premiums, and where do I apply?"
+    expected_answer: >-
+      Explain the federal frame: cantons reduce premiums for insured people in
+      modest economic circumstances, and each canton decides entitlement,
+      amount, procedure, and payment. Some use applications and some do not;
+      applications go to the competent cantonal authority. State that this
+      release publishes no Lucerne procedure, office, deadline, income limit,
+      or amount, and do not substitute the Zurich SVA.
+    expected_claims:
+      - Cantons reduce premiums for insured people in modest economic circumstances.
+      - The canton decides entitlement, amount, procedure, and payment.
+      - Application requirements vary by canton.
+      - The release publishes no Lucerne-specific procedure or office.
+    required_citations:
+      - https://www.bag.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The SVA Zurich handles the user's Lucerne application.
+      - Zurich's month-after-arrival rule applies in Lucerne.
+      - A Lucerne income limit or premium amount not served by the release.

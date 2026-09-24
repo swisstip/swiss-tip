@@ -1,0 +1,115 @@
+cases:
+  - case_id: UAT-2e
+    category: residence-permits
+    difficulty: standard
+    question: "Ich habe die indische Staatsbürgerschaft. Darf ich in der Schweiz arbeiten? Welche Voraussetzungen gelten für eine Arbeitsbewilligung und eine Aufenthaltsbewilligung?"
+    expected_answer: >-
+      In German, explain that admission is limited to well-qualified people,
+      the employer must show that no suitable person is available in
+      Switzerland or the EU/EFTA, and the employer applies for the permit
+      before work starts. The cantonal migration office issues it, and a B
+      permit applies to stays over one year. Do not apply EU/EFTA rules or
+      invent quotas, fees, or an unpublished procedure.
+    expected_claims:
+      - Admission is limited to well-qualified third-country nationals.
+      - The employer must show that no suitable person is available in Switzerland or the EU/EFTA.
+      - A work permit is required regardless of the duration of the stay.
+      - The employer applies for the permit through the cantonal migration authority.
+      - A B permit is used for employment stays over one year.
+    required_citations:
+      - https://www.sem.admin.ch
+      - https://www.fedlex.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The EU/EFTA 14-day registration rule applies to this Indian citizen.
+      - Annual quotas or a specific fee not stated by the served facts.
+
+  - case_id: UAT-3
+    category: residence-permits
+    difficulty: standard
+    question: "I have had a Swiss B permit since March 2022 and work in Zurich. My son is 13 and still lives with my mother in Pristina. Can I bring him to live with me now?"
+    expected_answer: >-
+      Explain that children over twelve must normally be brought within twelve
+      months of the permit grant. A claim made now is late and is approved
+      only for important family reasons. State the B-permit reunification
+      conditions as conditions rather than a promise of approval, and say the
+      release does not assess the individual reasons.
+    expected_claims:
+      - A child over twelve must normally be reunited within twelve months.
+      - The deadline runs from the grant of the permit.
+      - Late reunification requires important family reasons.
+      - The B-permit conditions do not guarantee approval.
+    required_citations:
+      - https://www.fedlex.admin.ch
+    expected_tools: [resolve]
+    must_not_claim:
+      - The child can definitely be brought now.
+      - The three-month or five-year deadline applies to this 13-year-old child.
+
+  - case_id: UAT-4
+    category: residence-permits
+    difficulty: standard
+    question: "I am a Brazilian citizen, married to a Swiss woman for two years, and living in Zurich on a B permit. We are separating. Will I lose my permit because we were not married for three years?"
+    expected_answer: >-
+      Explain both independent routes under the separation rule: a union of at
+      least three years with integration, or important personal reasons that
+      require continued residence. Do not predict automatic loss; the
+      cantonal authority decides individually and the release does not assess
+      the user's reasons or evidence.
+    expected_claims:
+      - One route requires a union of at least three years and integration.
+      - A separate route is based on important personal reasons.
+      - The important-personal-reasons route does not depend on three years of marriage.
+      - The cantonal authority decides the individual case.
+    required_citations:
+      - https://www.fedlex.admin.ch
+    expected_tools: [resolve]
+    must_not_claim:
+      - The permit will automatically be revoked.
+      - Three years of marriage is the only route to continued residence.
+
+  - case_id: UAT-5
+    category: residence-permits
+    difficulty: hard
+    question: "I am an Indian citizen. I have lived in Switzerland for ten years: three years on an L permit and then seven years on a B permit. Can I apply for a C permit now?"
+    expected_answer: >-
+      State the ordinary conditions: ten years on L or B permits, the last
+      five years continuously on a B permit, integration, and no revocation
+      grounds. The user's stated seven continuous B years satisfy the time
+      conditions, but the authority still assesses integration and other
+      conditions. Explain that the served five-year routes rest on named
+      settlement agreements and do not apply to India based on the served
+      list.
+    expected_claims:
+      - The ordinary route requires at least ten years on L or B permits.
+      - The last five years must be continuous on a B permit.
+      - Integration and absence of revocation grounds remain conditions.
+      - The served five-year route is based on settlement agreements and does not name India.
+    required_citations:
+      - https://www.fedlex.admin.ch
+      - https://www.sem.admin.ch
+    expected_tools: [resolve]
+    must_not_claim:
+      - Five years alone automatically gives this Indian citizen a C permit.
+      - The authority has already approved the individual application.
+
+  - case_id: UAT-6
+    category: residence-permits
+    difficulty: standard
+    question: "I have a B permit and just lost my job in Zurich. I may have to apply for social assistance for a few months. Will my permit be revoked?"
+    expected_answer: >-
+      Explain that social assistance can have immigration consequences but does
+      not cause revocation automatically. The cantonal migration authority
+      decides individually and proportionately, and the release does not
+      decide this person's case or publish a threshold or duration.
+    expected_claims:
+      - Social assistance does not automatically revoke the permit.
+      - Immigration consequences are possible.
+      - The cantonal authority decides individually and proportionately.
+      - The release does not publish a threshold or duration that decides the case.
+    required_citations:
+      - https://www.sem.admin.ch
+    expected_tools: [resolve]
+    must_not_claim:
+      - Receiving social assistance automatically revokes the permit.
+      - A specific amount or duration triggers revocation.

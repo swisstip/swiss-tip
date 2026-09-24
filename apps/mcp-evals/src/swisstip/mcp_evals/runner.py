@@ -16,7 +16,12 @@ from .persistence import save_case, save_score
 def run(config_path: Path, cases_path: Path, selected_configs: list[str], case_ids: list[str], category: str | None,
     difficulty: str | None, trials: int | None, results_dir: Path, judge: bool = False) -> Path:
     config = load_config(config_path)
-    cases = [case for case in load_cases(cases_path) if (not category or case.category == category)
+    if cases_path.is_file():
+        loaded_cases = load_cases(cases_path)
+    else:
+        case_files = config.case_files or ["benchmark.yaml"]
+        loaded_cases = [case for case_file in case_files for case in load_cases(cases_path / case_file)]
+    cases = [case for case in loaded_cases if (not category or case.category == category)
              and (not difficulty or case.difficulty == difficulty)]
     if case_ids:
         cases = [case for case in cases if case.case_id in case_ids]
@@ -93,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         import subprocess
         return subprocess.run(["deepeval", "inspect"], check=False).returncode
     selected_configs = [] if args.configuration == "all" else [args.configuration]
-    cases_path = args.cases if args.cases.is_file() else args.cases / "benchmark.yaml"
+    cases_path = args.cases
     try:
         run_dir = run(args.config, cases_path, selected_configs, args.case_ids, args.category,
                       args.difficulty, args.trials, args.results, args.judge)
