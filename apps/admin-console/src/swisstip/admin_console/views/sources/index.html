@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Sources - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Sources and coverage</h1>
+<nav class="tabs" aria-label="Source views">
+  <a href="/packs/{{ pack.pack }}/sources?tab=catalogue" class="{{ 'current' if tab != 'matrix' }}">Catalogue table</a>
+  <a href="/packs/{{ pack.pack }}/sources?tab=matrix" class="{{ 'current' if tab == 'matrix' }}">Coverage matrix</a>
+</nav>
+
+{% if pack.catalogue.error %}<p class="alert">sources.json does not validate: {{ pack.catalogue.error }}</p>{% endif %}
+
+{% if tab == 'matrix' %}
+  <h2>Coverage matrix</h2>
+  <p class="small muted">The highest stage each jurisdiction and language reached, with the count behind it.
+  A cell opens the catalogue table filtered to it.</p>
+  <div class="scroll">
+  <table class="matrix">
+    <thead><tr><th>Jurisdiction</th>{% for language in matrix.languages %}<th>{{ language }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for row in matrix.rows %}
+      <tr>
+        <th scope="row">{{ row.jurisdiction }}</th>
+        {% for cell in row.cells %}
+          <td title="{% for stage, count in cell.counts.items() %}{{ stage }} {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}">
+            {% if cell.stage %}
+              <a href="/packs/{{ pack.pack }}/sources?jurisdiction={{ cell.jurisdiction }}&language={{ cell.language }}">
+                {{ cell.stage }}<br>{{ cell.count }}</a>
+            {% else %}<span class="muted">-</span>{% endif %}
+          </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% else %}
+  <form method="get" class="filters">
+    <input type="hidden" name="tab" value="catalogue">
+    <div><label for="f-id">Source</label><input type="text" id="f-id" name="source_id" value="{{ filters.source_id }}"></div>
+    <div><label for="f-level">Authority</label>
+      <select id="f-level" name="authority_level"><option value=""></option>
+        {% for level in levels %}<option {{ 'selected' if filters.authority_level == level }}>{{ level }}</option>{% endfor %}
+      </select></div>
+    <div><label for="f-jur">Jurisdiction</label>
+      <select id="f-jur" name="jurisdiction"><option value=""></option>
+        {% for code in jurisdictions %}<option {{ 'selected' if filters.jurisdiction == code }}>{{ code }}</option>{% endfor %}
+      </select></div>
+    <div><label for="f-lang">Language</label>
+      <select id="f-lang" name="language"><option value=""></option>
+        {% for code in languages %}<option {{ 'selected' if filters.language == code }}>{{ code }}</option>{% endfor %}
+      </select></div>
+    <div><label for="f-prio">Priority</label><input type="text" id="f-prio" name="priority" value="{{ filters.priority }}"></div>
+    <div><label for="f-scan">Scan status</label><input type="text" id="f-scan" name="scan_status" value="{{ filters.scan_status }}"></div>
+    <div><label for="f-gap">Gap</label><input type="text" id="f-gap" name="gap" value="{{ filters.gap }}"></div>
+    <div><label for="f-rec">Record</label><input type="text" id="f-rec" name="record_status_filter" value="{{ filters.record_status }}"></div>
+    <button type="submit">Filter</button>
+    <a class="button secondary" href="/packs/{{ pack.pack }}/sources">Clear</a>
+    {% if not read_only %}<a class="button" href="/packs/{{ pack.pack }}/sources/new">Add a source</a>{% endif %}
+  </form>
+
+  {{ m.pager(listing, '/packs/' ~ pack.pack ~ '/sources?tab=catalogue') }}
+  <div class="scroll">
+  <table>
+    <thead><tr>
+      <th>Source</th><th>Title</th><th>Authority</th><th>Jurisdiction</th><th>Lang</th><th>Prio</th>
+      <th>Scan</th><th>Canonical authority</th><th>Acquisition review</th><th>Record</th><th class="num">Facts</th>
+    </tr></thead>
+    <tbody>
+    {% for row in listing.rows %}
+      <tr>
+        <td>{{ m.source_link(pack.pack, row.source_id) }}</td>
+        <td>{{ row.title }}<br><a class="small" href="{{ row.start_url }}" rel="noreferrer">{{ row.start_url | shorten(70) }}</a></td>
+        <td>{{ row.authority_level }}</td>
+        <td>{{ row.jurisdiction }}</td>
+        <td>{{ row.language }}</td>
+        <td>{{ row.priority }}</td>
+        <td>{{ row.scan_status }}</td>
+        <td class="small">{{ row.canonical_authority }}</td>
+        <td>
+          {% if row.disposition == 'approved' %}<span class="badge ok">human-reviewed - approved</span>
+            {% if row.review %}<div class="small muted">{{ row.review.reviewed_by }}, {{ row.review.reviewed_on }}</div>{% endif %}
+          {% elif row.gap in (none, 'none') %}<span class="badge ok">none</span>
+          {% else %}<span class="badge {{ 'warn' if row.retriable else 'bad' }}">{{ row.gap }}</span>
+            <span class="small muted">{{ 'retriable' if row.retriable else 'not retriable' }}</span>
+            <div class="small">{{ row.action }}</div>{% endif %}
+        </td>
+        <td>
+          {% if row.disposition == 'approved' or row.text_review %}<span class="badge">accepted scope</span>
+          {% elif row.record_status == 'error_page' %}<span class="badge bad">error_page</span>
+          {% elif row.record_status == 'no record' %}<span class="badge warn">no record</span>
+          {% else %}<span class="badge">{{ row.record_status }}</span>{% endif %}
+          {% if row.document_id %}<br>{{ m.document_link(pack.pack, row.document_id, row.document_id | shorten(14)) }}{% endif %}
+          <div class="small muted">{{ row.records }} record(s)</div>
+        </td>
+        <td class="num">{{ row.facts }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="11" class="muted">No source matches.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Discovered pages of the run</h2>
+  <p class="small muted">Pages a link-following crawl found, grouped by attribution kind and host, as the acquisition report
+  renders them. Promoting a page opens the source form prefilled from it, so a discovered page becomes a catalogue
+  entry with a documented discovery reference.</p>
+  {% for group in discovered %}
+    <details class="card">
+      <summary><strong>{{ group.host }}</strong> - {{ group.kind }} - {{ group.pages }} pages,
+        {{ group.saved }} saved{% if group.approved %}, {{ group.approved }} accepted for scope{% endif %}{% if group.gaps %}, outstanding:
+        {% for gap, count in group.gaps.items() %}{{ gap }} {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</summary>
+      <table>
+        <thead><tr><th>Page</th><th>Status</th><th>Acquisition review</th>{% if not read_only %}<th>Action</th>{% endif %}</tr></thead>
+        <tbody>
+        {% for target in group.targets %}
+          <tr>
+            <td>{{ target.label | shorten(70) }}<br><span class="small mono">{{ target.url | shorten(90) }}</span></td>
+            <td>{{ target.status }}</td>
+            <td>{% if target.disposition == 'approved' %}<span class="badge ok">human-reviewed - approved</span>
+              {% else %}{{ target.gap }}{% endif %}</td>
+            {% if not read_only %}
+            <td><a class="button secondary small"
+                   href="/packs/{{ pack.pack }}/sources/new?url={{ target.url | urlencode }}&label={{ target.label | urlencode }}">promote to catalogue</a></td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% if group.pages > group.targets | length %}<p class="small muted">The first {{ group.targets | length }} of
+      {{ group.pages }} pages are listed; the rest are in gap-report.json.</p>{% endif %}
+    </details>
+  {% else %}
+    <p class="muted">No discovered pages in the run, or no gap report yet.</p>
+  {% endfor %}
+{% endif %}
+{% endblock %}

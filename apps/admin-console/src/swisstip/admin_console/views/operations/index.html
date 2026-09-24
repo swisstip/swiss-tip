@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Operations - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Operations</h1>
+<p class="small muted">Over stdio the server runs inside the client and its stderr is not collected, so the traffic
+panels stay empty until the streamable HTTP transport writes a log file. Point the console at one with
+<code>--server-log</code> or import a file below. Calls made in the sandbox are counted here too.</p>
+
+<h2>Health of the release on disk</h2>
+{% if not health.available %}
+  <p class="muted">No release built.</p>
+{% else %}
+<div class="card">
+  <div class="row"><span class="label">Release</span><span class="mono">{{ health.release_id }}</span></div>
+  <div class="row"><span class="label">Counts</span>
+    <span>{{ health.topics }} topics, {{ health.concepts }} concepts, {{ health.facts }} facts,
+      {{ health.evidence }} evidence, {{ health.documents }} documents</span></div>
+  <div class="row"><span class="label">Scope</span>
+    <span>{{ health.jurisdictions | length }} jurisdictions, languages {{ health.languages | join(', ') }}</span></div>
+  <div class="row"><span class="label">Freshness</span>
+    <span>snapshot {{ health.snapshot_date }}, stale from {{ health.stale_from }},
+      <span class="badge {{ 'bad' if health.days_to_stale < 14 else 'ok' }}">{{ health.days_to_stale }} days</span></span></div>
+  <div class="row"><span class="label">Review</span>{{ m.stacked(health.review_statuses, health.facts) }}</div>
+  {% if mismatch %}
+    <div class="row"><span class="label">Mismatch</span>
+      <span class="badge bad">the log reports {{ mismatch | join(', ') }}; a running server serves an older
+        release than the one on disk</span></div>
+  {% endif %}
+</div>
+{% endif %}
+
+<h2>Traffic ({{ calls }} call(s))</h2>
+<form method="get" class="filters">
+  <div><label for="by">bucket</label>
+    <select id="by" name="by" onchange="this.form.submit()">
+      <option value="hour" {{ 'selected' if by == 'hour' }}>hour</option>
+      <option value="day" {{ 'selected' if by == 'day' }}>day</option></select></div>
+  <noscript><button type="submit">Apply</button></noscript>
+</form>
+<table>
+  <thead><tr><th>Tool</th><th class="num">Calls</th><th>Status mix</th><th class="num">ms p50/p95/p99</th>
+    <th class="num">bytes p50/p95/p99</th><th class="num">Tool errors</th></tr></thead>
+  <tbody>
+  {% for row in summary.per_tool %}
+    <tr>
+      <td class="mono">{{ row.tool }}</td>
+      <td class="num">{{ row.calls }}</td>
+      <td class="small">{% for status, count in row.statuses.items() %}{{ status }} {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      <td class="num">{{ row.ms.p50 }}/{{ row.ms.p95 }}/{{ row.ms.p99 }}</td>
+      <td class="num">{{ row.bytes.p50 }}/{{ row.bytes.p95 }}/{{ row.bytes.p99 }}</td>
+      <td class="num">{{ row.errors }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">No call recorded yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if summary.traffic %}
+<table>
+  <thead><tr><th>{{ by }}</th><th class="num">Calls</th><th>Per tool</th></tr></thead>
+  <tbody>{% for row in summary.traffic %}
+    <tr><td class="mono">{{ row.bucket }}</td><td class="num">{{ row.total }}</td>
+        <td class="small">{% for tool, count in row.counts.items() %}{{ tool }} {{ count }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% endif %}
+{% if summary.error_codes %}<p class="small">Tool errors by code: {{ summary.error_codes }}</p>{% endif %}
+
+<h2>Gap feed</h2>
+<p class="small muted">The curation backlog as callers report it. It needs the server to log the gap fields:
+one more key on the line, <code>gap=</code> when the status is not SUPPORTED and <code>hits=</code> on a search.
+Request payloads are never logged; a query only when it produced no hit, truncated to 80 characters.</p>
+<div class="cards">
+  <section class="card">
+    <h3 style="margin-top:0">Most frequent OUT_OF_COVERAGE gaps</h3>
+    <table><thead><tr><th>Gap</th><th class="num">Calls</th><th>Action</th></tr></thead>
+      <tbody>{% for name, count in summary.gap_feed.out_of_coverage %}
+        <tr><td class="mono">{{ name }}</td><td class="num">{{ count }}</td>
+            <td><a href="/packs/{{ pack.pack }}/workbench">create a concept</a></td></tr>
+      {% else %}<tr><td colspan="3" class="muted">None recorded.</td></tr>{% endfor %}</tbody></table>
+  </section>
+  <section class="card">
+    <h3 style="margin-top:0">Most frequent NEEDS_CONTEXT fields</h3>
+    <table><thead><tr><th>Field</th><th class="num">Calls</th></tr></thead>
+      <tbody>{% for name, count in summary.gap_feed.needs_context %}
+        <tr><td class="mono">{{ name }}</td><td class="num">{{ count }}</td></tr>
+      {% else %}<tr><td colspan="2" class="muted">None recorded.</td></tr>{% endfor %}</tbody></table>
+  </section>
+  <section class="card">
+    <h3 style="margin-top:0">Searches without a hit</h3>
+    <table><thead><tr><th>Query</th><th class="num">Calls</th><th>Action</th></tr></thead>
+      <tbody>{% for query, count in summary.gap_feed.searches_without_hit %}
+        <tr><td class="small">{{ query }}</td><td class="num">{{ count }}</td>
+            <td><a href="/packs/{{ pack.pack }}/workbench">add an alias</a></td></tr>
+      {% else %}<tr><td colspan="3" class="muted">None recorded.</td></tr>{% endfor %}</tbody></table>
+  </section>
+</div>
+
+<h2>Freshness of the cited documents</h2>
+<table>
+  <thead><tr><th>Accessed on</th><th class="num">Documents</th><th class="num">Days old</th></tr></thead>
+  <tbody>{% for row in freshness %}
+    <tr><td class="mono">{{ row.accessed_on }}</td><td class="num">{{ row.documents }}</td>
+        <td class="num">{{ row.age }}</td></tr>
+  {% else %}<tr><td colspan="3" class="muted">No release.</td></tr>{% endfor %}</tbody>
+</table>
+
+{% if not read_only %}
+<div class="card">
+  <h3 style="margin-top:0">Import a server log</h3>
+  <form method="post" action="/packs/{{ pack.pack }}/operations/import" class="filters">
+    <div><label for="log">log file</label>
+      <input type="text" id="log" name="path" value="{{ server_log or '' }}" size="60"></div>
+    <button type="submit">Parse into calls.jsonl</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0">Refresh the pack</h3>
+  <p class="small">Acquire with the download flag, then extract, validate-text and build with
+  <code>update_curation</code>, then the relocation review. This is the only action of this screen that makes
+  network requests.</p>
+  <form method="post" action="/packs/{{ pack.pack }}/operations/refresh" class="filters">
+    <div><label for="confirm">type the pack name to confirm</label>
+      <input type="text" id="confirm" name="confirm_pack" placeholder="{{ pack.pack }}"></div>
+    <button type="submit" class="danger" {{ 'disabled' if job }}>Refresh</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

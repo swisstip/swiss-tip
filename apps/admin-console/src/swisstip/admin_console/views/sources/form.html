@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}{{ 'New source' if creating else source.source_id }} - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>{{ 'Add a source' if creating else 'Source ' ~ source.source_id }}</h1>
+<p class="small muted">Validation on save: a unique <code>source_id</code>, a start URL inside its own allowlist,
+a jurisdiction inside the catalogue scope and an ISO 639-1 language. The catalogue is written through the ingestion
+package's writer, so the console cannot save a catalogue the planner would refuse.</p>
+
+<form method="post" action="/packs/{{ pack.pack }}/sources">
+  <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+  <input type="hidden" name="original_id" value="{{ '' if creating else source.source_id }}">
+
+  <fieldset>
+    <legend>Identity</legend>
+    <label for="source_id">source_id <span class="hint">lower case, hyphens</span></label>
+    <input type="text" id="source_id" name="source_id" value="{{ source.source_id or '' }}" required
+           pattern="[a-z0-9]+(-[a-z0-9]+)*">
+    <label for="title">title</label>
+    <input type="text" id="title" name="title" value="{{ source.title or '' }}" required>
+    <label for="authority_level">authority_level</label>
+    <select id="authority_level" name="authority_level">
+      {% for level in levels %}<option {{ 'selected' if source.authority_level == level }}>{{ level }}</option>{% endfor %}
+    </select>
+    <label for="source_kind">source_kind</label>
+    <input type="text" id="source_kind" name="source_kind" value="{{ source.source_kind or 'official_guidance' }}">
+    <label for="priority">priority</label>
+    <select id="priority" name="priority">
+      {% for value in priorities %}<option {{ 'selected' if source.priority == value }}>{{ value }}</option>{% endfor %}
+    </select>
+    <label for="scan_status">scan_status</label>
+    <select id="scan_status" name="scan_status">
+      {% for value in scan_statuses %}<option {{ 'selected' if source.scan_status == value }}>{{ value }}</option>{% endfor %}
+    </select>
+  </fieldset>
+
+  <fieldset>
+    <legend>Definition</legend>
+    <label for="start_url">start_url <span class="hint">https, no query or fragment, inside the allowlist</span></label>
+    <input type="text" id="start_url" name="start_url" value="{{ source.start_url or '' }}" required>
+    <label for="allowed_hosts">allowed_hosts <span class="hint">one per line</span></label>
+    <textarea id="allowed_hosts" name="allowed_hosts" required>{{ source.allowed_hosts or '' }}</textarea>
+    <label for="allowed_path_prefixes">allowed_path_prefixes <span class="hint">one per line, canonical and decoded</span></label>
+    <textarea id="allowed_path_prefixes" name="allowed_path_prefixes" required>{{ source.allowed_path_prefixes or '' }}</textarea>
+    <label for="canonical_authority">canonical_authority</label>
+    <input type="text" id="canonical_authority" name="canonical_authority" value="{{ source.canonical_authority or '' }}" required>
+    <label for="jurisdiction">jurisdiction <span class="hint">CH for federal, CH-XX for a canton</span></label>
+    <select id="jurisdiction" name="jurisdiction">
+      {% for code in jurisdictions %}<option {{ 'selected' if source.jurisdiction == code }}>{{ code }}</option>{% endfor %}
+    </select>
+    <label for="language">language</label>
+    <select id="language" name="language">
+      {% for code in languages %}<option {{ 'selected' if source.language == code }}>{{ code }}</option>{% endfor %}
+    </select>
+    <label for="topic_hints">topic_hints <span class="hint">one per line; known: {{ topics | join(', ') }}</span></label>
+    <textarea id="topic_hints" name="topic_hints" required>{{ source.topic_hints or '' }}</textarea>
+  </fieldset>
+
+  <fieldset>
+    <legend>Discovery and notes</legend>
+    <label for="discovery_method">method</label>
+    <select id="discovery_method" name="discovery_method">
+      {% for method in methods %}<option {{ 'selected' if source.discovery_method == method }}>{{ method }}</option>{% endfor %}
+    </select>
+    <label for="reference_url">reference_url</label>
+    <input type="text" id="reference_url" name="reference_url" value="{{ source.reference_url or '' }}" required>
+    <label for="located_on">located_on</label>
+    <input type="date" id="located_on" name="located_on" value="{{ source.located_on or today }}" required>
+    <label for="notes">notes</label>
+    <textarea id="notes" name="notes" required>{{ source.notes or '' }}</textarea>
+  </fieldset>
+
+  <fieldset>
+    <legend>Municipality <span class="hint">required when the authority level is municipal</span></legend>
+    <label for="municipality_name">name</label>
+    <input type="text" id="municipality_name" name="municipality_name" value="{{ source.municipality_name or '' }}">
+    <label for="bfs_code">bfs_code <span class="hint">four digits</span></label>
+    <input type="text" id="bfs_code" name="bfs_code" value="{{ source.bfs_code or '' }}" pattern="[0-9]{4}">
+  </fieldset>
+
+  <button type="submit">Save source</button>
+  <a class="button secondary" href="/packs/{{ pack.pack }}/sources">Cancel</a>
+</form>
+{% endblock %}

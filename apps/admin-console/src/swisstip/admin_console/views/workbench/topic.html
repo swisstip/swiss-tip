@@ -1,0 +1,16 @@
+<h2>Topic {{ topic_id }}</h2>
+{% if topic is none %}
+  <p class="alert">No topic <code>{{ topic_id }}</code> in the curation file.</p>
+{% else %}
+<form method="post" action="/packs/{{ pack.pack }}/workbench/topics">
+  <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+  <input type="hidden" name="original_id" value="{{ topic.topic_id }}">
+  <label for="t-id">topic_id <span class="hint">renaming moves every concept of the topic</span></label>
+  <input type="text" id="t-id" name="topic_id" value="{{ topic.topic_id }}" required>
+  <label for="t-title">title</label>
+  <input type="text" id="t-title" name="title" value="{{ topic.title }}" required>
+  <label for="t-desc">description</label>
+  <textarea id="t-desc" name="description" rows="4" required>{{ topic.description }}</textarea>
+  {% if not read_only %}<button type="submit">Save the topic</button>{% endif %}
+</form>
+{% endif %}

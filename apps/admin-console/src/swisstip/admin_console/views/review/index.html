@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Review - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Review queue</h1>
+
+<div class="card">
+  <div class="row">
+    <span class="label">Facts</span>
+    <span>{{ progress.reviewed }} of {{ progress.total }} human-reviewed</span>
+    {{ m.stacked({'reviewed': progress.reviewed, 'unreviewed': progress.total - progress.reviewed}, progress.total) }}
+  </div>
+  <div class="row">
+    <span class="label">Checks</span>
+    <span>{{ progress.expected_reviewed }} of {{ progress.expected }} facts a stored check expects</span>
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Queue mode">
+  <a href="/packs/{{ pack.pack }}/review" class="{{ 'current' if mode != 'sample' }}">Queue</a>
+  <a href="/packs/{{ pack.pack }}/review?mode=sample" class="{{ 'current' if mode == 'sample' }}">Sample</a>
+</nav>
+{% if mode == 'sample' %}
+  <p class="small muted">A fixed random sample per document, seeded by the record's <code>content_sha256</code>, so
+  it is the same sample every time. A sample verdict is recorded per document in <code>checks.yaml</code>, not as a
+  review status per fact; the limitations text of the release says so.</p>
+{% endif %}
+
+<form method="get" class="filters">
+  {% if mode == 'sample' %}<input type="hidden" name="mode" value="sample">{% endif %}
+  <div><label for="q-status">review_status</label>
+    <select id="q-status" name="review_status"><option value=""></option>
+      {% for value in ['human-reviewed', 'assistant-authored-unreviewed', 'automatically-derived-unreviewed',
+                       'model-candidate-automated-review'] %}
+        <option {{ 'selected' if filters.review_status == value }}>{{ value }}</option>{% endfor %}
+    </select></div>
+  <div><label for="q-kind">provenance.kind</label>
+    <select id="q-kind" name="kind"><option value=""></option>
+      {% for value in ['curated-statement', 'source-section', 'model-candidate'] %}
+        <option {{ 'selected' if filters.kind == value }}>{{ value }}</option>{% endfor %}
+    </select></div>
+  <div><label for="q-jur">jurisdiction</label><input type="text" id="q-jur" name="jurisdiction" value="{{ filters.jurisdiction }}" size="8"></div>
+  <div><label for="q-lang">language</label><input type="text" id="q-lang" name="language" value="{{ filters.language }}" size="4"></div>
+  <div><label for="q-concept">concept</label>
+    <select id="q-concept" name="concept"><option value=""></option>
+      {% for value in concepts %}<option {{ 'selected' if filters.concept == value }}>{{ value }}</option>{% endfor %}
+    </select></div>
+  <div><label for="q-doc">document</label><input type="text" id="q-doc" name="document" value="{{ filters.document }}"></div>
+  <div><label for="q-check">cited by a check</label>
+    <select id="q-check" name="by_check"><option value=""></option>
+      <option value="yes" {{ 'selected' if filters.by_check == 'yes' }}>yes</option>
+      <option value="no" {{ 'selected' if filters.by_check == 'no' }}>no</option></select></div>
+  <div><label for="q-basis">basis</label>
+    <select id="q-basis" name="basis"><option value=""></option>
+      {% for value in basis_kinds %}<option {{ 'selected' if filters.basis == value }}>{{ value }}</option>{% endfor %}
+      <option value="none" {{ 'selected' if filters.basis == 'none' }}>none</option>
+    </select></div>
+  <button type="submit">Filter</button>
+  <a class="button secondary" href="/packs/{{ pack.pack }}/review">Clear</a>
+</form>
+
+<div class="split">
+<nav class="card" aria-label="Queue">
+  <p class="small muted">{{ listing.total }} card(s), highest priority first.</p>
+  {% set bulk = not read_only and mode != 'sample' and listing.total %}
+  {% if bulk %}
+  <form method="post" action="/packs/{{ pack.pack }}/review/bulk" id="bulk" class="bulk" data-total="{{ listing.total }}">
+    <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+    {% for key, value in filters.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+    <label class="check"><input type="checkbox" data-select-all> Select all on this page</label>
+    <label class="check"><input type="checkbox" name="scope" value="matching">
+      All {{ listing.total }} matching the filter{% if listing.pages > 1 %}, on every page{% endif %}</label>
+    <label for="bulk-action">Mark the selected facts</label>
+    <select id="bulk-action" name="action">
+      <option value="confirm">Confirm as human-reviewed</option>
+      <option value="flag">Flag with a comment</option>
+      <option value="reject">Reject with a comment</option>
+    </select>
+    <label for="bulk-note">comment <span class="hint">required to flag or reject; kept with a confirmation</span></label>
+    <input type="text" id="bulk-note" name="note">
+    <button type="submit" data-bulk-submit>Apply to the selected facts</button>
+    <p class="small muted">One write for all of them: if one fact cannot be saved, none is. A group confirmation is
+    noted on each fact as a bulk review.</p>
+  </form>
+  {% endif %}
+  <ol style="padding-left: 20px; margin: 0">
+  {% for item in listing.rows %}
+    <li class="small" style="margin-bottom:4px">
+      {% if bulk %}<input type="checkbox" name="fact_ids" value="{{ item.fact.fact_id }}" form="bulk"
+        aria-label="select {{ item.fact.fact_id }}"
+        {% if card and item.fact.fact_id == card.fact.fact_id %}data-key="select"{% endif %}>{% endif %}
+      <a href="/packs/{{ pack.pack }}/review?fact_id={{ item.fact.fact_id }}{% if mode == 'sample' %}&mode=sample{% endif %}"
+         {{ 'style=font-weight:700' if card and item.fact.fact_id == card.fact.fact_id }}>{{ item.fact.fact_id }}</a>
+      {% if item.flagged %}<span class="badge warn">flagged</span>{% endif %}
+      {% if item.by_check %}<span class="badge">check</span>{% endif %}
+      {% if item.warned %}<span class="badge warn">warning</span>{% endif %}
+      {% if item.reviewed %}<span class="badge ok">reviewed</span>{% endif %}
+      {% if item.basis_kind %}<span class="badge" title="{{ item.basis }}">{{ item.basis_kind }}</span>{% endif %}
+    </li>
+  {% endfor %}
+  </ol>
+  {{ m.pager(listing, '/packs/' ~ pack.pack ~ '/review?mode=' ~ mode) }}
+</nav>
+
+<section>
+{% if not card %}
+  <p class="muted">Nothing in the queue.</p>
+{% else %}
+{% set fact = card.fact %}
+<p class="keys">Keyboard: <kbd>y</kbd> confirm, <kbd>e</kbd> edit, <kbd>n</kbd> reject, <kbd>f</kbd> flag,
+  <kbd>j</kbd> next, <kbd>k</kbd> previous{% if not read_only and mode != 'sample' %}, <kbd>x</kbd> select this fact for a
+  bulk action{% endif %}.</p>
+{% if previous %}<a data-key="previous" href="/packs/{{ pack.pack }}/review?fact_id={{ previous.fact.fact_id }}&mode={{ mode }}">previous</a>{% endif %}
+{% if following %}<a data-key="next" href="/packs/{{ pack.pack }}/review?fact_id={{ following.fact.fact_id }}&mode={{ mode }}">next</a>{% endif %}
+
+<div class="split wide">
+<div class="card">
+  <h2 style="margin-top:0">{{ m.fact_link(pack.pack, fact.fact_id) }}</h2>
+  <p><strong>{{ fact.statement }}</strong></p>
+  <div class="row"><span class="label">Concept</span>
+    <span>{{ m.concept_link(pack.pack, card.concept.concept_id) }} - {{ card.concept.label }}</span></div>
+  <div class="row"><span class="label">Where</span>
+    <span>{{ fact.jurisdiction }}</span>
+    <span class="mono small">{{ fact.condition or 'no condition' }}</span>
+    <span class="small">{{ fact.language }}</span></div>
+  <div class="row"><span class="label">Validity</span>
+    <span class="small">{{ fact.valid_from or 'unbounded' }} to {{ fact.valid_through or 'unbounded' }}</span></div>
+  <div class="row"><span class="label">Basis</span>
+    <span>{% if card.basis %}<strong>{{ card.basis }}</strong>{% else %}<span class="muted">none: the cited page has no institution</span>{% endif %}
+      <span class="small muted">what the strongest cited excerpt is, as the build states it on the fact; each citation below says its own</span></span></div>
+  <div class="row"><span class="label">Provenance</span>
+    <div>
+      <span class="badge">{{ fact.provenance.kind }}</span>
+      <span class="badge {{ 'ok' if card.reviewed else 'warn' }}">{{ fact.provenance.review_status }}</span>
+      <div class="small">author: {{ fact.provenance.author }}</div>
+      {% if fact.provenance.source %}<div class="small">source: {{ fact.provenance.source }}</div>{% endif %}
+      {% if fact.provenance.reviewed_by %}<div class="small">confirmed by {{ fact.provenance.reviewed_by }}
+        on {{ fact.provenance.reviewed_on }}</div>{% endif %}
+      {% for note in fact.provenance.notes %}<div class="small muted">{{ note }}</div>{% endfor %}
+    </div></div>
+
+  {% if not read_only %}
+  <h3>Actions</h3>
+  <form method="post" action="/packs/{{ pack.pack }}/review/{{ fact.fact_id }}/confirm" class="inline">
+    <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+    <input type="hidden" name="next_fact" value="{{ following.fact.fact_id if following else '' }}">
+    <button type="submit" data-key="confirm">Confirm (y)</button>
+  </form>
+  <a class="button secondary" data-key="edit" href="/packs/{{ pack.pack }}/workbench/facts/{{ fact.fact_id }}">Edit (e)</a>
+  {% if fact.provenance.kind == 'model-candidate' %}
+    <details>
+      <summary>Accept the candidate</summary>
+      <form method="post" action="/packs/{{ pack.pack }}/review/{{ fact.fact_id }}/accept">
+        <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+        <label for="a-statement">statement <span class="hint">editable before it is accepted</span></label>
+        <textarea id="a-statement" name="statement" rows="3" required>{{ fact.statement }}</textarea>
+        <button type="submit">Accept as a curated, human-reviewed statement</button>
+      </form>
+    </details>
+  {% endif %}
+  <details>
+    <summary data-key="flag">Flag (f)</summary>
+    <form method="post" action="/packs/{{ pack.pack }}/review/{{ fact.fact_id }}/flag">
+      <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+      <label for="flag-note">note</label><input type="text" id="flag-note" name="note" required>
+      <button type="submit">Flag without changing the status</button>
+    </form>
+  </details>
+  <details>
+    <summary data-key="reject">Reject (n)</summary>
+    <form method="post" action="/packs/{{ pack.pack }}/review/{{ fact.fact_id }}/reject">
+      <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+      <label for="reject-note">why <span class="hint">required; the fact and the reason are kept outside Git</span></label>
+      <input type="text" id="reject-note" name="note" required>
+      <button type="submit" class="danger">Remove the fact from the concept</button>
+    </form>
+  </details>
+  <p class="small muted">Confirming sets <code>human-reviewed</code>, today's date and your name, and refreshes the
+  anchor from the current record, so the confirmation is bound to the bytes you read. Nothing else in the console
+  can set that status.</p>
+  {% endif %}
+</div>
+
+<div>
+{% for row in context.citations %}
+  <div class="card">
+    <p class="small">
+      citation {{ row.number }}:
+      {{ m.document_link(pack.pack, row.citation.document_id, row.entry.title or row.citation.document_id) }}
+      blocks {{ row.citation.first_block }}-{{ row.citation.last_block or row.citation.first_block }}
+      <span class="badge {{ 'ok' if 'matching' in row.state else 'warn' }}">{{ row.state }}</span>
+    </p>
+    <p class="small">
+      <a href="{{ row.entry.source_url }}" rel="noreferrer">{{ row.entry.source_url | shorten(80) }}</a>
+      - accessed {{ (row.entry.retrieved_at or '')[:10] }}
+      - language {{ row.entry.language_declared or row.entry.language_hint }}
+    </p>
+    {% if row.citation.anchor %}
+      <p class="small mono muted">{{ row.citation.anchor.heading_path | join(' / ') }}</p>{% endif %}
+    <p class="small">basis:
+      {% if row.basis.label %}<strong>{{ row.basis.label }}</strong> <span class="muted">({{ row.basis.rule }}{% if row.basis.institution %}; published by {{ row.basis.institution.name }}, {{ row.basis.institution.level }}{% endif %})</span>
+      {% else %}<span class="muted">{{ row.basis.rule }}</span>{% endif %}
+      {% for warning in row.basis.warnings %}<span class="badge warn">{{ warning }}</span>{% endfor %}
+      <a href="/packs/{{ pack.pack }}/workbench/facts/{{ fact.fact_id }}">set in the workbench</a></p>
+    {% if row.outcome.get('warnings') %}
+      <p class="alert small">relocated with {{ row.outcome.warnings | join(', ') }}</p>
+      <div class="split wide">
+        <div><h4>anchored excerpt</h4><div class="excerpt">{{ row.citation.anchor.excerpt }}</div></div>
+        <div><h4>current excerpt</h4><div class="excerpt">{{ row.current_excerpt }}</div></div>
+      </div>
+    {% else %}
+      <h4>The excerpt in its page context</h4>
+      <div class="blocks">
+      {% for block in row.context %}
+        <div class="block {{ 'selected' if block.selected }}">
+          <span class="no">b{{ block.number }}</span>
+          <div class="body">{{ block.block.text | shorten(600) }}</div>
+        </div>
+      {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{% endfor %}
+
+{% if mode == 'sample' and not read_only %}
+  <div class="card">
+    <h3 style="margin-top:0">Sample verdict for this document</h3>
+    <form method="post" action="/packs/{{ pack.pack }}/review/sample">
+      <input type="hidden" name="document_id" value="{{ card.fact.evidence[0].document_id }}">
+      <label for="s-blocks">blocks checked</label>
+      <input type="number" id="s-blocks" name="blocks_checked" value="0" min="0">
+      <label for="s-verdict">verdict</label>
+      <input type="text" id="s-verdict" name="verdict" required>
+      <button type="submit">Record the sample verdict</button>
+    </form>
+  </div>
+{% endif %}
+</div>
+</div>
+{% endif %}
+</section>
+</div>
+{% endblock %}

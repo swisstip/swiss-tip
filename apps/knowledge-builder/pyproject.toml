@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-knowledge-builder"
+version = "0.2.5"
+description = "Swiss TIP knowledge builder: the build pipeline of a pack from catalogue to validated release"
+requires-python = ">=3.14"
+dependencies = [
+    "swisstip-core",
+    "swisstip-ingestion",
+    "swisstip-extraction",
+    "swisstip-build",
+    "swisstip-runtime",
+]
+
+[project.scripts]
+swisstip-build = "swisstip.builder.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true

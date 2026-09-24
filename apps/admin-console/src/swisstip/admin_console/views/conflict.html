@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}The file changed{% endblock %}
+{% block content %}
+<h1>The file changed since this form was loaded</h1>
+<p class="alert" role="alert">{{ message }}</p>
+<p>Last write: {{ last_actor or 'not recorded in the audit log' }}.
+   The file now hashes to <code>{{ current_sha256 | shorten(16) }}</code>.</p>
+<p class="small muted">One person edits a pack at a time. Reload the form to work on the current file; nothing was
+written.</p>
+<p><a class="button" href="{{ back }}">Reload the form</a></p>
+{% endblock %}

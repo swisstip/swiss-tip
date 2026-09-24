@@ -1,0 +1,118 @@
+{% extends layout %}
+{% import "macros.html" as m %}
+{% block content %}
+<h2>{{ tool }}</h2>
+{% if error %}
+  <p class="alert">{{ error }}</p>
+{% else %}
+<p class="small">
+  <span class="badge {{ 'bad' if is_error else 'ok' }}">{{ call.status }}</span>
+  {{ call.bytes }} bytes, {{ call.ms }} ms, release <code>{{ call.release }}</code>
+  {% if call.hits is defined %}, {{ call.hits }} hit(s){% endif %}
+  {% if call.gap %}, gap <code>{{ call.gap }}</code>{% endif %}
+</p>
+
+{% set body = call.payload %}
+{% if tool == 'get_coverage' and not is_error %}
+  {% if body.topics is defined %}
+    <p><strong>{{ body.scope_statement }}</strong></p>
+    <p class="small">jurisdictions: {{ body.jurisdictions | join(', ') }} - languages: {{ body.languages | join(', ') }}
+      - snapshot {{ body.freshness.snapshot_date }}, stale from {{ body.freshness.stale_from }}</p>
+    <table><thead><tr><th>Topic</th><th class="num">Concepts</th><th>Jurisdictions</th></tr></thead>
+      <tbody>{% for topic in body.topics %}
+        <tr><td>{{ topic.title }} <span class="mono small">{{ topic.topic_id }}</span></td>
+            <td class="num">{{ topic.concept_count }}</td>
+            <td class="small">{{ topic.jurisdictions | join(', ') }}</td></tr>{% endfor %}</tbody></table>
+    <h3>Out of scope</h3>
+    <ul class="small">{% for item in body.out_of_scope %}<li>{{ item }}</li>{% endfor %}</ul>
+  {% else %}
+    <h3>{{ body.title }}</h3>
+    <table><thead><tr><th>Concept</th><th>Aliases</th><th>Required context</th><th>Jurisdictions</th></tr></thead>
+      <tbody>{% for concept in body.concepts %}
+        <tr><td>{{ m.concept_link(pack.pack, concept.concept_id) }}<div class="small">{{ concept.label }}</div></td>
+            <td class="small">{{ concept.aliases | join(', ') or '-' }}</td>
+            <td class="small mono">{{ concept.required_context | join(', ') or '-' }}</td>
+            <td class="small">{{ concept.jurisdictions | join(', ') }}</td></tr>{% endfor %}</tbody></table>
+  {% endif %}
+{% elif tool == 'search' and not is_error %}
+  <table><thead><tr><th>Concept</th><th class="num">Score</th><th>Matched on</th><th>Required context</th></tr></thead>
+    <tbody>{% for hit in body.results %}
+      <tr><td>{{ m.concept_link(pack.pack, hit.concept_id) }}<div class="small">{{ hit.label }}</div></td>
+          <td class="num">{{ hit.score }}</td><td class="small">{{ hit.matched_on | join(', ') }}</td>
+          <td class="small mono">{{ hit.required_context | join(', ') or '-' }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">No hit.</td></tr>{% endfor %}</tbody></table>
+{% elif tool == 'resolve' and not is_error %}
+  <p class="small">status {{ body.status }}, as_of {{ body.as_of }},
+    scope {{ body.executed_scope }}{% if body.status == 'STALE' %} - snapshot {{ body.freshness.snapshot_date }},
+    stale from {{ body.freshness.stale_from }}{% endif %}</p>
+  {% for item in body.results %}
+    <div class="card">
+      <p>{{ m.concept_link(pack.pack, item.concept_id) }}
+        <span class="badge {{ 'ok' if item.status == 'SUPPORTED' else 'warn' }}">{{ item.status }}</span>
+        {% if item.answering_jurisdiction %}<span class="small">answering as {{ item.answering_jurisdiction }}</span>{% endif %}</p>
+      {% for gap in item.gaps %}
+        <p class="small"><strong>{{ gap.dimension }}</strong>: {{ gap.message }}
+          <br>published values: <code>{{ gap.published_values | join(', ') }}</code></p>
+      {% endfor %}
+      {% for missing in item.missing_context %}
+        <p class="small"><strong>needs {{ missing.field }}</strong>: {{ missing.hint }}
+          <br>options: <code>{{ (missing.options or []) | join(', ') }}</code></p>
+      {% endfor %}
+      {% for fact in item.facts %}
+        <div class="row"><span class="label">{{ fact.fact_id }}</span>
+          <div><div>{{ fact.statement }}</div>
+            <div class="small muted">{{ fact.jurisdiction }} - {{ fact.condition or 'no condition' }}
+              - valid {{ fact.valid_from or 'unbounded' }} to {{ fact.valid_through or 'unbounded' }}
+              - evidence <code>{{ fact.evidence_ids | join(', ') }}</code></div></div></div>
+      {% endfor %}
+      {% if item.citations %}
+        <table class="small"><thead><tr><th>Evidence</th><th>Publisher</th><th>URL</th><th>Accessed</th></tr></thead>
+          <tbody>{% for citation in item.citations %}
+            <tr><td class="mono">{{ citation.evidence_id }}</td><td>{{ citation.publisher }}</td>
+                <td><a href="{{ citation.url }}" rel="noreferrer">{{ citation.url | shorten(60) }}</a></td>
+                <td>{{ citation.accessed_on }}</td></tr>{% endfor %}</tbody></table>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% elif tool == 'get_evidence' and not is_error %}
+  {% for item in body.evidence %}
+    <div class="card">
+      <p class="small"><code>{{ item.evidence_id }}</code> - {{ item.publisher }} - {{ item.language }}
+        - accessed {{ item.accessed_on }}<br>
+        <a href="{{ item.url }}" rel="noreferrer">{{ item.url }}</a></p>
+      <div class="excerpt">{{ item.original_excerpt }}</div>
+    </div>
+  {% endfor %}
+{% endif %}
+
+<details><summary>the JSON the caller receives ({{ call.bytes }} bytes)</summary><pre>{{ call.text }}</pre></details>
+
+{% if not read_only and tool in ('resolve', 'search') and not is_error %}
+<details class="card">
+  <summary>Save this call as a check</summary>
+  <form method="post" action="/packs/{{ pack.pack }}/sandbox/checks/save">
+    <label for="sv-id">check_id</label><input type="text" id="sv-id" name="check_id" required>
+    <label for="sv-title">title</label><input type="text" id="sv-title" name="title">
+    <input type="hidden" name="tool" value="{{ tool }}">
+    <label for="sv-args">request</label><textarea id="sv-args" name="arguments" rows="4">{{ arguments }}</textarea>
+    {% if tool == 'resolve' %}
+      <label for="sv-status">expect status</label>
+      <textarea id="sv-status" name="expect_status" rows="3">{% for item in body.results %}{{ item.concept_id }}={{ item.status }}
+{% endfor %}</textarea>
+      <label for="sv-facts">expect fact_ids</label>
+      <textarea id="sv-facts" name="expect_fact_ids" rows="3">{% for item in body.results %}{% for fact in item.facts %}{{ fact.fact_id }}
+{% endfor %}{% endfor %}</textarea>
+      <input type="hidden" name="expect_concepts" value="">
+    {% else %}
+      <label for="sv-concepts">expect concept_ids in the hits</label>
+      <textarea id="sv-concepts" name="expect_concepts" rows="3">{% for hit in body.results %}{{ hit.concept_id }}
+{% endfor %}</textarea>
+      <input type="hidden" name="expect_status" value="">
+      <input type="hidden" name="expect_fact_ids" value="">
+    {% endif %}
+    <button type="submit">Save as a check</button>
+  </form>
+</details>
+{% endif %}
+{% endif %}
+{% endblock %}

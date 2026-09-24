@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Release - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Release</h1>
+
+<h2>Manifest text</h2>
+{% if curation %}
+  <p class="small muted">Edited in the pack form of the workbench; the two fields returned on every coverage root
+  call are shown with their length.</p>
+  <div class="card">
+    <div class="row"><span class="label">title</span><span>{{ curation.title }}</span></div>
+    <div class="row"><span class="label">scope</span>
+      <span>{{ curation.scope_statement }}<br><span class="small muted">{{ curation.scope_statement | length }} characters</span></span></div>
+    <div class="row"><span class="label">refusal</span>
+      <span>{{ curation.out_of_scope_response }}<br><span class="small muted">{{ curation.out_of_scope_response | length }} characters</span></span></div>
+    <div class="row"><span class="label">out of scope</span>
+      <ul class="small">{% for item in curation.out_of_scope %}<li>{{ item }}</li>{% endfor %}</ul></div>
+    <div class="row"><span class="label">limitations</span>
+      <ul class="small">{% for item in curation.limitations %}<li>{{ item }}</li>{% endfor %}</ul></div>
+  </div>
+  <p><a class="button secondary" href="/packs/{{ pack.pack }}/workbench">Edit in the workbench</a></p>
+{% else %}
+  <p class="muted">No curation file for this pack.</p>
+{% endif %}
+
+<h2>Build</h2>
+{% if not read_only %}
+<form method="post" action="/packs/{{ pack.pack }}/release/build" class="card filters">
+  <div><label for="r-id">release_id</label>
+    <input type="text" id="r-id" name="release_id" placeholder="{{ next_release }}"></div>
+  <label><input type="checkbox" name="update_curation" value="1"> update_curation</label>
+  <button type="submit" {{ 'disabled' if job }}>Build, validate and health-check</button>
+  {% if job %}<span class="small muted">a job is running for this pack</span>{% endif %}
+</form>
+{% endif %}
+{% if job %}
+  <div hx-get="/packs/{{ pack.pack }}/runs/jobs/{{ job.job_id }}" hx-trigger="load, every 2s" hx-swap="innerHTML">
+    <p class="muted">Loading the job log...</p>
+  </div>
+{% endif %}
+
+{% if release %}
+  <div class="card">
+    <div class="row"><span class="label">Release</span><span class="mono">{{ release.manifest.release_id }}</span>
+      <span>built {{ release.manifest.created_at }}</span></div>
+    <div class="row"><span class="label">Counts</span>
+      <span>{{ release.topics | length }} topics, {{ release.concepts | length }} concepts,
+        {{ release.facts | length }} facts, {{ release.evidence | length }} evidence,
+        {{ release.documents | length }} documents</span></div>
+    <div class="row"><span class="label">Validator</span>
+      {% if issues %}<span class="badge bad">{{ issues | length }} issue(s)</span>
+        <ul class="small">{% for issue in issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+      {% else %}<span class="badge ok">no issue</span>{% endif %}</div>
+    <div class="row"><span class="label">Citations</span>
+      <span class="small">{% for outcome, count in (report.citation_outcomes or {}).items() %}{{ count }} {{ outcome }}{% if not loop.last %}, {% endif %}{% endfor %}
+        - <a href="/packs/{{ pack.pack }}/runs/relocation">relocation review</a></span></div>
+    <div class="row"><span class="label">Review</span>
+      {{ m.stacked(release.manifest.review_statuses, release.facts | length) }}</div>
+  </div>
+{% endif %}
+
+<h2>Diff against the previous release</h2>
+{% if not diff.available %}
+  <p class="muted">No earlier release is archived under <code>{{ pack.console_dir }}/releases/</code> yet. The
+  console archives each release it builds, since Git holds only the current one.</p>
+{% else %}
+  <p class="small">from <code>{{ diff.old_id }}</code> to <code>{{ diff.new_id }}</code>. Computed from the two
+  release files, so it shows what callers will see change.</p>
+  <table>
+    <tbody>
+      <tr><th>Concepts added</th><td class="mono small">{{ diff.concepts_added | join(', ') or '-' }}</td></tr>
+      <tr><th>Concepts removed</th><td class="mono small">{{ diff.concepts_removed | join(', ') or '-' }}</td></tr>
+      <tr><th>Facts added</th><td class="mono small">{{ diff.facts_added | join(', ') or '-' }}</td></tr>
+      <tr><th>Facts removed</th><td class="mono small">{{ diff.facts_removed | join(', ') or '-' }}</td></tr>
+      <tr><th>Facts re-cited</th><td class="mono small">{{ diff.facts_recited | join(', ') or '-' }}</td></tr>
+      <tr><th>Documents added</th><td class="mono small">{{ diff.documents_added | join(', ') or '-' }}</td></tr>
+      <tr><th>Documents removed</th><td class="mono small">{{ diff.documents_removed | join(', ') or '-' }}</td></tr>
+      <tr><th>Review status before</th><td class="small">{{ diff.review_before }}</td></tr>
+      <tr><th>Review status after</th><td class="small">{{ diff.review_after }}</td></tr>
+    </tbody>
+  </table>
+  {% if diff.facts_reworded %}
+    <h3>Reworded facts</h3>
+    {% for item in diff.facts_reworded %}
+      <div class="card small">
+        <p>{{ m.fact_link(pack.pack, item.fact_id) }}</p>
+        <p><strong>before:</strong> {{ item.before }}</p>
+        <p><strong>after:</strong> {{ item.after }}</p>
+      </div>
+    {% endfor %}
+  {% endif %}
+  {% if diff.manifest %}
+    <h3>Manifest fields changed</h3>
+    <table><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+      <tbody>{% for item in diff.manifest %}
+        <tr><td class="mono">{{ item.field }}</td><td class="small">{{ item.before }}</td>
+            <td class="small">{{ item.after }}</td></tr>{% endfor %}</tbody></table>
+  {% endif %}
+{% endif %}
+
+<h2>Caller preview</h2>
+{% if not preview.available %}
+  <p class="muted">No release to preview.</p>
+{% else %}
+  <p>Coverage root: <strong>{{ preview.root_bytes }} bytes</strong> against the {{ preview.target }} byte target
+  of the tool contracts
+  {% if preview.over_target %}<span class="badge warn">over the target; shorten the scope statement, the
+    out-of-scope list or the limitations</span>{% else %}<span class="badge ok">within the target</span>{% endif %}</p>
+  <table>
+    <thead><tr><th>Topic page</th><th class="num">Concepts</th><th class="num">Bytes</th></tr></thead>
+    <tbody>{% for topic in preview.topics %}
+      <tr><td>{{ topic.title }} <span class="mono small">{{ topic.topic_id }}</span></td>
+          <td class="num">{{ topic.concepts }}</td><td class="num">{{ topic.bytes }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <details><summary>get_coverage root as the caller receives it</summary><pre>{{ preview.root }}</pre></details>
+  <details><summary>COVERAGE.md as the generator would write it</summary><pre>{{ preview.coverage_md }}</pre></details>
+  <details><summary>LIMITATIONS.md as the generator would write it</summary><pre>{{ preview.limitations_md }}</pre></details>
+{% endif %}
+
+<h2>Working tree</h2>
+<p class="small muted">Read-only <code>git</code> calls. There is no commit button: the lead commits from Git.
+Commit messages are a single imperative subject line in the style of the recent commits, with no trailers
+(see <code>AGENTS.md</code>).</p>
+<h3>git status --short (in the pack's repository, releases/{{ pack.pack }})</h3>
+<pre>{{ git_status or '(clean)' }}</pre>
+<h3>git diff --stat (in the pack's repository, releases/{{ pack.pack }})</h3>
+<pre>{{ git_diff or '(no change)' }}</pre>
+<h3>Recent subjects</h3>
+<pre>{{ git_log }}</pre>
+{% endblock %}

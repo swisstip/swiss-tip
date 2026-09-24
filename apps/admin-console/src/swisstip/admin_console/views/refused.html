@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Write refused{% endblock %}
+{% block content %}
+<h1>The write was refused</h1>
+<p class="alert" role="alert">{{ message }}</p>
+{% if fields %}
+<table>
+  <thead><tr><th>Field</th><th>Problem</th></tr></thead>
+  <tbody>{% for field, problem in fields.items() %}<tr><td class="mono">{{ field }}</td><td>{{ problem }}</td></tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+{% if issues %}<h2>Details</h2><pre>{% for issue in issues %}{{ issue }}
+{% endfor %}</pre>{% endif %}
+<p class="small muted">Nothing was written. The file on disk is unchanged.</p>
+<p><a class="button secondary" href="{{ back }}">Back to the form</a></p>
+{% endblock %}

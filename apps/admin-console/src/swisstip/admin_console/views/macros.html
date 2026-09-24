@@ -1,0 +1,44 @@
+{% macro stage_strip(stages) %}
+<div class="stages">
+  {% for stage in stages %}
+    <div class="stage {{ stage.status or 'unknown' }}" title="{{ stage.reason or stage.error or '' }}">
+      <strong>{{ stage.stage }}</strong><br>
+      {{ stage.status or '-' }}{% if stage.seconds is not none %} <span class="muted">{{ stage.seconds }}s</span>{% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro stacked(counts, total) %}
+{% set sum = total or (counts.values() | sum) %}
+<div class="bar-chart" role="img" aria-label="{% for key, value in counts.items() %}{{ value }} {{ key }}{% if not loop.last %}, {% endif %}{% endfor %}">
+  {% for key, value in counts.items() %}
+    <span class="s{{ loop.index0 % 4 }}" style="width: {{ (100 * value / sum) if sum else 0 }}%"></span>
+  {% endfor %}
+</div>
+<div class="small muted">{% for key, value in counts.items() %}{{ value }} {{ key }}{% if not loop.last %} - {% endif %}{% endfor %}{% if not counts %}none{% endif %}</div>
+{% endmacro %}
+
+{% macro pager(listing, base) %}
+<div class="pager small">
+  <span>{{ listing.first }}-{{ listing.last }} of {{ listing.total }}</span>
+  {% if listing.page > 1 %}<a href="{{ base }}&page={{ listing.page - 1 }}">previous</a>{% endif %}
+  <span>page {{ listing.page }} of {{ listing.pages }}</span>
+  {% if listing.page < listing.pages %}<a href="{{ base }}&page={{ listing.page + 1 }}">next</a>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro verdict(passed) %}
+<span class="badge {{ 'ok' if passed else 'bad' }}">{{ 'pass' if passed else 'fail' }}</span>
+{% endmacro %}
+
+{% macro document_link(pack, document_id, label=None, block=None) %}
+<a href="/packs/{{ pack }}/documents/{{ document_id }}{% if block %}?block={{ block }}&first={{ block }}{% endif %}"
+   class="mono">{{ label or document_id }}</a>
+{% endmacro %}
+
+{% macro fact_link(pack, fact_id) %}<a href="/packs/{{ pack }}/workbench/facts/{{ fact_id }}" class="mono">{{ fact_id }}</a>{% endmacro %}
+
+{% macro concept_link(pack, concept_id) %}<a href="/packs/{{ pack }}/workbench/concepts/{{ concept_id }}" class="mono">{{ concept_id }}</a>{% endmacro %}
+
+{% macro source_link(pack, source_id) %}<a href="/packs/{{ pack }}/sources/{{ source_id }}" class="mono">{{ source_id }}</a>{% endmacro %}

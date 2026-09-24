@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Documents - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Documents</h1>
+<nav class="tabs" aria-label="Document views">
+  <a href="/packs/{{ pack.pack }}/documents?tab=records" class="{{ 'current' if tab == 'records' }}">Records ({{ pack.dataset.entries | length }})</a>
+  <a href="/packs/{{ pack.pack }}/documents?tab=unavailable" class="{{ 'current' if tab == 'unavailable' }}">Pending unavailable targets ({{ unavailable | length }})</a>
+  <a href="/packs/{{ pack.pack }}/documents?tab=errors" class="{{ 'current' if tab == 'errors' }}">Pending extraction failures ({{ errors | length }})</a>
+  {% if accepted %}<a href="/packs/{{ pack.pack }}/documents?tab=accepted" class="{{ 'current' if tab == 'accepted' }}">Accepted scope ({{ accepted | length }})</a>{% endif %}
+</nav>
+
+{% if tab == 'accepted' %}
+  <p class="small muted">Human-reviewed and approved for the demonstration scope.</p>
+  <table>
+    <thead><tr><th>Source or document</th><th>Recorded status</th><th>Review</th></tr></thead>
+    <tbody>
+    {% for item in accepted %}
+      <tr><td class="small">{% if item.document_id %}{{ m.document_link(pack.pack, item.document_id, item.document_id) }}<br>{% endif %}
+        <span class="mono">{{ item.url | shorten(90) }}</span></td><td>{{ item.status }}</td>
+        <td><span class="badge ok">human-reviewed - approved</span>
+          {% if item.review %}<div class="small muted">{{ item.review.reviewed_by }}, {{ item.review.reviewed_on }}</div>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="3" class="muted">None.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+{% elif tab == 'unavailable' %}
+  <table>
+    <thead><tr><th>URL</th><th>Status</th><th>Error</th><th>Attribution</th></tr></thead>
+    <tbody>
+    {% for item in unavailable %}
+      <tr><td class="small mono">{{ item.url | shorten(90) }}</td><td>{{ item.status }}</td>
+        <td class="small">{{ item.error }}</td>
+        <td class="small">{{ item.attribution.kind }} {{ (item.attribution.source_ids or []) | join(', ') }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">None.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+{% elif tab == 'errors' %}
+  <table>
+    <thead><tr><th>Document</th><th>Error</th></tr></thead>
+    <tbody>
+    {% for item in errors %}
+      <tr><td class="small mono">{{ item.get('document_id') or item.get('url') }}</td>
+          <td class="small">{{ item.get('error') }}</td></tr>
+    {% else %}<tr><td colspan="2" class="muted">None.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <form method="get" class="filters">
+    <input type="hidden" name="tab" value="records">
+    <div><label for="q">Title or URL</label><input type="text" id="q" name="q" value="{{ filters.q }}"></div>
+    {% for name, label in [('page_kind', 'Page kind'), ('status', 'Status'),
+                           ('attribution_kind', 'Attribution'), ('representation', 'Representation')] %}
+      <div><label for="f-{{ name }}">{{ label }}</label>
+        <select id="f-{{ name }}" name="{{ name }}"><option value=""></option>
+          {% for value in facets[name] %}<option {{ 'selected' if filters[name] == value }}>{{ value }}</option>{% endfor %}
+        </select></div>
+    {% endfor %}
+    <div><label for="f-language">Language</label><input type="text" id="f-language" name="language" value="{{ filters.language }}" size="4"></div>
+    <div><label for="f-eligible">Eligible</label>
+      <select id="f-eligible" name="eligible"><option value=""></option>
+        <option value="yes" {{ 'selected' if filters.eligible == 'yes' }}>yes</option>
+        <option value="no" {{ 'selected' if filters.eligible == 'no' }}>no</option></select></div>
+    <div><label for="f-superseded">Superseded</label>
+      <select id="f-superseded" name="superseded"><option value=""></option>
+        <option value="yes" {{ 'selected' if filters.superseded == 'yes' }}>yes</option>
+        <option value="no" {{ 'selected' if filters.superseded == 'no' }}>no</option></select></div>
+    <div><label for="f-cited">Cited</label>
+      <select id="f-cited" name="cited"><option value=""></option>
+        <option value="yes" {{ 'selected' if filters.cited == 'yes' }}>yes</option>
+        <option value="no" {{ 'selected' if filters.cited == 'no' }}>no</option></select></div>
+    <button type="submit">Filter</button>
+    <a class="button secondary" href="/packs/{{ pack.pack }}/documents">Clear</a>
+  </form>
+
+  {{ m.pager(listing, '/packs/' ~ pack.pack ~ '/documents?tab=records') }}
+  <div class="scroll">
+  <table>
+    <thead><tr>
+      <th>Title</th><th>Lang</th><th>Repr</th><th>Page kind</th><th>Status</th><th>Eligible</th>
+      <th>Attribution</th><th>Retrieved</th><th class="num">Blocks</th><th class="num">Chars</th>
+      <th>Marks</th><th class="num">Facts</th>
+    </tr></thead>
+    <tbody>
+    {% for row in listing.rows %}
+      <tr>
+        <td>{{ m.document_link(pack.pack, row.document_id, row.title or row.source_url) }}
+          <div class="small mono muted">{{ row.source_url | shorten(80) }}</div></td>
+        <td class="small">{{ row.language_declared or '-' }}/{{ row.language_hint or '-' }}</td>
+        <td>{{ row.representation }}</td>
+        <td>{{ row.page_kind }}</td>
+        <td>{{ row.status }}</td>
+        <td>{{ 'yes' if row.eligible_for_processing else 'no' }}
+          {% if row.exclusions %}<div class="small muted">{{ row.exclusions }}</div>{% endif %}</td>
+        <td class="small">{{ row.attribution_kind }}<br>{{ row.sources | shorten(40) }}</td>
+        <td class="small mono">{{ (row.retrieved_at or '')[:10] }}</td>
+        <td class="num">{{ row.blocks }}</td>
+        <td class="num">{{ row.text_characters }}</td>
+        <td class="small">
+          {% if row.scope_review %}<span class="badge ok">human-reviewed - approved for scope</span>{% endif %}
+          {% if row.superseded %}<span class="badge warn">superseded</span>
+            <a href="/packs/{{ pack.pack }}/documents/{{ row.document_id }}/diff">diff</a>{% endif %}
+          {% if row.imported %}<span class="badge">imported</span>{% endif %}
+          {% if row.preferred_representation %}<span class="badge ok">preferred</span>{% endif %}
+          {% if row.identical_text_records %}<span class="badge">{{ row.identical_text_records | length }} identical</span>{% endif %}
+        </td>
+        <td class="num">{{ row.facts }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="12" class="muted">No record matches.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% endif %}
+{% endblock %}

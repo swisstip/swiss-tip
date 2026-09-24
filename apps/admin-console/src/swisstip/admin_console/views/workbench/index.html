@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Workbench - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Curation workbench</h1>
+{% if curation_error %}
+  <p class="alert">curation.yaml does not validate, so this pack is read-only until the file is fixed by hand:
+  {{ curation_error }}</p>
+{% endif %}
+{% if missing_publishers %}
+  <p class="alert">No publisher is named for {{ missing_publishers | join(', ') }}. The build stops on a cited host
+  without a publisher; add it in the pack form.</p>
+{% endif %}
+
+<div class="split">
+<nav class="card" aria-label="Topics and concepts">
+  <p><a href="/packs/{{ pack.pack }}/workbench"><strong>Pack</strong></a></p>
+  {% for node in nodes %}
+    <p style="margin:8px 0 2px">
+      <a href="/packs/{{ pack.pack }}/workbench/topics/{{ node.topic.topic_id }}"><strong>{{ node.topic.title }}</strong></a>
+      <span class="small muted">{{ node.reviewed }}/{{ node.facts }} reviewed</span>
+    </p>
+    <ul style="margin:0 0 8px; padding-left: 18px">
+    {% for item in node.concepts %}
+      <li>
+        <a href="/packs/{{ pack.pack }}/workbench/concepts/{{ item.concept.concept_id }}">{{ item.concept.label }}</a>
+        <span class="small muted">{{ item.reviewed }}/{{ item.facts }}</span>
+        {% if item.reviewed == item.facts and item.facts %}<span class="badge ok" title="every fact reviewed">done</span>{% endif %}
+        {% for warning in item.warnings %}<span class="badge warn" title="{{ warning }}">!</span>{% endfor %}
+        <ul style="padding-left: 14px">
+          {% for fact in item.concept.facts %}
+            <li class="small"><a href="/packs/{{ pack.pack }}/workbench/facts/{{ fact.fact_id }}">{{ fact.fact_id }}</a>
+              {% if fact.provenance.review_status == 'human-reviewed' %}<span class="badge ok">reviewed</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </li>
+    {% endfor %}
+    </ul>
+  {% endfor %}
+  {% if not read_only %}
+  <details>
+    <summary>New topic</summary>
+    <form method="post" action="/packs/{{ pack.pack }}/workbench/topics">
+      <input type="hidden" name="sha256" value="{{ sha256 or '' }}">
+      <label for="nt-id">topic_id</label><input type="text" id="nt-id" name="topic_id" required>
+      <label for="nt-title">title</label><input type="text" id="nt-title" name="title" required>
+      <label for="nt-desc">description</label><textarea id="nt-desc" name="description" required></textarea>
+      <button type="submit">Create topic</button>
+    </form>
+  </details>
+  <p class="small muted">A concept is created from a reading view selection, so that it has a citation from the
+  start; see the Documents screen.</p>
+  {% endif %}
+</nav>
+
+<section>
+{% if form == 'pack' %}{% include "workbench/pack.html" %}
+{% elif form == 'topic' %}{% include "workbench/topic.html" %}
+{% elif form == 'concept' %}{% include "workbench/concept.html" %}
+{% elif form == 'fact' %}{% include "workbench/fact.html" %}
+{% endif %}
+</section>
+</div>
+{% endblock %}
