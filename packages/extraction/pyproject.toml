@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-extraction"
+version = "0.2.5"
+description = "Source-text extraction for Swiss TIP: saved responses to labelled blocks with offsets and hashes"
+requires-python = ">=3.14"
+dependencies = [
+    "lxml==6.1.3",
+    "pypdf==6.18.0",
+    "pypdfium2==5.13.0",
+]
+
+[project.optional-dependencies]
+office = [
+    "olefile==0.47",
+    "striprtf==0.0.33",
+]
+
+[project.scripts]
+swisstip-extract = "swisstip.extraction.extract_cli:main"
+swisstip-extract-validate = "swisstip.extraction.validate:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true

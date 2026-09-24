@@ -1,0 +1,313 @@
+{
+  "schema_version": "source-catalog/v1",
+  "artifact_id": "residence-sources-test",
+  "version": "test-1",
+  "knowledge_space_id": "hackathon",
+  "title": "Test catalogue (federal and Canton Zurich)",
+  "status": "SOURCES_ONLY",
+  "scope": {
+    "country_code": "CH",
+    "canton_codes": [
+      "CH-ZH"
+    ],
+    "description": "MVP scope: Swiss federal foundations for residence permits plus Canton of Zurich and City of Zurich entry points, extended on 15 September 2026 with the topics a newly arrived resident meets next (social insurance on arrival and departure, tax at source, the foreign driving licence, health insurance and premium reduction) and with naturalisation, at the same three levels. Other cantons are in the swiss-residence pack. Extended on 17 September 2026 with the contact pages of the Zurich offices these topics name: addresses, opening and telephone hours and directions where published. Extended again on 17 September 2026 with the daily-life duties of a newcomer in the City of Zurich: waste, parking and vehicles, dogs, school, taxes, the radio and television fee and emergencies. Extended on 18 September 2026 with voting rights and the Zurich tax-at-source tariff pages, and with the questions of expats settling in: family allowances and parental leave, housing and rent, customs on moving, marriage, pillar 3a, unemployment, accident insurance and leaving the City of Zurich.",
+    "exclusions": [
+      "Tourism unrelated to residence",
+      "Full asylum/protection casework",
+      "Private relocation advice",
+      "Authenticated application portals",
+      "Complete municipal coverage",
+      "Tax tariff tables, premium and allowance calculators, individual amounts",
+      "Live data (timetables, vote results, current premiums)"
+    ]
+  },
+  "planning_topics": [
+    {
+      "topic_id": "entry-visas",
+      "label": "Entry and visas"
+    },
+    {
+      "topic_id": "residence-permits",
+      "label": "Residence permits and documents"
+    },
+    {
+      "topic_id": "work-eu-efta",
+      "label": "Working as an EU/EFTA national"
+    },
+    {
+      "topic_id": "work-third-country",
+      "label": "Working as a third-country national"
+    },
+    {
+      "topic_id": "family-reunification",
+      "label": "Family reunification"
+    },
+    {
+      "topic_id": "study-no-employment",
+      "label": "Study, retirement and residence without employment"
+    },
+    {
+      "topic_id": "settlement-renewal",
+      "label": "Settlement, renewal and changes of status"
+    },
+    {
+      "topic_id": "registration-moving",
+      "label": "Registration, changing canton and departure"
+    },
+    {
+      "topic_id": "integration-language",
+      "label": "Integration and language requirements"
+    },
+    {
+      "topic_id": "health-insurance",
+      "label": "Health insurance on taking up residence"
+    },
+    {
+      "topic_id": "housing",
+      "label": "Housing and renting"
+    },
+    {
+      "topic_id": "tax-social-insurance",
+      "label": "Tax and social insurance on taking up residence"
+    },
+    {
+      "topic_id": "legal-bases",
+      "label": "Federal legal bases and administrative guidance"
+    },
+    {
+      "topic_id": "competent-authorities",
+      "label": "Competent cantonal and municipal authorities"
+    },
+    {
+      "topic_id": "driving-licence",
+      "label": "Driving licence after taking up residence"
+    },
+    {
+      "topic_id": "naturalisation",
+      "label": "Naturalisation"
+    },
+    {
+      "topic_id": "daily-life",
+      "label": "Daily life after moving in"
+    },
+    {
+      "topic_id": "political-rights",
+      "label": "Political rights of foreign residents"
+    }
+  ],
+  "language_discovery": {
+    "seed_languages_are_hints": true,
+    "method": "Later inspect html lang, hreflang and visible language navigation. Record declarations and detected section languages independently.",
+    "scope": "New language URLs or hosts outside explicit allowlists require catalogue updates before crawling.",
+    "parallel_content": "Independent snapshots, hashes, timestamps and source revisions; no equivalence from URL patterns alone.",
+    "projection_targets": [
+      "en",
+      "de",
+      "fr",
+      "it",
+      "rm"
+    ],
+    "evaluated_routes": [],
+    "preferred_seed_language": "de",
+    "selection_policy": "Prefer a verified official German seed when choosing only one language version for a limited MVP run. Named scan sets and explicit --source selectors retain every selected language version, with German seeds scheduled first. Keep the recorded local language when no German equivalent has been verified; never guess translated URL slugs or silently fall back after a failed crawl."
+  },
+  "crawl_profiles": {
+    "smoke": {
+      "max_depth": 0,
+      "max_pages": 1,
+      "max_requests": 5,
+      "max_total_bytes": 3000000,
+      "max_response_bytes": 2000000,
+      "max_duration_seconds": 60,
+      "request_timeout_seconds": 15,
+      "delay_seconds": 2,
+      "max_redirects": 2,
+      "max_links_per_page": 200,
+      "max_queued_urls": 50,
+      "max_failures": 2
+    },
+    "sample": {
+      "max_depth": 1,
+      "max_pages": 5,
+      "max_requests": 10,
+      "max_total_bytes": 10000000,
+      "max_response_bytes": 2000000,
+      "max_duration_seconds": 120,
+      "request_timeout_seconds": 15,
+      "delay_seconds": 2,
+      "max_redirects": 2,
+      "max_links_per_page": 500,
+      "max_queued_urls": 100,
+      "max_failures": 3
+    }
+  },
+  "scan_sets": {
+    "smoke": [
+      "ch-sem-residence-de",
+      "zh-overview"
+    ]
+  },
+  "build_notes": [
+    "Test fixture: five entries in the shape of a pack's source catalogue. Not a knowledge base."
+  ],
+  "sources": [
+    {
+      "definition": {
+        "source_id": "ch-bag-health-insurance",
+        "start_url": "https://www.bag.admin.ch/de/krankenversicherung-versicherungspflicht-fuer-in-der-schweiz-wohnhafte-versicherte",
+        "allowed_hosts": [
+          "www.bag.admin.ch"
+        ],
+        "allowed_path_prefixes": [
+          "/de/krankenversicherung-versicherungspflicht-fuer-in-der-schweiz-wohnhafte-versicherte"
+        ],
+        "canonical_authority": "Federal Office of Public Health (FOPH/BAG)",
+        "jurisdiction": "CH",
+        "language": "de"
+      },
+      "title": "Health insurance for persons resident in Switzerland",
+      "authority_level": "federal",
+      "source_kind": "official_guidance",
+      "priority": "P0",
+      "topic_hints": [
+        "health-insurance"
+      ],
+      "discovery": {
+        "method": "official_search_result",
+        "reference_url": "https://www.bag.admin.ch/de/krankenversicherung-versicherungspflicht-fuer-in-der-schweiz-wohnhafte-versicherte",
+        "located_on": "2026-09-06"
+      },
+      "scan_status": "ready",
+      "notes": "Seed located on an official site; crawler accessibility and content language must be checked at build time."
+    },
+    {
+      "definition": {
+        "source_id": "ch-bazg-moving",
+        "start_url": "https://www.bazg.admin.ch/de/vorgehen-umzug-in-die-schweiz",
+        "allowed_hosts": [
+          "www.bazg.admin.ch"
+        ],
+        "allowed_path_prefixes": [
+          "/de/vorgehen-umzug-in-die-schweiz"
+        ],
+        "canonical_authority": "Federal Office for Customs and Border Security (FOCBS/BAZG)",
+        "jurisdiction": "CH",
+        "language": "de"
+      },
+      "title": "Moving to Switzerland: customs procedure",
+      "authority_level": "federal",
+      "source_kind": "official_guidance",
+      "priority": "P1",
+      "topic_hints": [
+        "registration-moving"
+      ],
+      "discovery": {
+        "method": "official_search_result",
+        "reference_url": "https://www.bazg.admin.ch/de/vorgehen-umzug-in-die-schweiz",
+        "located_on": "2026-09-06"
+      },
+      "scan_status": "ready",
+      "notes": "Seed located on an official site; crawler accessibility and content language must be checked at build time."
+    },
+    {
+      "definition": {
+        "source_id": "ch-bsv-ahv",
+        "start_url": "https://www.bsv.admin.ch/de/ahv-uebersicht",
+        "allowed_hosts": [
+          "www.bsv.admin.ch"
+        ],
+        "allowed_path_prefixes": [
+          "/de/ahv-uebersicht"
+        ],
+        "canonical_authority": "Federal Social Insurance Office (FSIO/BSV)",
+        "jurisdiction": "CH",
+        "language": "de"
+      },
+      "title": "Old-age and survivors insurance (AHV) overview",
+      "authority_level": "federal",
+      "source_kind": "official_guidance",
+      "priority": "P1",
+      "topic_hints": [
+        "tax-social-insurance"
+      ],
+      "discovery": {
+        "method": "official_search_result",
+        "reference_url": "https://www.bsv.admin.ch/de/ahv-uebersicht",
+        "located_on": "2026-09-06"
+      },
+      "scan_status": "ready",
+      "notes": "German official AHV overview from BSV selected for first-pillar source planning. Replaces the English ch.ch first-pillar seed; no German ch.ch counterpart was verified. Crawler access and content language remain build-time checks."
+    },
+    {
+      "definition": {
+        "source_id": "ch-sem-residence-de",
+        "start_url": "https://www.sem.admin.ch/sem/de/home/themen/aufenthalt.html",
+        "allowed_hosts": [
+          "www.sem.admin.ch"
+        ],
+        "allowed_path_prefixes": [
+          "/sem/de/home/themen/aufenthalt.html",
+          "/sem/de/home/themen/aufenthalt/"
+        ],
+        "canonical_authority": "State Secretariat for Migration (SEM)",
+        "jurisdiction": "CH",
+        "language": "de"
+      },
+      "title": "SEM residence overview (de)",
+      "authority_level": "federal",
+      "source_kind": "official_guidance",
+      "priority": "P0",
+      "topic_hints": [
+        "residence-permits",
+        "settlement-renewal"
+      ],
+      "discovery": {
+        "method": "official_page_link",
+        "reference_url": "https://www.sem.admin.ch/sem/de/home/themen/aufenthalt.html",
+        "located_on": "2026-09-06"
+      },
+      "scan_status": "ready",
+      "notes": "German entry point preferred for a single-version MVP selection. Capture independently; candidate page grouping does not prove equivalent sections, synchronized revisions or concept identity."
+    },
+    {
+      "definition": {
+        "source_id": "zh-overview",
+        "start_url": "https://www.zh.ch/de/migration-integration/aufenthalt.html",
+        "allowed_hosts": [
+          "www.zh.ch"
+        ],
+        "allowed_path_prefixes": [
+          "/de/migration-integration/aufenthalt.html",
+          "/de/migration-integration/aufenthalt/"
+        ],
+        "canonical_authority": "Canton Zurich - Migration Office",
+        "jurisdiction": "CH-ZH",
+        "language": "de"
+      },
+      "title": "Zurich - Residence overview",
+      "authority_level": "cantonal",
+      "source_kind": "official_guidance",
+      "priority": "P0",
+      "topic_hints": [
+        "residence-permits",
+        "competent-authorities"
+      ],
+      "discovery": {
+        "method": "official_page_link",
+        "reference_url": "https://www.zh.ch/de/migration-integration/aufenthalt.html",
+        "located_on": "2026-09-06"
+      },
+      "scan_status": "ready",
+      "notes": "Seed located on an official site; crawler accessibility and content language must be checked at build time."
+    }
+  ],
+  "parallel_page_groups": [],
+  "evidence_selection_policy": {
+    "status": "PLANNED_NOT_IMPLEMENTED",
+    "eligibility": "Apply explicit scope, jurisdiction, applicability, effective date and source_languages filters before ranking evidence. Query and answer languages never imply a source-language filter.",
+    "ranking": "Prefer authoritative, current evidence that supports the requested claim. German is only a final tie-breaker among verified equivalent, equally suitable official versions.",
+    "duplicate_support": "Group verified equivalent sections of compatible source revisions when selecting evidence; translations of one source do not count as independent corroboration. Retain all source references and expose material differences or conflicts.",
+    "identity": "Reviewed concept equivalence permits shared language-neutral concept IDs and multilingual term metadata. Documents, snapshots, sections, evidence IDs, URLs, source languages and hashes remain independently identified.",
+    "answer_language": "The calling LLM chooses the answer language independently and cites the selected original evidence. Localized retrieval metadata is not factual evidence."
+  }
+}
