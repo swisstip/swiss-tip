@@ -1,8 +1,39 @@
 # Developer setup
 
-Everything needed to run Swiss TIP from source, test it and build a knowledge
-base. To **use** the server rather than develop it, the Docker route in the
-[README](../README.md) is one command and needs nothing on this page.
+## First step: run it with Docker
+
+Before setting anything up locally, run the server as it is published. One
+command, and everything is inside the image: the MCP server, the `mvp-zurich`
+knowledge base with its readiness attestation and semantic index, and a
+CPU-only Ollama with the `qwen3-embedding:0.6b` model, so search is hybrid
+from the first request.
+
+```shell
+docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
+```
+
+It needs no clone, no Python, no uv, no API key and no model download. The
+first run pulls about 850 MB, roughly three minutes on a normal connection,
+and the server answers on `http://127.0.0.1:8000/mcp` about 15 seconds after
+starting. This is the fastest way to see what the server does, to try it from
+an MCP client, and to have something known-good to compare against when a
+local build behaves differently. The [README](../README.md) covers it and the
+two smaller image variants.
+
+## Then, if you are developing
+
+Use the local toolchain when you are changing the code, running the unit
+tests, building or curating a knowledge base, or rebuilding a semantic index —
+none of which the published image can do. That means uv and Python 3.14, as
+below. The rule of thumb:
+
+| You want to | Use |
+| --- | --- |
+| Use, demo or evaluate the server | **Docker**, above |
+| Change the server or the pipeline, run the tests | **uv** and Python 3.14, below |
+| Serve a pack you are building locally | **uv** or the checkout, pointing `--release` at your pack |
+| Build a pack, curate facts, review in the console | **uv** with the `build` dependency group |
+| Rebuild a semantic index | **uv** plus a local Ollama with the model |
 
 ## Quick start with uv
 
