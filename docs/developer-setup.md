@@ -88,18 +88,19 @@ uv run swisstip-quickstart mvp-zurich
 ```
 
 Either way, the command downloads the current attested release of the
-`mvp-zurich` knowledge base from the packs repository into
-`.local/packs/mvp-zurich/` under the current directory (outside Git in a
-checkout), and runs the first tests on it with no model and no further
-network: the release validates and its readiness record attests exactly the
-downloaded file, the semantic index is bound to that release, the pack's
+`mvp-zurich` knowledge base and its 15 waste-collection calendars from the
+packs repository into `.local/packs/mvp-zurich/` under the current directory
+(outside Git in a checkout), and runs the first tests on it with no model and
+no further network: the release validates and its readiness record attests
+exactly the downloaded file, the semantic index is bound to that release, the
+calendars bind to concepts of the release, the pack's
 acceptance suite and regression pack are replayed against it, and a client
 round trip over MCP runs against the server. It prints one line per check
 and ends with the commands that serve the pack and connect a client, in the
 form it was started with (`uvx ...` or `uv run ...`):
 
 ```shell
-uvx swisstip-quickstart mvp-zurich --serve                    # MCP on http://127.0.0.1:8000/mcp, /health beside it
+uvx swisstip-quickstart mvp-zurich --serve                    # MCP on http://127.0.0.1:8000/mcp, /health beside it, with the calendars
 uvx swisstip-mcp --release .local/packs/mvp-zurich/release.json --require-ready --print-client-config opencode
 uvx swisstip-quickstart mvp-zurich --no-fetch                 # the same checks again, offline
 ```

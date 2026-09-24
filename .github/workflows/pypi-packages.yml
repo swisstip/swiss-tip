@@ -118,6 +118,7 @@ jobs:
           python -m venv "$RUNNER_TEMP/quick"
           "$RUNNER_TEMP/quick/bin/python" -m pip install \
             "dist/swisstip_core-$VERSION-py3-none-any.whl" "dist/swisstip_mcp-$VERSION-py3-none-any.whl" \
+            "dist/swisstip_calendar_connector-$VERSION-py3-none-any.whl" \
             "dist/swisstip_quickstart-$VERSION-py3-none-any.whl"
           # The synthetic release as a fetched pack, checked and tested offline: no request and no knowledge base.
           # The round trip inside starts the server of the same environment, so it tests the installed wheels.
