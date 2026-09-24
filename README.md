@@ -100,25 +100,23 @@ the live numbers through `get_coverage` and `/health`.
 
 ## Run the server
 
-Every way of running the server names the release it serves; the server holds
-no knowledge of its own. Docker is the primary route, and the full pack image
-above is the whole server in one container. Two more images trade size for the
-bundled model:
+One image, one command, hybrid search:
 
-| Image | Command | Search | Size |
-| --- | --- | --- | --- |
-| Full pack image, model inside | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` | hybrid | ~850 MB |
-| Slim server plus the embedding sidecar, two containers ([compose.yaml](compose.yaml)) | `SWISSTIP_PACK=mvp-zurich docker compose up -d --wait` | hybrid | ~165 MB + ~790 MB |
-| Slim pack image alone, no model | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich-slim` | lexical only | ~165 MB |
+```shell
+docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
+```
 
-Each `search` result names its own `retrieval_mode`: `hybrid`, or
-`lexical-fallback` with the reason when a configured model is unreachable. The
-image family, the calendar connector and the OpenCode demo interface are
-described under [container images](docker/README.md).
+The image is the whole server: the release it serves, its readiness
+attestation, the semantic index and the embedding model. Nothing else is
+needed, and nothing has to be configured. Every `search` result names its own
+`retrieval_mode`, which is `hybrid` here.
 
-Running from source or from PyPI, with uv and a release directory, is in
-[developer setup](docs/developer-setup.md); those routes serve lexical search
-unless a local Ollama provides the model.
+Other container images exist for narrower cases — a smaller image without the
+model, a two-container split with an embedding sidecar, the calendar connector
+and a browser demo interface. They serve the same release and are described
+under [container images](docker/README.md) and in
+[developer setup](docs/developer-setup.md); the command above is the one to
+use.
 
 ## Source etiquette
 
@@ -135,14 +133,52 @@ rather than silent. The commands are in
 Quoted official texts kept in a release remain the property of their
 publishers and are reproduced only as cited evidence, see [NOTICE](NOTICE).
 
+## Freshness, and what happens when it lapses
+
+Answers come from a **dated snapshot**, never from a live fetch at request
+time. For the current release the snapshot date is **23 September 2026**: every
+fact says what its official page published on or before that date, and every
+citation carries its own `accessed_on` date, so a caller can always tell how
+old the evidence is.
+
+The release declares a freshness window of 60 days, which runs out on
+**22 November 2026**. The server does not quietly keep serving after that. Once
+the window has passed, `resolve` returns the typed status `STALE` instead of
+`SUPPORTED`, and says so in its guidance:
+
+> The source snapshot of 2026-09-23 is older than 60 days on 2026-11-23. These
+> facts say what the official pages published on 2026-09-23, not what holds on
+> 2026-11-23: present them as published on 2026-09-23, do not confirm that
+> opening hours, availability, officeholders, rates, contacts or rules still
+> apply, and tell the user to check the cited page.
+
+So an assistant is told to present the facts as historical and to send the user
+to the source, rather than asserting that they are current. A caller cannot
+dodge this by asking for an earlier date: the guidance names that too. The
+window is a property of the release, so publishing a fresher release resets it,
+and `/health` and `get_coverage` both report the snapshot date and the date the
+release goes stale.
+
+This matters most for the values that move: fees, rates, opening hours,
+officeholders and deadlines. Two things keep those honest. Amounts and
+calculators are **out of scope** by declaration, not by omission — tariff
+tables, tax and pension amounts, premiums and every calculator are listed in
+`out_of_scope`, which `get_coverage` returns. And where a rate is published,
+the statement carries its own effective date rather than presenting it as
+timeless. The mortgage reference interest rate reads:
+
+> The mortgage reference interest rate (Referenzzinssatz) that governs rent
+> adjustments is 1.25 percent, valid since 2 September 2025; the Federal Office
+> for Housing's page, saved on 18 September 2026, states that it remains
+> unchanged from 2 September 2026.
+
 ## Credentials and the prebuilt index
 
 **No credentials.** The server needs no API key, no token and no account, at
 build time or at run time, and it makes no call to any external service while
 answering: it serves a local release, and the embedding model runs locally
-(inside the full image, or in the sidecar beside the slim one). There is
-nothing to hand over in order to run or test it, and the repository holds no
-secrets.
+inside the image. There is nothing to hand over in order to run or test it,
+and the repository holds no secrets.
 
 **The prebuilt index ships with the release.** `semantic-index.json` is part
 of a pack's release bundle, so every route above already has it: inside the
