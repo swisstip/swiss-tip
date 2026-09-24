@@ -1,0 +1,5 @@
+# The sidecar image needs only its two scripts; Ollama, the model and the
+# start check come out of the semantic image.
+*
+!serve-embeddings.sh
+!embeddings_health.py

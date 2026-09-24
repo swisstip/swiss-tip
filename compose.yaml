@@ -1,0 +1,68 @@
+# Swiss TIP with hybrid search in two containers: the slim release image of
+# the MCP server (no Ollama, no model) and the embedding sidecar (CPU-only
+# Ollama with qwen3-embedding:0.6b inside). Both images are pulled from
+# ghcr.io; nothing else is needed, not even a clone - this file is enough.
+# This repository holds no pack: SWISSTIP_PACK names the pack to serve, and
+# the pack images come from the packs repository (swiss-tip-mvp).
+#
+#   SWISSTIP_PACK=<pack> docker compose up -d --wait   MCP on http://127.0.0.1:8000/mcp, /health beside it
+#   docker compose logs -f swiss-tip                   one line per tool call
+#   docker compose down
+#
+# The sidecar joins the server's network namespace, so the server reaches the
+# model on 127.0.0.1:11434, the only kind of address it accepts, and the
+# model is reachable from nowhere else. The server does not depend on it:
+# while the model loads, and if the sidecar stops, every search reports
+# retrieval_mode lexical-fallback with the reason. --wait returns when the
+# server answers and the model is loaded.
+#
+#   SWISSTIP_PORT=9000 docker compose up -d --wait              another host port
+#   SWISSTIP_REGISTRY=ghcr.io/<owner> docker compose up -d      images of another owner, or local builds
+#
+# A browser interface for the same server, when wanted: the OpenCode agent
+# in a third container (docker/opencode), behind the profile "demo". It is a
+# test image, not the product, and it calls a model over the internet.
+#
+#   docker compose --profile demo up -d --wait   the above, and the GUI on http://127.0.0.1:4096
+#   docker compose stop demo                     the GUI off; the server is not touched
+#   docker compose --profile demo down           everything
+#
+# It reaches the server by its service name and has its own port, so it
+# comes and goes without the server being recreated. The port is published
+# on the loopback address, because the agent can spend a model budget; with
+# SWISSTIP_DEMO_BIND=0.0.0.0 set OPENCODE_SERVER_PASSWORD too (the name is
+# opencode, or OPENCODE_SERVER_USERNAME). A name and a password for the MCP
+# endpoint itself are a proxy's to ask for: the AWS deployment of the packs
+# repository (deploy/aws) has one.
+#
+# One container instead of two: docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:<pack>
+# Details and the same setup without Compose: docker/README.md.
+name: swiss-tip
+
+services:
+  swiss-tip:
+    image: ${SWISSTIP_REGISTRY:-ghcr.io/swisstip}/swiss-tip:${SWISSTIP_PACK:?set SWISSTIP_PACK to the pack to serve}-slim
+    # Appended to the image's server command line: the index the image carries.
+    command: ["--semantic-index", "/srv/swiss-tip/semantic-index.json"]
+    ports:
+      - "${SWISSTIP_PORT:-8000}:8000"
+
+  embeddings:
+    image: ${SWISSTIP_REGISTRY:-ghcr.io/swisstip}/swiss-tip-ollama:qwen3-embedding-0.6b
+    network_mode: "service:swiss-tip"
+
+  demo:
+    profiles: ["demo"]
+    image: ${SWISSTIP_REGISTRY:-ghcr.io/swisstip}/swiss-tip-opencode:latest
+    # A name without a value is passed on when it is set where Compose runs, and left unset otherwise.
+    environment:
+      - SWISSTIP_MCP_URL=http://swiss-tip:8000/mcp
+      - SWISSTIP_DEMO_MODEL
+      - OPENCODE_SERVER_USERNAME
+      - OPENCODE_SERVER_PASSWORD
+      - OPENCODE_API_KEY
+    ports:
+      - "${SWISSTIP_DEMO_BIND:-127.0.0.1}:${SWISSTIP_DEMO_PORT:-4096}:4096"
+    depends_on:
+      swiss-tip:
+        condition: service_healthy

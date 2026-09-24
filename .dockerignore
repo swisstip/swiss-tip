@@ -1,0 +1,15 @@
+# The image needs three packages and the licence files; everything else
+# stays out of the build context. The pack comes in as a named build
+# context (docker build --build-context pack=<pack directory>), not from
+# this repository, which holds no pack.
+*
+!LICENSE
+!NOTICE
+!packages/core/pyproject.toml
+!packages/core/src
+!packages/runtime/pyproject.toml
+!packages/runtime/src
+!apps/mcp-server/pyproject.toml
+!apps/mcp-server/src
+**/__pycache__
+**/*.egg-info

@@ -1,0 +1,5 @@
+# The base image needs only its three scripts; swisstip-mcp comes from PyPI.
+*
+!with-ollama.sh
+!ollama_ready.py
+!check_semantic.py

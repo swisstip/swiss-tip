@@ -1,0 +1,8 @@
+# The context is the pack directory; the image needs three of its files and
+# the image README where the pack has one, not the saved pages or the text
+# dataset.
+*
+!release.json
+!readiness.json
+!semantic-index.json
+!README.md
