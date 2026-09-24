@@ -157,7 +157,7 @@ The alternatives serve the same release in different packaging:
 | Way | Command | Search | Size |
 | --- | --- | --- | --- |
 | Full pack image, model inside | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` | hybrid | ~850 MB |
-| Two containers: slim server plus the embedding sidecar ([compose.yaml](compose.yaml), no clone of the packs needed) | `SWISSTIP_PACK=mvp-zurich docker compose up -d --wait` | hybrid | ~165 MB + ~830 MB |
+| Two containers: slim server plus the embedding sidecar ([compose.yaml](compose.yaml), no clone of the packs needed) | `SWISSTIP_PACK=mvp-zurich docker compose up -d --wait` | hybrid | ~165 MB + ~790 MB |
 | Slim pack image alone, no model | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich-slim` | lexical only | ~165 MB |
 | From PyPI with [uv](https://docs.astral.sh/uv/), a release directory | `uvx swisstip-mcp --release <packs>/releases/<pack>/release.json --require-ready --transport streamable-http` | lexical; hybrid needs a local Ollama | - |
 | From this checkout, after the installation below | `./.venv/bin/python -m swisstip.mcp_server.server --release <packs>/releases/<pack>/release.json --transport streamable-http` (`.venv/Scripts/python.exe` on Windows) | lexical; same note | - |
