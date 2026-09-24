@@ -34,28 +34,75 @@ that says whether the question is covered, whether a detail such as the
 canton is missing, or whether the facts are stale. The full design is in the
 [functional specification](docs/product/functional-specification.md).
 
+## Coverage at a glance
+
+The server is knowledge-base agnostic; the published MVP knowledge base is
+**`mvp-zurich`** ([swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp)).
+`get_coverage` returns the live scope, out-of-scope list and limitations of
+whatever release is loaded; the snapshot below describes the current one.
+
+- **Subject:** everyday administrative life in Switzerland, for people who
+  live here and people moving here, of any nationality.
+- **Jurisdictions:** federal rules and arrival registration for **all 26
+  cantons**, the full procedures of the **Canton of Zurich** and the **City of
+  Zurich**, and waste hand-over in the **City of Lugano**; federal rules still
+  apply elsewhere and are served with a caveat.
+- **Topics:** residence permits and registration, cantonal migration offices,
+  entry and visas, AHV and the pillar system, tax return and tax at source,
+  health and accident insurance, unemployment and the RAV, family allowances,
+  naturalisation, voting rights, renting, foreign driving licences, customs,
+  waste and recycling, integration offers, and City of Zurich services.
+- **Languages:** search matches German, English, French and Italian; answers
+  are written in the user's own language.
+- **Not covered (examples):** fees, appointment availability and processing
+  times; benefit amounts and every calculator; eligibility decisions for a
+  specific person; asylum, social assistance and debt enforcement; cantons
+  other than Zurich and municipalities other than the City of Zurich beyond
+  arrival registration. `get_coverage` returns the full list.
+- **Sources:** authoritative Swiss pages only — federal (`admin.ch`,
+  `fedlex.data.admin.ch`, `ch.ch`), cantonal (`zh.ch`), and municipal
+  (`stadt-zuerich.ch`); every fact cites an exact excerpt with its URL, access
+  date and hash.
+
+**Current release — `mvp-zurich-2026-09-24-v1`:** 20 topics, 212 concepts and
+**1,273 facts, all human-reviewed**, cited to 1,531 excerpts across 336 official
+documents; source snapshot 2026-09-23, stale from 2026-11-22. Coverage grows
+with each release, so these figures are a snapshot: the running server reports
+the live numbers through `get_coverage` and `/health`.
+
 ## Run the server
 
 The server holds no knowledge: every way of running it names the release it
-serves. A release is a pack directory with `release.json` and
-`readiness.json`, from a clone of the packs repository or downloaded from
-one of its GitHub releases.
+serves. In the commands below, `<packs>` is a clone of the packs repository
+[swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) (or a directory of
+files downloaded from one of its GitHub releases) and `<pack>` is a pack name
+in it — the published one is **`mvp-zurich`**. A release is the pack directory
+`<packs>/releases/<pack>`, holding `release.json` and `readiness.json`.
 
-With [uv](https://docs.astral.sh/uv/), the published package from PyPI:
+The quickest path needs **no clone**: a pack's own image from the packs
+repository carries its release, and Docker Compose adds the embedding sidecar
+for hybrid search (`/mcp` and `/health` on port 8000):
 
 ```shell
-uvx swisstip-mcp --release <packs>/releases/<pack>/release.json --require-ready --transport streamable-http
+docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich          # one container, lexical search
+SWISSTIP_PACK=mvp-zurich docker compose up -d --wait                        # server + embedding sidecar, hybrid search
 claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
 ```
 
-With Docker, the slim MCP image with the pack mounted, or a pack's own image
-from the packs repository:
+To serve a release directory instead — with [uv](https://docs.astral.sh/uv/)
+and the published package from PyPI, or with the slim MCP image and the pack
+mounted (here shown for the MVP pack after `git clone` of the packs repo into
+`../swiss-tip-mvp`):
 
 ```shell
-docker run --rm -p 8000:8000 -v "<packs>/releases/<pack>:/srv/swiss-tip:ro" ghcr.io/swisstip/swiss-tip-mcp:latest-slim
+git clone https://github.com/swisstip/swiss-tip-mvp ../swiss-tip-mvp
+uvx swisstip-mcp --release ../swiss-tip-mvp/releases/mvp-zurich/release.json --require-ready --transport streamable-http
+docker run --rm -p 8000:8000 -v "$PWD/../swiss-tip-mvp/releases/mvp-zurich:/srv/swiss-tip:ro" ghcr.io/swisstip/swiss-tip-mcp:latest-slim
 ```
 
-From this checkout, after the installation below:
+The general form, for any `<packs>` clone and `<pack>` name — from this
+checkout, after the installation below (`.venv/Scripts/` on Windows,
+`.venv/bin/` on macOS and Linux):
 
 ```shell
 ./.venv/Scripts/python.exe -m swisstip.mcp_server.server --release <packs>/releases/<pack>/release.json --transport streamable-http
