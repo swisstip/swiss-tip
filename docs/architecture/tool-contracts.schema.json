@@ -1,0 +1,2053 @@
+{
+  "schema_version": "swiss-tip/v4",
+  "tools": {
+    "get_coverage": {
+      "description": "Discover what this server covers. A question normally needs two calls in total: search, then resolve. Call get_coverage with no arguments only when you are unsure whether the question is in scope at all: the root page (about 5 KB) returns the active release_id, a scope_statement, an out_of_scope list, the covered jurisdictions and languages, the query languages for search, the freshness window and the topics. If the question matches out_of_scope or lies outside the scope_statement (another topic, another country), follow out_of_scope_response and make no further calls. With parent_id set to a topic_id it lists that topic's concepts with their jurisdictions and required context fields; search is the shorter way to the same concept_ids.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "release_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Release to read; omit for the active release.",
+            "title": "Release Id"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "A topic_id from the root page to list its concepts; omit for the root page.",
+            "title": "Parent Id"
+          }
+        },
+        "title": "GetCoverageRequest",
+        "type": "object"
+      },
+      "output": {
+        "type": "object",
+        "$defs": {
+          "ConceptSummary": {
+            "additionalProperties": false,
+            "description": "One line of a topic listing: enough to pick a concept. The aliases serve search only, and the allowed\ncontext values arrive with a search hit or with resolve's missing_context, so neither is listed here.",
+            "properties": {
+              "concept_id": {
+                "title": "Concept Id",
+                "type": "string"
+              },
+              "topic_id": {
+                "title": "Topic Id",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "description": {
+                "title": "Description",
+                "type": "string"
+              },
+              "jurisdictions": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Jurisdictions",
+                "type": "array"
+              },
+              "required_context": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Required Context",
+                "type": "array"
+              }
+            },
+            "required": [
+              "concept_id",
+              "topic_id",
+              "label",
+              "description",
+              "jurisdictions",
+              "required_context"
+            ],
+            "title": "ConceptSummary",
+            "type": "object"
+          },
+          "CoverageRoot": {
+            "additionalProperties": false,
+            "description": "Compact root page: about one kilobyte, enough to refuse an outside question.",
+            "properties": {
+              "release_id": {
+                "title": "Release Id",
+                "type": "string"
+              },
+              "schema_version": {
+                "title": "Schema Version",
+                "type": "string"
+              },
+              "scope_statement": {
+                "title": "Scope Statement",
+                "type": "string"
+              },
+              "out_of_scope": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Out Of Scope",
+                "type": "array"
+              },
+              "out_of_scope_response": {
+                "title": "Out Of Scope Response",
+                "type": "string"
+              },
+              "jurisdictions": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Jurisdictions",
+                "type": "array"
+              },
+              "languages": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Languages",
+                "type": "array"
+              },
+              "query_languages": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "$ref": "#/$defs/QueryLanguage"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The languages to write search queries in, best first. Send a question in one of them as asked; translate the key terms of a question in any other language into the first one before searching.",
+                "title": "Query Languages"
+              },
+              "freshness": {
+                "$ref": "#/$defs/FreshnessPolicy"
+              },
+              "topics": {
+                "items": {
+                  "$ref": "#/$defs/TopicSummary"
+                },
+                "title": "Topics",
+                "type": "array"
+              },
+              "institution_levels": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "type": "integer"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Cited documents per level of the institution that published them (federal, cantonal, municipal).",
+                "title": "Institution Levels"
+              },
+              "basis_kinds": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "type": "integer"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Facts per kind of the excerpt they rest on: act, ordinance, treaty, directive, guidance, directory, summary.",
+                "title": "Basis Kinds"
+              },
+              "limitations": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Limitations",
+                "type": "array"
+              }
+            },
+            "required": [
+              "release_id",
+              "schema_version",
+              "scope_statement",
+              "out_of_scope",
+              "out_of_scope_response",
+              "jurisdictions",
+              "languages",
+              "freshness",
+              "topics",
+              "limitations"
+            ],
+            "title": "CoverageRoot",
+            "type": "object"
+          },
+          "CoverageTopic": {
+            "additionalProperties": false,
+            "properties": {
+              "release_id": {
+                "title": "Release Id",
+                "type": "string"
+              },
+              "topic_id": {
+                "title": "Topic Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "concepts": {
+                "items": {
+                  "$ref": "#/$defs/ConceptSummary"
+                },
+                "title": "Concepts",
+                "type": "array"
+              },
+              "limitations": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Limitations",
+                "type": "array"
+              }
+            },
+            "required": [
+              "release_id",
+              "topic_id",
+              "title",
+              "concepts",
+              "limitations"
+            ],
+            "title": "CoverageTopic",
+            "type": "object"
+          },
+          "ErrorBody": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "issues": {
+                "items": {
+                  "$ref": "#/$defs/ValidationIssue"
+                },
+                "title": "Issues",
+                "type": "array"
+              }
+            },
+            "required": [
+              "code",
+              "issues"
+            ],
+            "title": "ErrorBody",
+            "type": "object"
+          },
+          "ErrorCode": {
+            "enum": [
+              "INVALID_ARGUMENT",
+              "RELEASE_UNAVAILABLE",
+              "OPERATIONAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          },
+          "FreshnessPolicy": {
+            "additionalProperties": false,
+            "properties": {
+              "snapshot_date": {
+                "description": "Date on which the source pages were saved.",
+                "format": "date",
+                "title": "Snapshot Date",
+                "type": "string"
+              },
+              "max_age_days": {
+                "description": "Days after the snapshot during which results are current.",
+                "title": "Max Age Days",
+                "type": "integer"
+              },
+              "stale_from": {
+                "description": "First date on which results report STALE.",
+                "format": "date",
+                "title": "Stale From",
+                "type": "string"
+              }
+            },
+            "required": [
+              "snapshot_date",
+              "max_age_days",
+              "stale_from"
+            ],
+            "title": "FreshnessPolicy",
+            "type": "object"
+          },
+          "QueryLanguage": {
+            "additionalProperties": false,
+            "description": "A language that lexical search matches, with what the release indexes in it.",
+            "properties": {
+              "code": {
+                "description": "ISO 639-1 code.",
+                "title": "Code",
+                "type": "string"
+              },
+              "rank": {
+                "description": "1 is the preferred language for search queries.",
+                "minimum": 1,
+                "title": "Rank",
+                "type": "integer"
+              },
+              "indexed": {
+                "description": "What the release indexes in this language, which is why it ranks where it does.",
+                "title": "Indexed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "rank",
+              "indexed"
+            ],
+            "title": "QueryLanguage",
+            "type": "object"
+          },
+          "ToolError": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "$ref": "#/$defs/ErrorBody"
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "title": "ToolError",
+            "type": "object"
+          },
+          "TopicSummary": {
+            "additionalProperties": false,
+            "description": "A topic on the coverage root. The jurisdictions it publishes for are not repeated here: the root's own\n`jurisdictions` lists every one of them, and the topic page carries them per concept. The root has to stay small\nenough for one call to settle whether a question is in scope.",
+            "properties": {
+              "topic_id": {
+                "title": "Topic Id",
+                "type": "string"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "concept_count": {
+                "title": "Concept Count",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "topic_id",
+              "title",
+              "concept_count"
+            ],
+            "title": "TopicSummary",
+            "type": "object"
+          },
+          "ValidationIssue": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "title": "Path",
+                "type": "string"
+              },
+              "message": {
+                "title": "Message",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "message"
+            ],
+            "title": "ValidationIssue",
+            "type": "object"
+          }
+        },
+        "anyOf": [
+          {
+            "$ref": "#/$defs/CoverageRoot"
+          },
+          {
+            "$ref": "#/$defs/CoverageTopic"
+          },
+          {
+            "$ref": "#/$defs/ToolError"
+          }
+        ]
+      }
+    },
+    "search": {
+      "description": "Find ranked published concepts for a question or key terms. Lexical search matches only the server's query languages (named in the server instructions and in get_coverage query_languages; English and German unless named otherwise): send a question in one of them as asked, and translate the key terms of a question in any other language into the preferred one before searching. Optional local semantic search can also find concepts in other languages, less reliably. When the user's canton or municipality is known, give it as jurisdiction, as for resolve: the hits are then the concepts that can apply there, and a concept published for other places only is named in published_elsewhere instead (do not resolve it; if no hit answers the question, say that this service does not publish it for the user's place). The result names retrieval_mode and any fallback. An empty list means no candidates matched this retrieval method; it does not prove the subject is outside coverage. matched_count and truncated describe the selected candidates, not completeness for the question. Scores rank candidates, not confidence or applicability; they include a small prior for the basis of a concept's facts (the law above guidance above a portal summary) and for their review, never for the level of the publisher. Each hit carries concept_id, label, description, jurisdictions, required_context and context_schema (the allowed values of every context field with their meaning). Select the relevant concepts and supply the known jurisdiction and context to resolve, which determines which published facts match. A search hit only says the concept is a retrieval candidate. match_strength says whether the question's distinctive words reached a published concept at all: on strong, resolve the relevant hits; on weak or none, the hits rest on incidental words or a nearby subject and the result carries the scope_statement, so compare the question with it and decline in this same turn, without calling get_coverage, unless a hit is clearly the question's subject.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "description": "Question or key terms to find published concepts, in one of the server's query languages (get_coverage query_languages; English and German unless the server names others). Send a question in one of them as asked; translate the key terms of a question in any other language into the preferred one first. Optional local semantic search also accepts other languages, less reliably.",
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "limit": {
+            "default": 3,
+            "description": "Maximum hits. Three is enough for a question about one subject; raise it only to explore, at most ten.",
+            "maximum": 10,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "jurisdiction": {
+            "additionalProperties": false,
+            "description": "Where the user lives, in parts, at the most specific level known. Every part takes a name, in English or in\nthe local language, or a code; the server turns it into the code the facts carry and echoes what it understood\nin executed_scope. The field names of schema v3 (country_code, canton_code, municipality_id) are still accepted.",
+            "properties": {
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Country name or ISO 3166-1 code, for example Switzerland, Schweiz or CH. Omit it for the country this server covers; another country resolves OUT_OF_COVERAGE.",
+                "title": "Country"
+              },
+              "canton": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Canton name, abbreviation or ISO 3166-2 code, for example Zurich, Z\u00fcrich, ZH or CH-ZH. Not needed when the city is given, unless several cantons have a city of that name.",
+                "title": "Canton"
+              },
+              "city": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The municipality (political commune) the user lives in, not a district, a quarter or a postcode: its name, for example Wallisellen or Zurich, or its code, the canton code plus the BFS number (CH-ZH-261; the number alone only next to the canton).",
+                "title": "City"
+              }
+            },
+            "title": "Jurisdiction",
+            "type": "object"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
+        "type": "object"
+      },
+      "output": {
+        "type": "object",
+        "$defs": {
+          "ContextField": {
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "const": "string",
+                "default": "string",
+                "title": "Type",
+                "type": "string"
+              },
+              "enum": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Enum"
+              },
+              "description": {
+                "title": "Description",
+                "type": "string"
+              }
+            },
+            "required": [
+              "description"
+            ],
+            "title": "ContextField",
+            "type": "object"
+          },
+          "ErrorBody": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "issues": {
+                "items": {
+                  "$ref": "#/$defs/ValidationIssue"
+                },
+                "title": "Issues",
+                "type": "array"
+              }
+            },
+            "required": [
+              "code",
+              "issues"
+            ],
+            "title": "ErrorBody",
+            "type": "object"
+          },
+          "ErrorCode": {
+            "enum": [
+              "INVALID_ARGUMENT",
+              "RELEASE_UNAVAILABLE",
+              "OPERATIONAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          },
+          "ExecutedScope": {
+            "additionalProperties": false,
+            "description": "The jurisdiction a resolve ran for, as the server understood the request: the codes the facts are matched\nagainst and the register's official names for them.",
+            "properties": {
+              "country_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "ISO 3166-1 code; absent for a country named in words that is not served.",
+                "title": "Country Code"
+              },
+              "canton_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "ISO 3166-2 canton code, for example CH-ZH.",
+                "title": "Canton Code"
+              },
+              "municipality_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Canton code plus BFS municipality number, for example CH-ZH-261.",
+                "title": "Municipality Id"
+              },
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Official name of the country, or the caller's words for one not served.",
+                "title": "Country"
+              },
+              "canton": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Official name of the canton.",
+                "title": "Canton"
+              },
+              "city": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Official name of the municipality.",
+                "title": "City"
+              },
+              "not_recognised": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Parts of the request the place register does not hold, by field, as the caller sent them. The request ran for the broader place above; correct the part (the municipality's official name, not a district) and resolve again if the narrower place matters. Omitted when every part was recognised.",
+                "title": "Not Recognised",
+                "type": "object"
+              }
+            },
+            "title": "ExecutedScope",
+            "type": "object"
+          },
+          "MatchSignals": {
+            "additionalProperties": false,
+            "properties": {
+              "lexical_share": {
+                "description": "Share of the query's rarity-weighted words that the label, aliases or questions of the best concept matched; a word the index has never seen counts as unmatched.",
+                "maximum": 1,
+                "minimum": 0,
+                "title": "Lexical Share",
+                "type": "number"
+              },
+              "anchored_weight": {
+                "description": "The same matched mass in units of the rarest possible word, so a long question with names and places is judged by what it matched, not by what it did not.",
+                "minimum": 0,
+                "title": "Anchored Weight",
+                "type": "number"
+              },
+              "best_semantic_score": {
+                "anyOf": [
+                  {
+                    "maximum": 1,
+                    "minimum": -1,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Best raw cosine similarity over every concept before the candidate cut; absent without semantic search.",
+                "title": "Best Semantic Score"
+              }
+            },
+            "required": [
+              "lexical_share",
+              "anchored_weight"
+            ],
+            "title": "MatchSignals",
+            "type": "object"
+          },
+          "PublishedElsewhere": {
+            "additionalProperties": false,
+            "description": "A concept the query found that is published for other places only, so it cannot apply where the user lives.",
+            "properties": {
+              "concept_id": {
+                "title": "Concept Id",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "jurisdictions": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Jurisdictions",
+                "type": "array"
+              }
+            },
+            "required": [
+              "concept_id",
+              "label",
+              "jurisdictions"
+            ],
+            "title": "PublishedElsewhere",
+            "type": "object"
+          },
+          "SearchHit": {
+            "additionalProperties": false,
+            "properties": {
+              "concept_id": {
+                "title": "Concept Id",
+                "type": "string"
+              },
+              "topic_id": {
+                "title": "Topic Id",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "description": {
+                "title": "Description",
+                "type": "string"
+              },
+              "jurisdictions": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Jurisdictions",
+                "type": "array"
+              },
+              "required_context": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Required Context",
+                "type": "array"
+              },
+              "context_schema": {
+                "additionalProperties": {
+                  "$ref": "#/$defs/ContextField"
+                },
+                "description": "Allowed values and meaning of every context field, so resolve can be called with the context filled in.",
+                "title": "Context Schema",
+                "type": "object"
+              },
+              "score": {
+                "title": "Score",
+                "type": "number"
+              },
+              "matched_on": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Matched On",
+                "type": "array"
+              }
+            },
+            "required": [
+              "concept_id",
+              "topic_id",
+              "label",
+              "description",
+              "jurisdictions",
+              "required_context",
+              "score",
+              "matched_on"
+            ],
+            "title": "SearchHit",
+            "type": "object"
+          },
+          "SearchResult": {
+            "additionalProperties": false,
+            "properties": {
+              "release_id": {
+                "title": "Release Id",
+                "type": "string"
+              },
+              "query": {
+                "title": "Query",
+                "type": "string"
+              },
+              "results": {
+                "items": {
+                  "$ref": "#/$defs/SearchHit"
+                },
+                "title": "Results",
+                "type": "array"
+              },
+              "executed_scope": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ExecutedScope"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The place the search ran for, as the server understood the request's jurisdiction; absent when none was given."
+              },
+              "published_elsewhere": {
+                "description": "Concepts that would have been among the first hits but are published for other cantons or municipalities only: they do not apply at the user's place, so do not resolve them and carry nothing over from them. When no result answers the question, tell the user that this service does not publish it for their place. Omitted when empty or when no jurisdiction was given.",
+                "items": {
+                  "$ref": "#/$defs/PublishedElsewhere"
+                },
+                "title": "Published Elsewhere",
+                "type": "array"
+              },
+              "match_strength": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "strong",
+                      "weak",
+                      "none"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Whether the query's distinctive words reached a published concept: strong (resolve the relevant hits), weak (the hits rest on incidental words or a nearby subject; the question probably lies outside the scope, decline it unless a hit is clearly its subject) or none (no candidate). Older mock responses omit it.",
+                "title": "Match Strength"
+              },
+              "match_signals": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/MatchSignals"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The two signals behind match_strength."
+              },
+              "scope_statement": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The release's scope statement, sent with weak and none results so the caller can decline without another call.",
+                "title": "Scope Statement"
+              },
+              "matched_count": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Candidates selected by the active retrieval method before applying limit; not a count of all relevant concepts.",
+                "title": "Matched Count"
+              },
+              "truncated": {
+                "default": false,
+                "description": "Some selected candidates were omitted by limit.",
+                "title": "Truncated",
+                "type": "boolean"
+              },
+              "retrieval_mode": {
+                "default": "lexical",
+                "enum": [
+                  "lexical",
+                  "hybrid",
+                  "lexical-fallback"
+                ],
+                "title": "Retrieval Mode",
+                "type": "string"
+              },
+              "ranking_model": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranking Model"
+              },
+              "ranking_model_digest": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranking Model Digest"
+              },
+              "fallback_reason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Why configured semantic search was unavailable.",
+                "title": "Fallback Reason"
+              },
+              "guidance_for_caller": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "How to interpret the ranked matches; search does not establish applicability or complete coverage.",
+                "title": "Guidance For Caller"
+              },
+              "limitations": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Limitations",
+                "type": "array"
+              }
+            },
+            "required": [
+              "release_id",
+              "query",
+              "results",
+              "limitations"
+            ],
+            "title": "SearchResult",
+            "type": "object"
+          },
+          "ToolError": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "$ref": "#/$defs/ErrorBody"
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "title": "ToolError",
+            "type": "object"
+          },
+          "ValidationIssue": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "title": "Path",
+                "type": "string"
+              },
+              "message": {
+                "title": "Message",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "message"
+            ],
+            "title": "ValidationIssue",
+            "type": "object"
+          }
+        },
+        "anyOf": [
+          {
+            "$ref": "#/$defs/SearchResult"
+          },
+          {
+            "$ref": "#/$defs/ToolError"
+          }
+        ]
+      }
+    },
+    "resolve": {
+      "description": "Return the published facts, evidence citations and, where published, the user facts still needed and a decision rule for up to five concept_ids in ONE call. Give where the user lives as jurisdiction, at the most specific level you know, in the words the user used: {\"canton\": \"Zurich\", \"city\": \"Wallisellen\"}. Names in English or the local language and codes are both accepted; the server turns them into codes and echoes what it understood in executed_scope, where not_recognised names a part it could not place (the request then ran for the broader place). A federal concept answers for any canton, a cantonal concept for its municipalities, never upward or sideways. Give as_of (normally today) and every required context field of each concept, derived from the question (the search hits list the allowed values). Per concept the status is SUPPORTED, NEEDS_CONTEXT (missing_context names the fields; derive them before asking the user), OUT_OF_COVERAGE (gaps name the dimension and the published values to use instead; say the request is not covered) or STALE (the facts say what the pages published on the snapshot date, not what holds on as_of: present them as published then and tell the user to check the page; never resolve again with an earlier as_of to avoid it). The facts and citations in the result are enough to answer: build the answer from the statements, cite only the returned URLs, add no document, fee, contact, link or procedure the statements do not contain (not_served names what the release does not publish), collect the required_user_facts before computing any date, and follow guidance_for_caller, including what to tell the user about review status and translation. Do not call search or get_evidence again unless the user asks for a verbatim quote. Citations list each cited page once with the evidence_ids that rest on it, the publisher, its level (federal, cantonal, municipal) and the jurisdiction it speaks for, the page with the strongest basis first. Every served fact states its basis (on the fact, or once on the concept when all its facts share it): what the cited excerpt is, such as 'Federal act: AIG, SR 142.20, Art. 12', 'Cantonal authority guidance' or 'Portal summary of federal rules', whichever page carries it; name it to the user when it matters, and prefer the law's excerpt where a summary differs from it. Every concept with facts states review_status, once for all its facts or, when they differ, on each fact: 'human-reviewed' means a named person confirmed the statement against its excerpt, any other value means no person has. Say so when it matters to the user, and for a critical question set reviewed_only to withhold unreviewed statements rather than pass them on unqualified.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "concept_ids": {
+            "description": "Concept IDs from get_coverage or search.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Concept Ids",
+            "type": "array"
+          },
+          "jurisdiction": {
+            "additionalProperties": false,
+            "description": "Where the user lives, in parts, at the most specific level known. Every part takes a name, in English or in\nthe local language, or a code; the server turns it into the code the facts carry and echoes what it understood\nin executed_scope. The field names of schema v3 (country_code, canton_code, municipality_id) are still accepted.",
+            "properties": {
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Country name or ISO 3166-1 code, for example Switzerland, Schweiz or CH. Omit it for the country this server covers; another country resolves OUT_OF_COVERAGE.",
+                "title": "Country"
+              },
+              "canton": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Canton name, abbreviation or ISO 3166-2 code, for example Zurich, Z\u00fcrich, ZH or CH-ZH. Not needed when the city is given, unless several cantons have a city of that name.",
+                "title": "Canton"
+              },
+              "city": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The municipality (political commune) the user lives in, not a district, a quarter or a postcode: its name, for example Wallisellen or Zurich, or its code, the canton code plus the BFS number (CH-ZH-261; the number alone only next to the canton).",
+                "title": "City"
+              }
+            },
+            "title": "Jurisdiction",
+            "type": "object"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Applicability date; omit for today.",
+            "title": "As Of"
+          },
+          "context": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Values for the concept's context_schema fields.",
+            "title": "Context",
+            "type": "object"
+          },
+          "reviewed_only": {
+            "default": false,
+            "description": "Serve only facts a person has confirmed (review_status 'human-reviewed'). Use it when the question is critical enough that an unreviewed statement is not good enough; a concept whose facts are all unreviewed then resolves OUT_OF_COVERAGE with a review_status_not_met gap instead of returning them.",
+            "title": "Reviewed Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "concept_ids"
+        ],
+        "title": "ResolveRequest",
+        "type": "object"
+      },
+      "output": {
+        "type": "object",
+        "$defs": {
+          "Citation": {
+            "additionalProperties": false,
+            "description": "One cited page, listed once per concept however many of its facts rest on it.",
+            "properties": {
+              "evidence_ids": {
+                "description": "The evidence IDs of this concept's facts that rest on this page; a fact's evidence_ids name its page here.",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Evidence Ids",
+                "type": "array"
+              },
+              "source_title": {
+                "title": "Source Title",
+                "type": "string"
+              },
+              "publisher": {
+                "title": "Publisher",
+                "type": "string"
+              },
+              "level": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Level of the state of the institution that published the page: federal, cantonal or municipal.",
+                "title": "Level"
+              },
+              "jurisdiction": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Whom that institution speaks for: CH, a canton code such as CH-ZH, or a municipality code.",
+                "title": "Jurisdiction"
+              },
+              "url": {
+                "title": "Url",
+                "type": "string"
+              },
+              "language": {
+                "title": "Language",
+                "type": "string"
+              },
+              "accessed_on": {
+                "format": "date",
+                "title": "Accessed On",
+                "type": "string"
+              }
+            },
+            "required": [
+              "evidence_ids",
+              "source_title",
+              "publisher",
+              "url",
+              "language",
+              "accessed_on"
+            ],
+            "title": "Citation",
+            "type": "object"
+          },
+          "ConceptResolution": {
+            "additionalProperties": false,
+            "properties": {
+              "concept_id": {
+                "title": "Concept Id",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/Status"
+              },
+              "answering_jurisdiction": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Answering Jurisdiction"
+              },
+              "review_status": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "human-reviewed",
+                      "assistant-authored-unreviewed",
+                      "automatically-derived-unreviewed",
+                      "model-candidate-automated-review"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Whether a person has confirmed the statement against its cited excerpt. 'human-reviewed' means a named reviewer did; every other value means no person has. Weigh a statement that is not human-reviewed accordingly, and for a critical question either quote the cited excerpt or resolve again with reviewed_only. Stated here once when every fact of the concept shares it, together with reviewed_on and reviewed_by; absent when the facts differ, and then each fact states its own.",
+                "title": "Review Status"
+              },
+              "reviewed_on": {
+                "anyOf": [
+                  {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Date of the human review shared by every fact.",
+                "title": "Reviewed On"
+              },
+              "reviewed_by": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Person who confirmed every fact of the concept.",
+                "title": "Reviewed By"
+              },
+              "basis": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "What the cited excerpt is, stated independently of the page that carries it: 'Federal act: AIG, SR 142.20, Art. 12' when the excerpt is the text of a norm (also 'Federal ordinance', 'International agreement', 'Cantonal directive'), '<Level> authority guidance' for an authority's own explanation such as a FAQ, '<Level> authority directory' for a list of offices, 'Portal summary of <level> rules' for a plain-language restatement by a portal; ', referring to <norm>' names a norm the excerpt cites without reproducing it. Where a summary or guidance and the law differ, the law's excerpt is the more exact source; name the basis to the user when it matters. Stated here once when every served fact of the concept shares it; absent when the facts differ, and then each fact states its own.",
+                "title": "Basis"
+              },
+              "facts": {
+                "items": {
+                  "$ref": "#/$defs/Fact"
+                },
+                "title": "Facts",
+                "type": "array"
+              },
+              "citations": {
+                "description": "One entry per cited page: the page whose excerpts carry the strongest basis first (the law before a FAQ, a FAQ before a portal summary), then in the order the facts first cite it.",
+                "items": {
+                  "$ref": "#/$defs/Citation"
+                },
+                "title": "Citations",
+                "type": "array"
+              },
+              "missing_context": {
+                "items": {
+                  "$ref": "#/$defs/MissingContext"
+                },
+                "title": "Missing Context",
+                "type": "array"
+              },
+              "gaps": {
+                "items": {
+                  "$ref": "#/$defs/CoverageGap"
+                },
+                "title": "Gaps",
+                "type": "array"
+              },
+              "not_served": {
+                "description": "What users commonly ask about this concept that the release does not publish (for example a fee, a document list or live availability). Say that the service does not publish it and point to the cited page; do not fill it in from general knowledge. Omitted when empty.",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Not Served",
+                "type": "array"
+              }
+            },
+            "required": [
+              "concept_id",
+              "status"
+            ],
+            "title": "ConceptResolution",
+            "type": "object"
+          },
+          "CoverageGap": {
+            "additionalProperties": false,
+            "properties": {
+              "dimension": {
+                "enum": [
+                  "jurisdiction_not_covered",
+                  "more_specific_jurisdiction_available",
+                  "more_specific_jurisdiction_not_published",
+                  "date_outside_coverage",
+                  "concept_not_published",
+                  "context_not_covered",
+                  "review_status_not_met"
+                ],
+                "title": "Dimension",
+                "type": "string"
+              },
+              "message": {
+                "title": "Message",
+                "type": "string"
+              },
+              "published_values": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Published Values",
+                "type": "array"
+              }
+            },
+            "required": [
+              "dimension",
+              "message",
+              "published_values"
+            ],
+            "title": "CoverageGap",
+            "type": "object"
+          },
+          "DecisionRule": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "title": "Description",
+                "type": "string"
+              },
+              "steps": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Steps",
+                "type": "array"
+              }
+            },
+            "required": [
+              "description",
+              "steps"
+            ],
+            "title": "DecisionRule",
+            "type": "object"
+          },
+          "ErrorBody": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "issues": {
+                "items": {
+                  "$ref": "#/$defs/ValidationIssue"
+                },
+                "title": "Issues",
+                "type": "array"
+              }
+            },
+            "required": [
+              "code",
+              "issues"
+            ],
+            "title": "ErrorBody",
+            "type": "object"
+          },
+          "ErrorCode": {
+            "enum": [
+              "INVALID_ARGUMENT",
+              "RELEASE_UNAVAILABLE",
+              "OPERATIONAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          },
+          "ExecutedScope": {
+            "additionalProperties": false,
+            "description": "The jurisdiction a resolve ran for, as the server understood the request: the codes the facts are matched\nagainst and the register's official names for them.",
+            "properties": {
+              "country_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "ISO 3166-1 code; absent for a country named in words that is not served.",
+                "title": "Country Code"
+              },
+              "canton_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "ISO 3166-2 canton code, for example CH-ZH.",
+                "title": "Canton Code"
+              },
+              "municipality_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Canton code plus BFS municipality number, for example CH-ZH-261.",
+                "title": "Municipality Id"
+              },
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Official name of the country, or the caller's words for one not served.",
+                "title": "Country"
+              },
+              "canton": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Official name of the canton.",
+                "title": "Canton"
+              },
+              "city": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Official name of the municipality.",
+                "title": "City"
+              },
+              "not_recognised": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Parts of the request the place register does not hold, by field, as the caller sent them. The request ran for the broader place above; correct the part (the municipality's official name, not a district) and resolve again if the narrower place matters. Omitted when every part was recognised.",
+                "title": "Not Recognised",
+                "type": "object"
+              }
+            },
+            "title": "ExecutedScope",
+            "type": "object"
+          },
+          "Fact": {
+            "additionalProperties": false,
+            "properties": {
+              "fact_id": {
+                "title": "Fact Id",
+                "type": "string"
+              },
+              "statement": {
+                "title": "Statement",
+                "type": "string"
+              },
+              "jurisdiction": {
+                "title": "Jurisdiction",
+                "type": "string"
+              },
+              "condition": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Condition"
+              },
+              "valid_from": {
+                "anyOf": [
+                  {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Valid From"
+              },
+              "valid_through": {
+                "anyOf": [
+                  {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Valid Through"
+              },
+              "evidence_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Evidence Ids",
+                "type": "array"
+              },
+              "review_status": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "human-reviewed",
+                      "assistant-authored-unreviewed",
+                      "automatically-derived-unreviewed",
+                      "model-candidate-automated-review"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Whether a person has confirmed the statement against its cited excerpt. 'human-reviewed' means a named reviewer did; every other value means no person has. Weigh a statement that is not human-reviewed accordingly, and for a critical question either quote the cited excerpt or resolve again with reviewed_only. Absent when the concept states one review status for all its facts.",
+                "title": "Review Status"
+              },
+              "reviewed_on": {
+                "anyOf": [
+                  {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Date of the human review; absent when not human-reviewed.",
+                "title": "Reviewed On"
+              },
+              "reviewed_by": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Person who confirmed the statement; absent when not human-reviewed.",
+                "title": "Reviewed By"
+              },
+              "basis": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "What the cited excerpt is, stated independently of the page that carries it: 'Federal act: AIG, SR 142.20, Art. 12' when the excerpt is the text of a norm (also 'Federal ordinance', 'International agreement', 'Cantonal directive'), '<Level> authority guidance' for an authority's own explanation such as a FAQ, '<Level> authority directory' for a list of offices, 'Portal summary of <level> rules' for a plain-language restatement by a portal; ', referring to <norm>' names a norm the excerpt cites without reproducing it. Where a summary or guidance and the law differ, the law's excerpt is the more exact source; name the basis to the user when it matters. Absent when the concept states one basis for all its facts.",
+                "title": "Basis"
+              }
+            },
+            "required": [
+              "fact_id",
+              "statement",
+              "jurisdiction",
+              "evidence_ids"
+            ],
+            "title": "Fact",
+            "type": "object"
+          },
+          "FreshnessPolicy": {
+            "additionalProperties": false,
+            "properties": {
+              "snapshot_date": {
+                "description": "Date on which the source pages were saved.",
+                "format": "date",
+                "title": "Snapshot Date",
+                "type": "string"
+              },
+              "max_age_days": {
+                "description": "Days after the snapshot during which results are current.",
+                "title": "Max Age Days",
+                "type": "integer"
+              },
+              "stale_from": {
+                "description": "First date on which results report STALE.",
+                "format": "date",
+                "title": "Stale From",
+                "type": "string"
+              }
+            },
+            "required": [
+              "snapshot_date",
+              "max_age_days",
+              "stale_from"
+            ],
+            "title": "FreshnessPolicy",
+            "type": "object"
+          },
+          "MissingContext": {
+            "additionalProperties": false,
+            "properties": {
+              "field": {
+                "title": "Field",
+                "type": "string"
+              },
+              "options": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Options"
+              },
+              "hint": {
+                "title": "Hint",
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "options",
+              "hint"
+            ],
+            "title": "MissingContext",
+            "type": "object"
+          },
+          "RequiredUserFact": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              },
+              "status": {
+                "title": "Status",
+                "type": "string"
+              },
+              "instruction": {
+                "title": "Instruction",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "status",
+              "instruction"
+            ],
+            "title": "RequiredUserFact",
+            "type": "object"
+          },
+          "ResolveResult": {
+            "additionalProperties": false,
+            "properties": {
+              "release_id": {
+                "title": "Release Id",
+                "type": "string"
+              },
+              "status": {
+                "$ref": "#/$defs/Status"
+              },
+              "as_of": {
+                "format": "date",
+                "title": "As Of",
+                "type": "string"
+              },
+              "executed_scope": {
+                "$ref": "#/$defs/ExecutedScope"
+              },
+              "freshness": {
+                "$ref": "#/$defs/FreshnessPolicy"
+              },
+              "results": {
+                "items": {
+                  "$ref": "#/$defs/ConceptResolution"
+                },
+                "title": "Results",
+                "type": "array"
+              },
+              "required_user_facts": {
+                "items": {
+                  "$ref": "#/$defs/RequiredUserFact"
+                },
+                "title": "Required User Facts",
+                "type": "array"
+              },
+              "decision_rule": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DecisionRule"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "guidance_for_caller": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Guidance For Caller"
+              },
+              "limitations": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Limitations",
+                "type": "array"
+              }
+            },
+            "required": [
+              "release_id",
+              "status",
+              "as_of",
+              "executed_scope",
+              "freshness",
+              "results",
+              "limitations"
+            ],
+            "title": "ResolveResult",
+            "type": "object"
+          },
+          "Status": {
+            "description": "Result status of a resolution; see section 4.3 of the specification.",
+            "enum": [
+              "SUPPORTED",
+              "NEEDS_CONTEXT",
+              "OUT_OF_COVERAGE",
+              "STALE"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "ToolError": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "$ref": "#/$defs/ErrorBody"
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "title": "ToolError",
+            "type": "object"
+          },
+          "ValidationIssue": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "title": "Path",
+                "type": "string"
+              },
+              "message": {
+                "title": "Message",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "message"
+            ],
+            "title": "ValidationIssue",
+            "type": "object"
+          }
+        },
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ResolveResult"
+          },
+          {
+            "$ref": "#/$defs/ToolError"
+          }
+        ]
+      }
+    },
+    "get_evidence": {
+      "description": "Read the full original excerpt, publisher (with its level and jurisdiction), the basis of the excerpt, language and citation URL for up to five evidence_ids, exactly as returned by resolve (or fact_ids, which return the evidence of that fact). Only needed to quote the source verbatim; resolve already returns the statements and citations.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_ids": {
+            "description": "Evidence IDs exactly as returned by resolve.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Evidence Ids",
+            "type": "array"
+          },
+          "release_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Release Id"
+          }
+        },
+        "required": [
+          "evidence_ids"
+        ],
+        "title": "GetEvidenceRequest",
+        "type": "object"
+      },
+      "output": {
+        "type": "object",
+        "$defs": {
+          "ErrorBody": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "issues": {
+                "items": {
+                  "$ref": "#/$defs/ValidationIssue"
+                },
+                "title": "Issues",
+                "type": "array"
+              }
+            },
+            "required": [
+              "code",
+              "issues"
+            ],
+            "title": "ErrorBody",
+            "type": "object"
+          },
+          "ErrorCode": {
+            "enum": [
+              "INVALID_ARGUMENT",
+              "RELEASE_UNAVAILABLE",
+              "OPERATIONAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          },
+          "Evidence": {
+            "additionalProperties": false,
+            "properties": {
+              "evidence_id": {
+                "title": "Evidence Id",
+                "type": "string"
+              },
+              "source_title": {
+                "title": "Source Title",
+                "type": "string"
+              },
+              "publisher": {
+                "title": "Publisher",
+                "type": "string"
+              },
+              "level": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Level of the state of the institution that published the page: federal, cantonal or municipal.",
+                "title": "Level"
+              },
+              "jurisdiction": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Whom that institution speaks for: CH, a canton code such as CH-ZH, or a municipality code.",
+                "title": "Jurisdiction"
+              },
+              "basis": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "What the cited excerpt is, stated independently of the page that carries it: 'Federal act: AIG, SR 142.20, Art. 12' when the excerpt is the text of a norm (also 'Federal ordinance', 'International agreement', 'Cantonal directive'), '<Level> authority guidance' for an authority's own explanation such as a FAQ, '<Level> authority directory' for a list of offices, 'Portal summary of <level> rules' for a plain-language restatement by a portal; ', referring to <norm>' names a norm the excerpt cites without reproducing it. Where a summary or guidance and the law differ, the law's excerpt is the more exact source; name the basis to the user when it matters.",
+                "title": "Basis"
+              },
+              "url": {
+                "title": "Url",
+                "type": "string"
+              },
+              "language": {
+                "title": "Language",
+                "type": "string"
+              },
+              "accessed_on": {
+                "format": "date",
+                "title": "Accessed On",
+                "type": "string"
+              },
+              "original_excerpt": {
+                "title": "Original Excerpt",
+                "type": "string"
+              }
+            },
+            "required": [
+              "evidence_id",
+              "source_title",
+              "publisher",
+              "url",
+              "language",
+              "accessed_on",
+              "original_excerpt"
+            ],
+            "title": "Evidence",
+            "type": "object"
+          },
+          "GetEvidenceResult": {
+            "additionalProperties": false,
+            "properties": {
+              "release_id": {
+                "title": "Release Id",
+                "type": "string"
+              },
+              "evidence": {
+                "items": {
+                  "$ref": "#/$defs/Evidence"
+                },
+                "title": "Evidence",
+                "type": "array"
+              },
+              "limitations": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Limitations",
+                "type": "array"
+              }
+            },
+            "required": [
+              "release_id",
+              "evidence",
+              "limitations"
+            ],
+            "title": "GetEvidenceResult",
+            "type": "object"
+          },
+          "ToolError": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "$ref": "#/$defs/ErrorBody"
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "title": "ToolError",
+            "type": "object"
+          },
+          "ValidationIssue": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "title": "Path",
+                "type": "string"
+              },
+              "message": {
+                "title": "Message",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "message"
+            ],
+            "title": "ValidationIssue",
+            "type": "object"
+          }
+        },
+        "anyOf": [
+          {
+            "$ref": "#/$defs/GetEvidenceResult"
+          },
+          {
+            "$ref": "#/$defs/ToolError"
+          }
+        ]
+      }
+    }
+  }
+}
