@@ -1,0 +1,6 @@
+# The concept prompt files are applied verbatim and hashed: every concept
+# report records their SHA-256. Never convert their line endings.
+packages/concepts/src/swisstip/concepts/prompts/*.md -text
+# Copied into Linux images and run there as entrypoints: a CRLF checkout on
+# Windows would break them.
+docker/**/*.sh text eol=lf

@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.env
+.env.*
+!.env.example
+*.egg-info/
+# setuptools build output, not the packages/build source package
+/build/
+packages/*/build/
+dist/
+node_modules/
+.venv/
+# Working data of the packs' runs and the console (job logs, audit files)
+.local/

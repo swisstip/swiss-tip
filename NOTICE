@@ -1,0 +1,18 @@
+Swiss TIP - Swisscom Trusted Information Platform
+Copyright 2026 The UBS Hackathon 2026 team: Alexander Bobrovsky and contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository holds the code only. The knowledge releases it serves are
+published separately (https://github.com/swisstip/swiss-tip-mvp). A release
+bundle that quotes excerpts of official publications of the Swiss
+Confederation, the cantons or municipalities reproduces those texts as cited
+evidence with their source URLs and access times; they remain the property
+of their publishers and are not relicensed under the Apache License. Consult
+the publishers' terms of use before redistributing them.
+
+The admin console vendors HTMX 2.0.7
+(apps/admin-console/src/swisstip/admin_console/static/htmx.min.js), which is
+distributed by the htmx authors under the Zero-Clause BSD licence. It is
+included verbatim so the console needs no network access and no JavaScript
+build step.
