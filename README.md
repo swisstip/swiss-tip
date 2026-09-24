@@ -100,25 +100,23 @@ the live numbers through `get_coverage` and `/health`.
 
 ## Run the server
 
-Every way of running the server names the release it serves; the server holds
-no knowledge of its own. Docker is the primary route, and the full pack image
-above is the whole server in one container. Two more images trade size for the
-bundled model:
+One image, one command, hybrid search:
 
-| Image | Command | Search | Size |
-| --- | --- | --- | --- |
-| Full pack image, model inside | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` | hybrid | ~850 MB |
-| Slim server plus the embedding sidecar, two containers ([compose.yaml](compose.yaml)) | `SWISSTIP_PACK=mvp-zurich docker compose up -d --wait` | hybrid | ~165 MB + ~790 MB |
-| Slim pack image alone, no model | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich-slim` | lexical only | ~165 MB |
+```shell
+docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
+```
 
-Each `search` result names its own `retrieval_mode`: `hybrid`, or
-`lexical-fallback` with the reason when a configured model is unreachable. The
-image family, the calendar connector and the OpenCode demo interface are
-described under [container images](docker/README.md).
+The image is the whole server: the release it serves, its readiness
+attestation, the semantic index and the embedding model. Nothing else is
+needed, and nothing has to be configured. Every `search` result names its own
+`retrieval_mode`, which is `hybrid` here.
 
-Running from source or from PyPI, with uv and a release directory, is in
-[developer setup](docs/developer-setup.md); those routes serve lexical search
-unless a local Ollama provides the model.
+Other container images exist for narrower cases — a smaller image without the
+model, a two-container split with an embedding sidecar, the calendar connector
+and a browser demo interface. They serve the same release and are described
+under [container images](docker/README.md) and in
+[developer setup](docs/developer-setup.md); the command above is the one to
+use.
 
 ## Source etiquette
 
@@ -179,9 +177,8 @@ timeless. The mortgage reference interest rate reads:
 **No credentials.** The server needs no API key, no token and no account, at
 build time or at run time, and it makes no call to any external service while
 answering: it serves a local release, and the embedding model runs locally
-(inside the full image, or in the sidecar beside the slim one). There is
-nothing to hand over in order to run or test it, and the repository holds no
-secrets.
+inside the image. There is nothing to hand over in order to run or test it,
+and the repository holds no secrets.
 
 **The prebuilt index ships with the release.** `semantic-index.json` is part
 of a pack's release bundle, so every route above already has it: inside the

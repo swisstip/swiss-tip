@@ -35,6 +35,28 @@ below. The rule of thumb:
 | Build a pack, curate facts, review in the console | **uv** with the `build` dependency group |
 | Rebuild a semantic index | **uv** plus a local Ollama with the model |
 
+## Other container images
+
+The [README](../README.md) names one image, the full pack image with the model
+inside, because it is the one to use. These variants exist for narrower cases
+and serve the same release:
+
+| Image | Command | Search | Size |
+| --- | --- | --- | --- |
+| Full pack image, model inside (the documented route) | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` | hybrid | ~850 MB |
+| Slim server plus the embedding sidecar, two containers ([compose.yaml](../compose.yaml)) | `SWISSTIP_PACK=mvp-zurich docker compose up -d --wait` | hybrid | ~165 MB + ~790 MB |
+| Slim pack image alone, no model | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich-slim` | **lexical only** | ~165 MB |
+
+The slim image carries the semantic index but no model, so on its own its
+searches report `retrieval_mode: lexical`. It reaches hybrid only next to the
+embedding sidecar, which has to share the server's network namespace because
+the server accepts a loopback Ollama address only; `compose.yaml` does that and
+passes `--semantic-index`. Use the slim route when image size matters more than
+a single container, for example on a constrained host or when several packs
+share one sidecar. The whole image family, the calendar connector and the
+OpenCode demo interface are described under
+[container images](../docker/README.md).
+
 ## Quick start with uv
 
 One clone and one command. It needs [uv](https://docs.astral.sh/uv/) and
