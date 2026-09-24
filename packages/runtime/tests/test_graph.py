@@ -225,6 +225,61 @@ class GraphToolTests(unittest.TestCase):
         self.assertEqual(served["domain.registration"].summary, "Reporting arrival to the commune of residence.")
 
 
+class TopicEmbedder:
+    """A fake local embedder: a text's vector says which domain it is about, by the first cue it contains."""
+
+    model = "qwen3-embedding:0.6b"
+    CUES = [("Registration", "moved into"), ("Residence",), ("Customs", "parcel"), ("zoo",)]
+
+    def __init__(self, fail: bool = False):
+        self.fail, self.calls = fail, 0
+
+    def model_digest(self):
+        return "d" * 64
+
+    def embed(self, texts):
+        self.calls += 1
+        if self.fail:
+            raise OSError("connection refused")
+        vectors = []
+        for text in texts:
+            text = text.split("Query: ")[-1] if text.startswith("Instruct:") else text.split("\n")[0]
+            hit = next((i for i, cues in enumerate(self.CUES) if any(cue in text for cue in cues)), 3)
+            vectors.append([1.0 if i == hit else 0.0 for i in range(4)])
+        return vectors
+
+
+class GraphSemanticTests(unittest.TestCase):
+    def service(self, embedder) -> ReleaseService:
+        service = ReleaseService(graph_release())
+        service.graph_embedder = embedder
+        return service
+
+    def test_embeddings_find_a_domain_the_words_miss(self):
+        service = self.service(TopicEmbedder())
+        self.assertEqual(service.graph_index.rank("I moved into a flat last week"), ([], "none"))
+        result = service.dispatch("get_knowledge_graph", {"question": "I moved into a flat last week"})
+        self.assertEqual((result.match_strength, result.covered_topics), ("strong", ["residence"]))
+        self.assertIn("domain.registration", {n.node_id for n in result.nodes})
+
+    def test_a_lexical_match_far_from_every_domain_is_at_most_weak(self):
+        embedder = TopicEmbedder()
+        service = self.service(embedder)
+        self.assertEqual(service.graph_index.lexical_rank("customs at the zoo")[1], "strong")
+        ranking = (service.dispatch("get_knowledge_graph", {"question": "customs at the zoo"}), service.graph_index.ranking("customs at the zoo"))
+        self.assertEqual((ranking[0].match_strength, ranking[1].mode, ranking[1].best_cosine), ("weak", "hybrid", 0.0))
+        calls = embedder.calls
+        service.dispatch("get_knowledge_graph", {"question": "a parcel from Germany"})
+        self.assertEqual(embedder.calls, calls + 1)  # the domain vectors are made once
+
+    def test_a_failing_embedder_falls_back_to_words_and_says_so(self):
+        result = self.service(TopicEmbedder(fail=True)).dispatch("get_knowledge_graph", {"question": "register my arrival"})
+        self.assertEqual(result.match_strength, "strong")
+        self.assertIn("matched by words only", result.limitations[-1])
+        plain = ReleaseService(graph_release()).dispatch("get_knowledge_graph", {"question": "register my arrival"})
+        self.assertNotIn("matched by words only", " ".join(plain.limitations))
+
+
 class GraphRegressionTests(unittest.TestCase):
     def test_the_suites_questions_are_judged_by_the_topics_bridges(self):
         from swisstip.core.acceptance import AcceptanceFile

@@ -15,6 +15,7 @@ Design: docs/architecture/knowledge-graph.md.
 import json
 import math
 from collections import Counter
+from dataclasses import dataclass
 from datetime import date
 
 from pydantic import Field
@@ -25,6 +26,7 @@ from swisstip.core.graph import contains
 from swisstip.core.places import PlaceIndex, Scope, level_of
 from swisstip.core.release import GraphEdge, GraphNode, KnowledgeGraph, Strict, Topic
 
+from .semantic import SemanticError, _digest, _vectors
 from .service import tokens
 
 FIELD_WEIGHTS = {"label": 3.0, "names": 3.0, "keywords": 3.0, "linked": 2.0, "summary": 1.0}
@@ -43,6 +45,11 @@ PLACE_GENERIC_WORDS = ("city town canton commune municipality Stadt Kanton Gemei
                        "sankt san")
 DOMAIN_SCORE_SHARE = 0.5
 BYTE_BUDGET = 8000
+# Embedding matching, when the server has a local embedder (hybrid search): the question against one text per domain.
+GRAPH_QUERY_PREFIX = "Instruct: Given a question, retrieve the Swiss public-administration domain it concerns.\nQuery: "
+SEMANTIC_FLOOR = 0.45
+SEMANTIC_STRONG = 0.6
+FUSION_K = 5
 # The order a caller needs a domain's links in: where to turn and who carries it out first (with the office that plays
 # the role at the user's place right after its role), then who sets the rules, what differs, the traps and the law.
 # The budget drops links from the end, the best-matched domain's last.
@@ -107,9 +114,57 @@ def place_names(places: PlaceIndex | None) -> list[str]:
     return [name for place in places.places.values() if level_of(place.code) < 2 for name in (place.name, *place.aliases)]
 
 
+@dataclass
+class Ranking:
+    chosen: list[tuple[float, str]]
+    strength: str
+    mode: str
+    best_cosine: float | None = None
+    error: str | None = None
+
+
+class GraphSemantic:
+    """Embedding matching of questions to the graph's domains, with the local embedder of hybrid search.
+
+    The domain vectors are made on first use, in one request, from the graph the server holds, so there is no index
+    file to build or attest; `digest` records the model digest they were made with."""
+
+    def __init__(self, embedder, floor: float = SEMANTIC_FLOOR, strong: float = SEMANTIC_STRONG):
+        self.embedder, self.floor, self.strong = embedder, floor, strong
+        self.vectors: dict[str, list[float]] | None = None
+        self.digest: str | None = None
+
+    def prepare(self, index: "GraphIndex") -> None:
+        if self.vectors is not None:
+            return
+        try:
+            digest = _digest(self.embedder.model_digest())
+            texts = [index.domain_text(d) for d in index.domains]
+            vectors = _vectors(self.embedder.embed(texts), len(texts))
+        except SemanticError:
+            raise
+        except Exception as exc:
+            raise SemanticError(f"Graph embedding failed ({type(exc).__name__}).") from exc
+        self.vectors = {d.node_id: v for d, v in zip(index.domains, vectors)}
+        self.digest = digest
+
+    def scores(self, question: str, index: "GraphIndex") -> list[tuple[float, str]]:
+        """The cosine of every domain, best first: one embedding request (after the first)."""
+        self.prepare(index)
+        try:
+            vector = _vectors(self.embedder.embed([GRAPH_QUERY_PREFIX + question]), 1, len(next(iter(self.vectors.values()))))[0]
+        except SemanticError:
+            raise
+        except Exception as exc:
+            raise SemanticError(f"Graph embedding failed ({type(exc).__name__}).") from exc
+        return sorted(((max(-1.0, min(1.0, sum(a * b for a, b in zip(vector, v)))), domain_id)
+                       for domain_id, v in self.vectors.items()), key=lambda item: (-item[0], item[1]))
+
+
 class GraphIndex:
     def __init__(self, graph: KnowledgeGraph, topics: list[Topic] | None = None, place_names: list[str] = ()):
         self.graph = graph
+        self.semantic: GraphSemantic | None = None
         self.nodes: dict[str, GraphNode] = {n.node_id: n for n in graph.nodes}
         self.out_edges: dict[str, list[GraphEdge]] = {n.node_id: [] for n in graph.nodes}
         for edge in graph.edges:
@@ -140,8 +195,53 @@ class GraphIndex:
     # --- selection -----------------------------------------------------------
 
     def rank(self, question: str) -> tuple[list[tuple[float, str]], str]:
-        """Domains by score, and the match strength: strong when the best domain matched a word at its label, names,
-        keywords or linked roles; weak when only its summary did; none without a match."""
+        """The chosen domains, best first, and the match strength (see `ranking`)."""
+        ranking = self.ranking(question)
+        return ranking.chosen, ranking.strength
+
+    def ranking(self, question: str) -> "Ranking":
+        """Lexical ranking, fused with embedding ranking when the index has an embedder.
+
+        Fused, a domain scores 1/(k + rank) in each list it is in, the embedding list holding only the domains at or
+        above the floor. The embedding score also sets the strength: strong at or above SEMANTIC_STRONG, and below
+        the floor a lexical match is at most weak, so a rare word alone ("limit", "Zurich") no longer makes an
+        off-topic question strong. When the embedder fails the lexical ranking stands, as search falls back."""
+        lexical, strength = self.lexical_rank(question)
+        if self.semantic is None:
+            return Ranking(lexical, strength, "lexical")
+        try:
+            scored = self.semantic.scores(question, self)
+        except SemanticError as exc:
+            return Ranking(lexical, strength, "lexical-fallback", error=str(exc))
+        best_cosine = scored[0][0] if scored else None
+        lexical_all = self.lexical_scores(question)[0]
+        fused: Counter = Counter()
+        for position, (_, domain_id) in enumerate(lexical_all):
+            fused[domain_id] += 1 / (FUSION_K + position + 1)
+        for position, (cosine, domain_id) in enumerate(scored):
+            if cosine >= self.semantic.floor:
+                fused[domain_id] += 1 / (FUSION_K + position + 1)
+        ranked = sorted(((score, domain_id) for domain_id, score in fused.items()), key=lambda item: (-item[0], item[1]))
+        if best_cosine is not None and best_cosine >= self.semantic.strong:
+            strength = "strong"
+        elif best_cosine is None or best_cosine < self.semantic.floor:
+            strength = "weak" if lexical else "none"
+        elif not lexical:
+            strength = "weak"
+        chosen = [item for item in ranked if item[0] >= DOMAIN_SCORE_SHARE * ranked[0][0]][:MAX_DOMAINS] if ranked else []
+        return Ranking(chosen, strength, "hybrid", best_cosine=best_cosine)
+
+    def lexical_rank(self, question: str) -> tuple[list[tuple[float, str]], str]:
+        """Domains by lexical score, and the match strength: strong when the best domain matched a word at its label,
+        names, keywords or linked roles; weak when only its summary did; none without a match."""
+        ranked, anchored = self.lexical_scores(question)
+        if not ranked:
+            return [], "none"
+        best = ranked[0][0]
+        chosen = [item for item in ranked if item[0] >= DOMAIN_SCORE_SHARE * best][:MAX_DOMAINS]
+        return chosen, "strong" if anchored[ranked[0][1]] else "weak"
+
+    def lexical_scores(self, question: str) -> tuple[list[tuple[float, str]], dict[str, bool]]:
         query = tokens(question) - self.place_tokens
         ranked, anchored = [], {}
         for domain_id, fields in self.fields.items():
@@ -155,11 +255,16 @@ class GraphIndex:
                 ranked.append((score, domain_id))
                 anchored[domain_id] = anchor
         ranked.sort(key=lambda item: (-item[0], item[1]))
-        if not ranked:
-            return [], "none"
-        best = ranked[0][0]
-        chosen = [item for item in ranked if item[0] >= DOMAIN_SCORE_SHARE * best][:MAX_DOMAINS]
-        return chosen, "strong" if anchored[ranked[0][1]] else "weak"
+        return ranked, anchored
+
+    def domain_text(self, domain: GraphNode) -> str:
+        """The embedding input of a domain: what it is called, where a person turns, and what it covers."""
+        linked = [self.nodes[e.to_id] for e in self.out_edges[domain.node_id] if e.relation in LINKING_RELATIONS]
+        return "\n".join([f"Domain: {domain.label}", "Names: " + "; ".join(domain.names.values()),
+                          "Keywords: " + "; ".join(domain.keywords),
+                          "Offices and pitfalls: " + "; ".join(dict.fromkeys(
+                              " / ".join([n.label, *n.names.values()]) for n in linked)),
+                          f"Summary: {domain.summary}"])
 
     # --- expansion -----------------------------------------------------------
 
@@ -264,7 +369,8 @@ class GraphIndex:
         place = (scope.code if scope is not None else None) or "CH"
         if not request.question and not request.node_ids:
             return self.root(release_id, today)
-        ranked, strength = self.rank(request.question) if request.question else ([], None)
+        ranking = self.ranking(request.question) if request.question else Ranking([], None, "none")
+        ranked, strength = ranking.chosen, ranking.strength
         domain_ids = [domain_id for _, domain_id in ranked]
         start = list(dict.fromkeys([*request.node_ids, *domain_ids]))
         nodes, edges = self.expand(start, place, request.reviewed_only)
@@ -286,6 +392,8 @@ class GraphIndex:
             nodes=[], edges=[], covered_topics=covered, place_dependence=dependence,
             next_search=self.next_search(request.question, domains, nodes, request.jurisdiction),
             guidance_for_caller=guidance, limitations=self.limitations())
+        if ranking.mode == "lexical-fallback":
+            result.limitations.append("Domains were matched by words only: the local embedding model was unavailable.")
         return self.fit(result, nodes, edges, protected=set(domains) | set(request.node_ids))
 
     def root(self, release_id: str, today: date) -> KnowledgeGraphResult:

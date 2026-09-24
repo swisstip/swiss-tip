@@ -169,7 +169,24 @@ weighted by its rarity across domains and counted once at its strongest field.
 The names of the country and the cantons (from the place register) and of the
 graph's place nodes are not subject words: "in Zurich" says where the user is,
 and would otherwise match every domain whose offices carry the name (SVA
-Zürich, Steueramt Zürich). At most three domains are taken (those within half the best score) and
+Zürich, Steueramt Zürich).
+
+**Embedding matching.** When the server has a local embedder (started with
+`--semantic-index`, as for hybrid search), the question is also embedded with
+the same model (`qwen3-embedding:0.6b`, with its own instruction: "retrieve
+the Swiss public-administration domain it concerns") and compared with one
+text per domain: its label, names, keywords, the offices and pitfalls linked to
+it, and its summary. The domain vectors are made on the first call from the
+graph the server holds, in one request, so there is no index to build or
+attest. The two rankings are fused (1/(5 + rank) in each list, the embedding
+list holding the domains at a cosine of 0.45 or more). The cosine also sets
+the strength: strong at 0.6 or more, and below 0.45 a word match is at most
+weak, so one rare word no longer makes an off-topic question strong. If the
+embedder fails, the words alone decide and the result says so in its
+limitations. Both thresholds are first settings, to be calibrated with the
+graph regression (section 10).
+
+At most three domains are taken (those within half the best score) and
 expanded by one hop. An edge with a place is served when that place contains
 the user's place; a role is resolved to the institution that plays it at the
 most specific level the place reaches (commune, then canton, then CH). The
@@ -259,6 +276,9 @@ questions reach a domain of their topic, 354 as the first domain; 8 of 28
 off-topic questions are not pointed at a covered topic. The declines are the
 weak point: stems collide across languages ("Generalabonnement" and
 "general") and one rare word makes a strong match.
+`--hybrid` replays the same questions with embedding matching and writes
+`graph-regression-report-hybrid.json`; every result records the best cosine,
+the material for calibrating the thresholds.
 
 ## 11. Extending
 

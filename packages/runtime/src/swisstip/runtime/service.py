@@ -443,6 +443,7 @@ class ReleaseService:
         from .graph import GraphIndex, place_names
         graph = release.knowledge_graph if knowledge_graph else None
         self.graph_disabled = release.knowledge_graph is not None and graph is None
+        self.graph_embedder = None
         self.graph_index = (GraphIndex(graph, release.topics, place_names(self.place_index))
                             if graph is not None else None)
         self.graph_evidence = {e.evidence_id: e for e in graph.evidence} if graph is not None else {}
@@ -1068,6 +1069,14 @@ class ReleaseService:
             gaps=[CoverageGap(dimension=g.dimension, message=g.message, published_values=g.published_values) for g in answer.gaps],
             guidance_for_caller=guidance, limitations=[*self.result_limitations, *summary.limitations])
     def get_knowledge_graph(self, request: GetKnowledgeGraphRequest):
+        # With hybrid search configured, the graph matches domains with the same local embedder as well;
+        # `graph_embedder` sets one for the graph alone (a replay without the release's concept index).
+        from .graph import GraphSemantic
+        embedder = self.graph_embedder or (self.semantic_search.embedder if self.semantic_search is not None else None)
+        if embedder is None:
+            self.graph_index.semantic = None
+        elif self.graph_index.semantic is None or self.graph_index.semantic.embedder is not embedder:
+            self.graph_index.semantic = GraphSemantic(embedder)
         place = request.jurisdiction
         scope = None
         if place.country or place.canton or place.city:

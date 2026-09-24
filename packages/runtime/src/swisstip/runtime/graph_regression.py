@@ -15,6 +15,7 @@ It uses no model and no network; the result carries the domains ranked, the matc
 answer, so two graphs or two matching methods can be compared case by case.
 """
 
+from collections import Counter
 from datetime import UTC, datetime
 
 from swisstip.core.acceptance import AcceptanceFile, Case, SearchStep
@@ -47,13 +48,15 @@ def check_graph_case(service: ReleaseService, case: Case, within: int) -> dict |
         return None
     kind, step = kind
     query = graph_query(case, step)
-    ranked, _ = service.graph_index.rank(query)
+    # The tool first: it attaches the service's embedder to the graph, which the ranking below then uses too.
     result = service.get_knowledge_graph(GetKnowledgeGraphRequest(question=query, jurisdiction=step.jurisdiction))
+    ranking = service.graph_index.ranking(query)
     if not isinstance(result, KnowledgeGraphResult):
         return dict(case_id=case.case_id, blocking=case.blocking, kind=kind, query=query, passed=False,
                     issues=[f"the graph refused the request: {result}"])
-    domains = [domain_id for _, domain_id in ranked]
-    outcome = dict(case_id=case.case_id, blocking=case.blocking, kind=kind, query=query,
+    domains = [domain_id for _, domain_id in ranking.chosen]
+    outcome = dict(case_id=case.case_id, blocking=case.blocking, kind=kind, query=query, mode=ranking.mode,
+                   best_cosine=None if ranking.best_cosine is None else round(ranking.best_cosine, 4),
                    match_strength=result.match_strength, domains=domains, covered_topics=result.covered_topics,
                    bytes=len(result.model_dump_json(exclude_none=True).encode()))
     issues: list[str] = []
@@ -75,8 +78,9 @@ def check_graph_case(service: ReleaseService, case: Case, within: int) -> dict |
     return dict(outcome, judged=True, passed=not issues, issues=issues)
 
 
-def graph_regression(service: ReleaseService, suite: AcceptanceFile, within: int = 3, method: str = "lexical") -> dict:
-    """The graph's orientation for every case of `suite` that has a search step to derive an expectation from."""
+def graph_regression(service: ReleaseService, suite: AcceptanceFile, within: int = 3) -> dict:
+    """The graph's orientation for every case of `suite` that has a search step to derive an expectation from; the
+    matching is hybrid when the service has a local embedder (`semantic_search`), lexical otherwise."""
     if service.graph_index is None:
         raise ValueError("the release carries no knowledge graph (or it was switched off)")
     results = [r for r in (check_graph_case(service, case, within) for case in suite.cases) if r is not None]
@@ -92,7 +96,8 @@ def graph_regression(service: ReleaseService, suite: AcceptanceFile, within: int
     graph = service.graph_index.graph
     return dict(schema_version=GRAPH_REGRESSION_SCHEMA_VERSION, pack=suite.pack, release_id=service.release_id,
                 graph_id=graph.graph_id, graph_sha256=graph.content_sha256, suite_sha256=suite.digest(),
-                checked_at=datetime.now(UTC).isoformat(), method=method, within=within,
+                checked_at=datetime.now(UTC).isoformat(), within=within,
+                modes=dict(Counter(r.get("mode") for r in results if r.get("mode"))),
                 cases=len(results), judged=len(judged), passed=sum(1 for r in judged if r["passed"]),
                 subject=tally("subject"), decline=tally("decline"),
                 unbridged=sorted({r["topic"] for r in results if not r["judged"] and r.get("topic")}),
