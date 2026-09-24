@@ -602,7 +602,9 @@ class GraphNodeOut(Strict):
     names: dict[str, str] = Field(default_factory=dict, exclude_if=lambda value: not value, description=(
         "The name in the languages of the sources, by ISO 639 code, verbatim from a cited excerpt: the words to "
         "search with and to recognise the office by."))
-    summary: str
+    summary: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "What the node is. Omitted, except for the matched domains, when the result had to be shortened to its size "
+        "limit; pass the node_id in node_ids for it."))
     level: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
         "Tier of the state: federal, cantonal or municipal."))
     place: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
@@ -623,7 +625,8 @@ class GraphEdgeOut(Strict):
     statement: str = Field(description="The claim in one sentence.")
     place: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
         "Where the claim holds: that place and the places inside it."))
-    source_url: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    source_url: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "The official page the statement rests on; omitted when the result had to be shortened to its size limit."))
     review_status: ReviewStatus | None = Field(default=None, exclude_if=lambda value: value is None, description=(
         "Omitted when it is the result's review_status."))
 

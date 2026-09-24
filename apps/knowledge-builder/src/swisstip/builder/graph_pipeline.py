@@ -29,7 +29,7 @@ from swisstip.build.places import PlaceFileError, load_place_register
 from swisstip.build.release_build import BuildError
 from swisstip.core.graph import GraphInvalid, dump_graph, load_graph
 from swisstip.core.places import PlaceIndex
-from swisstip.runtime.graph import GraphChecks, GraphIndex, check_graph
+from swisstip.runtime.graph import GraphChecks, GraphIndex, check_graph, place_names
 
 from .pipeline import Pipeline, StageError, sha256_file
 
@@ -117,7 +117,8 @@ class GraphPipeline(Pipeline):
         register = None
         if curation.place_register:
             register = load_place_register((self.curation.parent / curation.place_register).resolve())
-        report = check_graph(GraphIndex(graph), PlaceIndex(register, ["CH"]), checks, date.today())
+        places = PlaceIndex(register, ["CH"])
+        report = check_graph(GraphIndex(graph, place_names=place_names(places)), places, checks, date.today())
         (self.pack_dir / "checks-report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n",
                                                          encoding="utf-8", newline="\n")
         if report["failed_blocking"]:

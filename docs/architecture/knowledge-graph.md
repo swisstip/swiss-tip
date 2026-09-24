@@ -166,13 +166,21 @@ Selection (`swisstip.runtime.graph`) is deterministic. The question's words
 are matched against each domain's label, names and keywords, the labels and
 names of the roles and pitfalls linked to it, and its summary; each word is
 weighted by its rarity across domains and counted once at its strongest field.
-At most three domains are taken (those within half the best score) and
+The names of the country and the cantons (from the place register) and of the
+graph's place nodes are not subject words: "in Zurich" says where the user is,
+and would otherwise match every domain whose offices carry the name (SVA
+Zürich, Steueramt Zürich). At most three domains are taken (those within half the best score) and
 expanded by one hop. An edge with a place is served when that place contains
 the user's place; a role is resolved to the institution that plays it at the
 most specific level the place reaches (commune, then canton, then CH). The
-result is trimmed to 8 KB by dropping the least important links first: the
-best-matched domain's first contact, carrying-out and deciding bodies and the
-office at the user's place are kept longest.
+result stays within 8 KB (about 2,000 tokens, so the orientation does not
+crowd the caller's context before it searches). Over that, it is shortened
+before it is cut: first the summaries of nodes other than the matched and
+requested ones go (a caller asks for a node by its ID), then the edges' source
+URLs, and only then links, the least important first. Every matched domain's
+first contact, carrying-out, deciding and approving bodies, with the office at
+the user's place, come before any domain's laws, sources and pitfalls, since
+the second-best domain is often the subject.
 
 **Place dependence.** Without a place the scope is CH, as for search and
 resolve; no cantonal or municipal office is picked. `place_dependence` names
@@ -229,7 +237,30 @@ excerpt that changed since the graph cited it drops the claim the same way.
 `graph.json` carries a snapshot date and a freshness window; past it, the tool
 tells the caller that offices and procedures may have changed.
 
-## 10. Extending
+## 10. Measuring
+
+Two replays, both model-free:
+
+- `checks.yaml`: the orientation checks the checker agent wrote, replayed at
+  every compile (a node that must or must not be served, the place dependence,
+  the match strength).
+- The graph regression (`swisstip.runtime.graph_regression`): every question
+  of a pack's acceptance suite and regression pack asked of the graph as a
+  caller would, judged against what the suites already expect. A case whose
+  search expects a concept expects one of the domains its topic bridges to
+  among the first three, and the topic in `covered_topics`; a case whose
+  search expects a decline expects no strong match on a covered topic. The
+  packs repository runs it with
+  `scripts/test/regression/run_graph_regression.py` and writes
+  `graph-regression-report.json`.
+
+On `mvp-zurich` with lexical matching (24 September 2026): 448 of 546 subject
+questions reach a domain of their topic, 354 as the first domain; 8 of 28
+off-topic questions are not pointed at a covered topic. The declines are the
+weak point: stems collide across languages ("Generalabonnement" and
+"general") and one rare word makes a strong match.
+
+## 11. Extending
 
 - A new domain: bridge a pack topic to it (`graph_nodes`), run the skill with
   "extend", review.

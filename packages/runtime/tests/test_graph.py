@@ -207,6 +207,47 @@ class GraphToolTests(unittest.TestCase):
         self.assertEqual(report["failed_blocking"], [])
         self.assertEqual(report["passed"], 2)
 
+    def test_a_place_name_is_not_a_subject_word(self):
+        # "Zürich" is in the Personenmeldeamt's label, linked to registration through its role; it must not match.
+        self.assertEqual(self.service.graph_index.rank("opening hours of the Zurich zoo in Switzerland"), ([], "none"))
+        self.assertEqual(self.call(question="register in Zurich").match_strength, "strong")
+
+    def test_an_answer_is_shortened_before_links_are_cut(self):
+        index = self.service.graph_index
+        long = "A long sentence about the office that a caller does not need to orient itself. " * 12
+        index.nodes["role.residents-office"] = index.nodes["role.residents-office"].model_copy(update=dict(summary=long))
+        index.nodes["institution.zh-261-personenmeldeamt"] = index.nodes["institution.zh-261-personenmeldeamt"].model_copy(
+            update=dict(summary=long * 8))
+        result = self.call(question="register arrival", jurisdiction={"city": "Zurich"})
+        served = {n.node_id: n for n in result.nodes}
+        self.assertIn("institution.zh-261-personenmeldeamt", served)
+        self.assertIsNone(served["institution.zh-261-personenmeldeamt"].summary)
+        self.assertEqual(served["domain.registration"].summary, "Reporting arrival to the commune of residence.")
+
+
+class GraphRegressionTests(unittest.TestCase):
+    def test_the_suites_questions_are_judged_by_the_topics_bridges(self):
+        from swisstip.core.acceptance import AcceptanceFile
+        from swisstip.runtime.graph_regression import graph_regression
+        suite = AcceptanceFile(pack="test", cases=[
+            dict(case_id="hit", label="hit", question="When must I register my arrival?", expected_answer="x",
+                 steps=[dict(search=dict(query="When must I register my arrival?", expect_concept="deadline"))]),
+            dict(case_id="miss", label="miss", question="What does customs charge?", expected_answer="x",
+                 steps=[dict(search=dict(query="What does customs charge?", expect_concept="deadline"))]),
+            dict(case_id="unbridged", label="unbridged", question="Whom do I contact?", expected_answer="x",
+                 steps=[dict(search=dict(query="Whom do I contact?", expect_concept="contact"))]),
+            dict(case_id="decline", label="decline", question="Opening hours of the Zurich zoo", expected_answer="x",
+                 steps=[dict(search=dict(query="Opening hours of the Zurich zoo", expect_strength="none"))]),
+            dict(case_id="misled", label="misled", question="register a permit", expected_answer="x", blocking=False,
+                 quarantine_reason="test", steps=[dict(search=dict(query="register a permit", expect_strength="weak"))])])
+        report = graph_regression(ReleaseService(graph_release()), suite)
+        outcome = {r["case_id"]: r["passed"] for r in report["results"]}
+        self.assertEqual(outcome, {"hit": True, "miss": False, "unbridged": None, "decline": True, "misled": False})
+        self.assertEqual((report["subject"], report["decline"]), (dict(cases=2, passed=1, first=1), dict(cases=2, passed=1)))
+        self.assertEqual((report["unbridged"], report["failed_blocking"]), (["contacts"], ["miss"]))
+        with self.assertRaises(ValueError):
+            graph_regression(ReleaseService(graph_release(), knowledge_graph=False), suite)
+
 
 if __name__ == "__main__":
     unittest.main()

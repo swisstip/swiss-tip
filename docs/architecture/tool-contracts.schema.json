@@ -282,6 +282,7 @@
                   }
                 ],
                 "default": null,
+                "description": "The official page the statement rests on; omitted when the result had to be shortened to its size limit.",
                 "title": "Source Url"
               },
               "review_status": {
@@ -338,8 +339,17 @@
                 "type": "object"
               },
               "summary": {
-                "title": "Summary",
-                "type": "string"
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "What the node is. Omitted, except for the matched domains, when the result had to be shortened to its size limit; pass the node_id in node_ids for it.",
+                "title": "Summary"
               },
               "level": {
                 "anyOf": [
@@ -403,8 +413,7 @@
             "required": [
               "node_id",
               "kind",
-              "label",
-              "summary"
+              "label"
             ],
             "title": "GraphNodeOut",
             "type": "object"

@@ -22,7 +22,7 @@ from pydantic import Field
 from swisstip.core.contracts import (DomainSummary, ExecutedScope, GetKnowledgeGraphRequest, GraphEdgeOut, GraphNodeOut,
                                      Jurisdiction, KnowledgeGraphResult, NextSearch, PlaceDependence)
 from swisstip.core.graph import contains
-from swisstip.core.places import PlaceIndex, Scope
+from swisstip.core.places import PlaceIndex, Scope, level_of
 from swisstip.core.release import GraphEdge, GraphNode, KnowledgeGraph, Strict, Topic
 
 from .service import tokens
@@ -32,6 +32,15 @@ ANCHOR_FIELDS = frozenset({"label", "names", "keywords", "linked"})
 LINKING_RELATIONS = ("executed_by", "decided_by", "approved_by", "first_contact", "pitfall")
 DEPENDENCE_RELATIONS = ("executed_by", "decided_by", "first_contact", "varies_by")
 MAX_DOMAINS = 3
+# The country's own names, which a question uses for the place and not the subject, like a canton's name.
+COUNTRY_WORDS = "Switzerland Swiss Schweiz schweizerisch Suisse suisse Svizzera svizzero Svizra"
+# The words of a place's label that are not its name ("City of Zurich", "Canton of Ticino"): they stay subject words.
+# The parts of the canton names that are also ordinary words or stem like one (Appenzell "Interno" and international,
+# Basel-"Land", the "Confederation" and eidgenössisch) stay subject words too; so do the two-letter codes.
+PLACE_GENERIC_WORDS = ("city town canton commune municipality Stadt Kanton Gemeinde Bezirk ville canton commune "
+                       "città cantone comune country land campagne campagna inner outer interno esterno intérieures "
+                       "extérieures Confederation Eidgenossenschaft eidgenössisch confédération confederazione saint "
+                       "sankt san")
 DOMAIN_SCORE_SHARE = 0.5
 BYTE_BUDGET = 8000
 # The order a caller needs a domain's links in: where to turn and who carries it out first (with the office that plays
@@ -39,6 +48,9 @@ BYTE_BUDGET = 8000
 # The budget drops links from the end, the best-matched domain's last.
 RELATION_ORDER = ("first_contact", "executed_by", "decided_by", "approved_by", "instance", "rules_set_by", "varies_by",
                   "pitfall", "legal_basis", "authoritative_source", "see_also", "published_by", "governed_by", "part_of")
+# The links that say where the user turns: every matched domain keeps them, with the office at the user's place,
+# before any domain's laws, sources and pitfalls, since the second-best domain is often the subject.
+TURN_TO = frozenset({"first_contact", "executed_by", "decided_by", "approved_by"})
 RELATION_CAP = {"legal_basis": 4, "published_by": 3, "see_also": 2}
 LEVEL_WORD = {"municipal": "municipality", "cantonal": "canton"}
 DEPENDENCE_RANK = {"none": 0, "canton": 1, "municipality": 2}
@@ -87,8 +99,16 @@ class GraphChecks(Strict):
     cases: list[GraphCase]
 
 
+def place_names(places: PlaceIndex | None) -> list[str]:
+    """The names of the country and the cantons of a place register, which say where the user is and not what the
+    question is about. Communes are left out: many of their names are ordinary words (Wald, Egg, Au)."""
+    if places is None:
+        return []
+    return [name for place in places.places.values() if level_of(place.code) < 2 for name in (place.name, *place.aliases)]
+
+
 class GraphIndex:
-    def __init__(self, graph: KnowledgeGraph, topics: list[Topic] | None = None):
+    def __init__(self, graph: KnowledgeGraph, topics: list[Topic] | None = None, place_names: list[str] = ()):
         self.graph = graph
         self.nodes: dict[str, GraphNode] = {n.node_id: n for n in graph.nodes}
         self.out_edges: dict[str, list[GraphEdge]] = {n.node_id: [] for n in graph.nodes}
@@ -104,6 +124,11 @@ class GraphIndex:
         frequency = Counter(token for fields in self.fields.values() for token in set().union(*fields.values()))
         count = max(len(self.domains), 1)
         self.rarity = {token: math.log(1 + count / seen) for token, seen in frequency.items()}
+        # A place in the question ("in Zurich") says where, not what: it would match every domain whose offices carry
+        # the place's name (SVA Zürich, Steueramt Zürich) and turn an off-topic question into a strong match.
+        self.place_tokens = tokens(" ".join([COUNTRY_WORDS, *place_names, *(
+            " ".join([n.label, *n.names.values()]) for n in graph.nodes if n.kind == "place")]))
+        self.place_tokens = {t for t in self.place_tokens - tokens(PLACE_GENERIC_WORDS) if len(t) > 2}
 
     def domain_fields(self, domain: GraphNode) -> dict[str, set[str]]:
         linked = [self.nodes[e.to_id] for e in self.out_edges[domain.node_id] if e.relation in LINKING_RELATIONS]
@@ -117,7 +142,7 @@ class GraphIndex:
     def rank(self, question: str) -> tuple[list[tuple[float, str]], str]:
         """Domains by score, and the match strength: strong when the best domain matched a word at its label, names,
         keywords or linked roles; weak when only its summary did; none without a match."""
-        query = tokens(question)
+        query = tokens(question) - self.place_tokens
         ranked, anchored = [], {}
         for domain_id, fields in self.fields.items():
             score, anchor = 0.0, False
@@ -143,7 +168,8 @@ class GraphIndex:
         return edge.place is None or contains(edge.place, place)
 
     def expand(self, start: list[str], place: str, reviewed_only: bool) -> tuple[list[GraphNode], list[GraphEdge]]:
-        """The start nodes and their links, each link with its rank in `self.rank_of` (start position, relation)."""
+        """The start nodes and their links, each link with its rank in `self.rank_of`: where the user turns (with the
+        office at their place) for every start node first, then the other links by start position and relation."""
         nodes: dict[str, GraphNode] = {}
         edges: list[GraphEdge] = []
         self.rank_of: dict[str, tuple] = {}
@@ -172,14 +198,15 @@ class GraphIndex:
                     continue
                 counts[edge.relation] += 1
                 relation = RELATION_ORDER.index(edge.relation)
-                add_edge(edge, (position, relation, 0))
+                tier = 0 if edge.relation in TURN_TO else 1
+                add_edge(edge, (tier, position, relation, 0))
                 target = self.nodes[edge.to_id]
                 if target.kind == "role":
                     for instance in self.instances(target.node_id, place):
-                        add_edge(instance, (position, relation, 1))
+                        add_edge(instance, (tier, position, relation, 1))
                 if target.kind == "law":
                     for source in [e for e in self.out_edges[target.node_id] if e.relation == "authoritative_source"][:1]:
-                        add_edge(source, (position, RELATION_ORDER.index("authoritative_source"), 1))
+                        add_edge(source, (1, position, RELATION_ORDER.index("authoritative_source"), 1))
         for code in self.place_chain(place):
             add_node(f"place.{code.lower()}")
         return list(nodes.values()), edges
@@ -259,7 +286,7 @@ class GraphIndex:
             nodes=[], edges=[], covered_topics=covered, place_dependence=dependence,
             next_search=self.next_search(request.question, domains, nodes, request.jurisdiction),
             guidance_for_caller=guidance, limitations=self.limitations())
-        return self.fit(result, nodes, edges, protected=set(domains))
+        return self.fit(result, nodes, edges, protected=set(domains) | set(request.node_ids))
 
     def root(self, release_id: str, today: date) -> KnowledgeGraphResult:
         nodes = [n for n in self.graph.nodes if n.kind in ("level", "principle")]
@@ -286,37 +313,44 @@ class GraphIndex:
 
     def fit(self, result: KnowledgeGraphResult, nodes: list[GraphNode], edges: list[GraphEdge],
             protected: set[str]) -> KnowledgeGraphResult:
-        """Fill the result and drop the least specific links until it fits the byte budget; an unlinked node goes with
-        its last edge, the matched domains stay."""
+        """Fill the result and fit it to the byte budget, shortening before cutting: first without the summaries of
+        the nodes other than the matched and requested ones (a caller asks for a node by its ID), then without the
+        edges' source URLs (the caller cites resolve's), and only then by dropping the least specific links; an
+        unlinked node goes with its last edge, the matched domains stay."""
         statuses = Counter(item.provenance.review_status for item in [*nodes, *edges])
         common = statuses.most_common(1)[0][0] if statuses else None
         ranks = getattr(self, "rank_of", {})
-        edges = sorted(edges, key=lambda e: ranks.get(e.edge_id, (99, RELATION_ORDER.index(e.relation), 0)))
+        edges = sorted(edges, key=lambda e: ranks.get(e.edge_id, (99, 99, RELATION_ORDER.index(e.relation), 0)))
+        brevity = 0
         while True:
             linked = {e.from_id for e in edges} | {e.to_id for e in edges}
             kept = [n for n in nodes if n.node_id in protected or n.node_id in linked or n.kind == "place"]
-            result.nodes = [self.node_out(n, common) for n in kept]
-            result.edges = [self.edge_out(e, common) for e in edges]
+            result.nodes = [self.node_out(n, common, summary=brevity == 0 or n.node_id in protected) for n in kept]
+            result.edges = [self.edge_out(e, common, source=brevity < 2) for e in edges]
             result.review_status = common
             size = len(json.dumps(result.model_dump(mode="json", exclude_none=True), ensure_ascii=False,
                                   separators=(",", ":")).encode("utf-8"))
             if size <= BYTE_BUDGET or not edges:
                 return result
+            if brevity < 2:
+                brevity += 1
+                continue
             edges = edges[:-1]
 
     def url(self, evidence_ids: list[str]) -> str | None:
         return self.urls.get(evidence_ids[0]) if evidence_ids else None
 
-    def node_out(self, node: GraphNode, common: str | None) -> GraphNodeOut:
+    def node_out(self, node: GraphNode, common: str | None, summary: bool = True) -> GraphNodeOut:
         status = node.provenance.review_status
         # The edges carry the citations; a node's own source would repeat one of them for most nodes.
-        return GraphNodeOut(node_id=node.node_id, kind=node.kind, label=node.label, names=node.names, summary=node.summary,
+        return GraphNodeOut(node_id=node.node_id, kind=node.kind, label=node.label, names=node.names,
+                            summary=node.summary if summary else None,
                             level=node.level, place=node.place, review_status=None if status == common else status)
 
-    def edge_out(self, edge: GraphEdge, common: str | None) -> GraphEdgeOut:
+    def edge_out(self, edge: GraphEdge, common: str | None, source: bool = True) -> GraphEdgeOut:
         status = edge.provenance.review_status
         return GraphEdgeOut(from_id=edge.from_id, relation=edge.relation, to_id=edge.to_id, statement=edge.statement,
-                            place=edge.place, source_url=self.url(edge.evidence_ids),
+                            place=edge.place, source_url=self.url(edge.evidence_ids) if source else None,
                             review_status=None if status == common else status)
 
 

@@ -440,10 +440,11 @@ class ReleaseService:
         self.search_notes = {"strong": SEARCH_MATCH_NOTE, "weak": SEARCH_WEAK_NOTE + retry, "none": SEARCH_EMPTY_NOTE + retry}
         # The orientation graph, when the release carries one and the operator has not switched it off; the tool is
         # offered only then. Switched off, the server behaves as for a release without a graph.
-        from .graph import GraphIndex
+        from .graph import GraphIndex, place_names
         graph = release.knowledge_graph if knowledge_graph else None
         self.graph_disabled = release.knowledge_graph is not None and graph is None
-        self.graph_index = GraphIndex(graph, release.topics) if graph is not None else None
+        self.graph_index = (GraphIndex(graph, release.topics, place_names(self.place_index))
+                            if graph is not None else None)
         self.graph_evidence = {e.evidence_id: e for e in graph.evidence} if graph is not None else {}
         self.graph_institutions = {i.institution_id: i for i in graph.institutions} if graph is not None else {}
         template = INSTRUCTIONS_GRAPH if graph is not None else INSTRUCTIONS

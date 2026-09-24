@@ -1043,6 +1043,8 @@ the state, the principles and every domain with `covered`.
 | `review_status` | The review status of every item that states none |
 | `guidance_for_caller`, `limitations` | What to do next, and the graph's review counts |
 
-A result stays within 8 KB. `get_evidence` accepts the graph's evidence IDs
+A result stays within 8 KB: over it, node summaries other than the matched
+and requested ones and then the edges' `source_url` are omitted before links
+are dropped. `get_evidence` accepts the graph's evidence IDs
 (`graph-...`) like a fact's.
 
