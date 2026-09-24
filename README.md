@@ -34,6 +34,39 @@ that says whether the question is covered, whether a detail such as the
 canton is missing, or whether the facts are stale. The full design is in the
 [functional specification](docs/product/functional-specification.md).
 
+## Coverage at a glance
+
+The server is knowledge-base agnostic; the published MVP knowledge base is
+**`mvp-zurich`** ([swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp)).
+`get_coverage` returns the live scope, out-of-scope list and limitations of
+whatever release is loaded; the snapshot below describes the current one.
+
+- **Subject:** everyday administrative life in Switzerland, for people who
+  live here and people moving here, of any nationality.
+- **Jurisdictions:** federal rules and arrival registration for **all 26
+  cantons**, the full procedures of the **Canton of Zurich** and the **City of
+  Zurich**, and waste hand-over in the **City of Lugano**; federal rules still
+  apply elsewhere and are served with a caveat.
+- **Topics:** residence permits and registration, cantonal migration offices,
+  entry and visas, AHV and the pillar system, tax return and tax at source,
+  health and accident insurance, unemployment and the RAV, family allowances,
+  naturalisation, voting rights, renting, foreign driving licences, customs,
+  waste and recycling, integration offers, and City of Zurich services.
+- **Languages:** search matches German, English, French and Italian; answers
+  are written in the user's own language.
+- **Not covered (examples):** fees, appointment availability and processing
+  times; benefit amounts and every calculator; eligibility decisions for a
+  specific person; asylum, social assistance and debt enforcement; cantons
+  other than Zurich and municipalities other than the City of Zurich beyond
+  arrival registration. `get_coverage` returns the full list.
+- **Sources:** authoritative Swiss pages only — federal (`admin.ch`,
+  `fedlex.data.admin.ch`, `ch.ch`), cantonal (`zh.ch`), and municipal
+  (`stadt-zuerich.ch`); every fact cites an exact excerpt with its URL, access
+  date and hash.
+
+Coverage grows with each release, so the counts and topics live in the pack,
+not here; ask the running server with `get_coverage`, or read `/health`.
+
 ## Run the server
 
 The server holds no knowledge: every way of running it names the release it
