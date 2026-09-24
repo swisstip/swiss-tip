@@ -23,10 +23,10 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from swisstip.core.datasets import (Dataset, DatasetManifest, DatasetRow, DatasetSource, DatasetType, Period, RefreshPolicy,
-                                    content_hash, row_key, source_filename, validate_dataset)
+from swisstip.core.datasets import (ZONE, Dataset, DatasetManifest, DatasetRow, DatasetSource, DatasetType, Period,
+                                    RefreshPolicy, content_hash, row_key, source_filename, validate_dataset)
 
 from . import DATASET_CURATION_SCHEMA_VERSION
 from .curation import CurationDumper
@@ -34,6 +34,7 @@ from .curation import CurationDumper
 USER_AGENT = "Mozilla/5.0 (compatible; SwissTIPDatasetBuild/0.1)"
 DATE_FORMATS = ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y")
 POSTAL_CODE = re.compile(r"^\d{4}$")
+ZONE_PATTERN = re.compile(ZONE)
 Fetch = Callable[[str], bytes]
 
 
@@ -59,9 +60,22 @@ class CuratedSource(Strict):
 
 
 class Columns(Strict):
-    postal_code: str = Field(description="Column holding the four-digit postal code.")
+    """The file's columns: exactly one of postal_code and zone names the key column."""
+
+    postal_code: str | None = Field(default=None, description="Column holding the four-digit postal code.")
+    zone: str | None = Field(default=None, description="Column holding the publisher's collection zone.")
     date: str = Field(description="Column holding the date (ISO, dd.mm.yyyy or dd/mm/yyyy).")
     location: str | None = Field(default=None, description="Column holding a place name, when the file has one.")
+
+    @model_validator(mode="after")
+    def one_key(self) -> "Columns":
+        if (self.postal_code is None) == (self.zone is None):
+            raise ValueError("name exactly one of the postal_code and zone columns")
+        return self
+
+    @property
+    def key(self) -> str:
+        return "zone" if self.zone is not None else "postal_code"
 
 
 class Importer(Strict):
@@ -85,6 +99,8 @@ class DatasetCuration(Strict):
     sources: list[CuratedSource] = Field(min_length=1)
     importer: Importer
     period: Period
+    zone_lookup_url: str | None = Field(default=None, description=(
+        "For a dataset keyed by zone: the publisher's page where a resident finds their zone from the address."))
     notes: list[str] = Field(default_factory=list)
 
 
@@ -130,19 +146,26 @@ def import_csv_columns(data: bytes, columns: Columns, source: str) -> tuple[list
         dialect = csv.excel
     reader = csv.DictReader(io.StringIO(text), dialect=dialect)
     fields = reader.fieldnames or []
-    wanted = [columns.postal_code, columns.date] + ([columns.location] if columns.location else [])
+    key_column = columns.zone if columns.zone is not None else columns.postal_code
+    wanted = [key_column, columns.date] + ([columns.location] if columns.location else [])
     missing = [name for name in wanted if name not in fields]
     if missing:
         raise BuildError(f"{source}: column(s) {missing} not found; the file has {fields}")
     rows: dict[tuple, DatasetRow] = {}
     repeated = 0
     for number, record in enumerate(reader, 2):
-        postal_code = (record[columns.postal_code] or "").strip()
-        if not POSTAL_CODE.match(postal_code):
-            raise BuildError(f"{source}, line {number}: postal code {postal_code!r} is not four digits")
+        value = " ".join((record[key_column] or "").split())
+        if columns.zone is not None:
+            if not ZONE_PATTERN.match(value):
+                raise BuildError(f"{source}, line {number}: zone {value!r} is empty or longer than 40 characters")
+            keyed = dict(zone=value)
+        else:
+            if not POSTAL_CODE.match(value):
+                raise BuildError(f"{source}, line {number}: postal code {value!r} is not four digits")
+            keyed = dict(postal_code=value)
         day = parse_date(record[columns.date] or "")
         location = (record[columns.location] or "").strip() or None if columns.location else None
-        row = DatasetRow(postal_code=postal_code, date=day, location=location)
+        row = DatasetRow(**keyed, date=day, location=location)
         key = row_key(row)
         if key in rows:
             repeated += 1
@@ -154,12 +177,28 @@ IMPORTERS = {"csv-columns": import_csv_columns}
 
 
 def standard_limitations(curation: DatasetCuration) -> list[str]:
+    keyed = (f"Zones are the publisher's, and the user states their own zone; nothing checks that it is the zone of "
+             f"their address, which the publisher's page {curation.zone_lookup_url} finds."
+             if curation.importer.columns.key == "zone" else
+             f"Postal codes are the publisher's; no register ties them to {curation.jurisdiction}.")
     return [
         "Calendar rows are taken from the publisher's file unchanged and are not human-reviewed; the hashes of the "
         "downloaded files and the build's checks are the whole gate.",
-        f"Postal codes are the publisher's; no register ties them to {curation.jurisdiction}.",
+        keyed,
         f"Licence of the rows: {curation.licence}, published by {curation.publisher} at {curation.publisher_url}.",
     ]
+
+
+def zone_fields(curation: DatasetCuration, rows: list[DatasetRow]) -> dict:
+    """The manifest fields of a dataset keyed by zone; none for one keyed by postal code, whose bundle stays as it was."""
+    if curation.importer.columns.key != "zone":
+        if curation.zone_lookup_url is not None:
+            raise BuildError("zone_lookup_url is set, but the importer names a postal_code column, not a zone column")
+        return {}
+    if not (curation.zone_lookup_url or "").startswith("https://"):
+        raise BuildError("a dataset keyed by zone needs zone_lookup_url, the publisher's https page for finding a zone")
+    return dict(key="zone", zones=sorted({row.zone for row in rows if row.zone is not None}),
+                zone_lookup_url=curation.zone_lookup_url)
 
 
 def build_dataset(curation: DatasetCuration, sources_dir: Path, *, fetch: Fetch | None = fetch_url, refresh: bool = False,
@@ -215,7 +254,8 @@ def build_dataset(curation: DatasetCuration, sources_dir: Path, *, fetch: Fetch 
         jurisdiction=curation.jurisdiction, publisher=curation.publisher, publisher_url=curation.publisher_url,
         licence=curation.licence, refresh=curation.refresh,
         sources=[DatasetSource(url=s.url, sha256=s.sha256, bytes=s.bytes, downloaded_on=s.downloaded_on) for s in curation.sources],
-        period=curation.period, postal_codes=sorted({row.postal_code for row in ordered}), row_count=len(ordered),
+        period=curation.period, postal_codes=sorted({row.postal_code for row in ordered if row.postal_code is not None}),
+        **zone_fields(curation, ordered), row_count=len(ordered),
         created_at=created_at or datetime.now(timezone.utc).replace(microsecond=0),
         limitations=standard_limitations(curation), content_sha256="0" * 64)
     dataset = Dataset(manifest=manifest, rows=ordered)
@@ -224,7 +264,7 @@ def build_dataset(curation: DatasetCuration, sources_dir: Path, *, fetch: Fetch 
     if issues:
         raise BuildError(f"{len(issues)} issue(s): " + "; ".join(issues))
     report = dict(dataset_id=manifest.dataset_id, dataset_version=manifest.dataset_version, rows=len(ordered),
-                  repeated_rows_dropped=repeated, postal_codes=len(manifest.postal_codes),
+                  repeated_rows_dropped=repeated, postal_codes=len(manifest.postal_codes), zones=len(manifest.zones or []),
                   period=dict(start=curation.period.start.isoformat(), end=curation.period.end.isoformat()),
                   sources=report_sources)
     return dataset, report

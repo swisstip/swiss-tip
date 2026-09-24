@@ -83,6 +83,15 @@ class ConnectorTests(unittest.TestCase):
         self.assertEqual(not_json.status_code, 400)
         self.assertNotIn("path", not_json.json())
 
+    def test_a_request_with_the_other_key_is_a_400(self):
+        app = create_http_app(ConnectorService([BUNDLE]))
+        response = self.call(app, "POST", "/lookup", dict(dataset_id="test-waste-bioabfall", zone="A", limit=1))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual((response.json()["code"], response.json()["path"]), ("INVALID_ARGUMENT", "zone"))
+        self.assertIn("keyed by postal_code", response.json()["message"])
+        both = self.call(app, "POST", "/lookup", dict(dataset_id="test-waste-bioabfall", zone="A", postal_code="8001", limit=1))
+        self.assertEqual(both.status_code, 400)
+
     def test_the_command_reports_health_and_refuses_nothing_to_serve(self):
         out = StringIO()
         with redirect_stdout(out):
