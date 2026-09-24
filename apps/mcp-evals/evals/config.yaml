@@ -6,7 +6,7 @@ configs:
   codex-gpt:
     harness: codex
     model: gpt-5.5
-    command: [codex, exec, "{question}"]
+    command: [codex, --config, web_search="disabled", exec, --model, "{model}", "{question}"]
 benchmark:
   trials: 1
   concurrency: 1

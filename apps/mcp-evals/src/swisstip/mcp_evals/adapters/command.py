@@ -14,7 +14,7 @@ class CommandAdapter:
 
     def run(self, case: EvalCase) -> AgentResult:
         command = [part.replace("{question}", case.question).replace("{case_id}", case.case_id)
-                   for part in self.config.command]
+                   .replace("{model}", self.config.model) for part in self.config.command]
         environment = os.environ.copy()
         environment.update(self.config.environment)
         started = time.perf_counter()

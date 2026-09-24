@@ -14,3 +14,4 @@ node_modules/
 .venv/
 # Working data of the packs' runs and the console (job logs, audit files)
 .local/
+results/
