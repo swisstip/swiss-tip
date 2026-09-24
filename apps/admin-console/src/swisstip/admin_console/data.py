@@ -287,8 +287,13 @@ class Console:
         self._packs: dict[str, PackData] = {}
 
     def pack_names(self) -> list[str]:
-        folder = self.root / "releases"
-        return sorted(child.name for child in folder.iterdir() if child.is_dir()) if folder.is_dir() else []
+        releases = self.root / "releases"
+        names = {child.name for child in releases.iterdir() if child.is_dir()} if releases.is_dir() else set()
+        local = self.root / ".local"
+        if local.is_dir():
+            names.update(child.name for child in local.iterdir()
+                         if child.is_dir() and (child / "autopilot" / "workflow.json").is_file())
+        return sorted(names)
 
     def pack(self, name: str) -> PackData:
         if name not in self._packs:

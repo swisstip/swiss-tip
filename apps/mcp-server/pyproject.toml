@@ -9,7 +9,7 @@ description = "Swiss TIP MCP server: the four tools over stdio or Streamable HTT
 requires-python = ">=3.14"
 dependencies = [
     "mcp>=1.29,<2",
-    "pydantic>=2.11,<3",
+    "pydantic>=2.12,<3",
     "starlette>=0.48",
     "uvicorn>=0.31.1",
     "swisstip-core",

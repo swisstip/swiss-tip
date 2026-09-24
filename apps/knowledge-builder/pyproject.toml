@@ -8,6 +8,7 @@ version = "0.3.0"
 description = "Swiss TIP knowledge builder: the build pipeline of a pack from catalogue to validated release"
 requires-python = ">=3.14"
 dependencies = [
+    "pydantic>=2.12,<3",
     "swisstip-core",
     "swisstip-ingestion",
     "swisstip-extraction",
@@ -17,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 swisstip-build = "swisstip.builder.cli:main"
+swisstip-autopilot = "swisstip.builder.autopilot.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -20,7 +20,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .contracts import GapDimension, Jurisdiction, ResolveRequest, SearchRequest, Status
+from .contracts import GapDimension, Jurisdiction, LookupRequest, ResolveRequest, SearchRequest, Status
 from .release import sha256_text
 
 ACCEPTANCE_SCHEMA_VERSION = "swiss-tip-acceptance/v1"
@@ -143,16 +143,45 @@ class ResolveStep(Strict):
                               context=self.context, as_of=self.as_of or as_of, reviewed_only=self.reviewed_only)
 
 
+class LookupStep(Strict):
+    """A lookup of a dataset a connector serves behind a concept (docs/architecture/dataset-connectors.md).
+
+    Replayed only when the replay is given a connector that serves the dataset; otherwise the step is recorded as
+    not judged, so a pack's readiness never depends on a sidecar."""
+
+    dataset_id: str = Field(min_length=1)
+    postal_code: str = Field(pattern=r"^\d{4}$")
+    as_of: date | None = Field(default=None, description="Overrides the policy date for this step.")
+    start: date | None = None
+    end: date | None = None
+    limit: int = Field(default=3, ge=1, le=60)
+    expect_status: Status | None = Field(default=None, description="SUPPORTED or OUT_OF_COVERAGE.")
+    expect_gap: GapDimension | None = Field(default=None, description="A gap dimension the result must name.")
+    expect_first_date: date | None = Field(default=None, description="The date the first returned event must carry.")
+
+    @model_validator(mode="after")
+    def matches_the_contract(self) -> "LookupStep":
+        self.request(date.today())
+        if self.expect_status not in (None, Status.SUPPORTED, Status.OUT_OF_COVERAGE):
+            raise ValueError("a lookup answers SUPPORTED or OUT_OF_COVERAGE")
+        return self
+
+    def request(self, as_of: date) -> LookupRequest:
+        return LookupRequest(dataset_id=self.dataset_id, postal_code=self.postal_code, as_of=self.as_of or as_of,
+                             start=self.start, end=self.end, limit=self.limit)
+
+
 class Step(Strict):
-    """One tool call of the case: exactly one of `search` and `resolve`."""
+    """One tool call of the case: exactly one of `search`, `resolve` and `lookup`."""
 
     search: SearchStep | None = None
     resolve: ResolveStep | None = None
+    lookup: LookupStep | None = None
 
     @model_validator(mode="after")
     def exactly_one_tool(self) -> "Step":
-        if (self.search is None) == (self.resolve is None):
-            raise ValueError("a step is either a search or a resolve")
+        if sum(item is not None for item in (self.search, self.resolve, self.lookup)) != 1:
+            raise ValueError("a step is either a search, a resolve or a lookup")
         return self
 
 
@@ -243,6 +272,9 @@ class AcceptanceFile(Strict):
                     drop_defaults(step["search"], OPTIONAL_DIGEST_FIELDS["search"])
                 if step.get("resolve"):
                     drop_defaults(step["resolve"], OPTIONAL_DIGEST_FIELDS["resolve"])
+                # The lookup kind came after the first attested suites: a step without one keeps its digest.
+                if step.get("lookup") is None:
+                    step.pop("lookup", None)
         return sha256_text(json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
 
 

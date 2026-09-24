@@ -18,6 +18,7 @@ from pathlib import Path
 
 from . import SCHEMA_VERSION
 from .dataset import read_json, write_json
+from .run_reader import manifest_sha256, snapshot_items
 
 VALIDATION_SCHEMA = "swisstip.source-text-validation/v1"
 
@@ -43,13 +44,23 @@ def check_record(record: dict) -> list[str]:
     return problems
 
 
-def check_snapshot(run: Path, record: dict) -> str | None:
+def check_snapshot(run: Path, record: dict, allowed: dict[str, list[dict]]) -> str | None:
     acquisition = record.get("acquisition", {})
     path = (run / acquisition.get("path", "")).resolve()
     if not path.is_relative_to(run.resolve()) or not path.is_file():
         return "saved response missing"
     if hashlib.sha256(path.read_bytes()).hexdigest() != acquisition.get("raw_sha256"):
         return "saved response hash differs"
+    matches = [item for item in allowed.get(record.get("document_id"), [])
+               if item["source_url"] == record.get("source_url")
+               and item["relative_path"] == acquisition.get("path")
+               and item["pointer"] == acquisition.get("manifest_path")
+               and item["raw_sha256"] == acquisition.get("raw_sha256")]
+    if len(matches) != 1:
+        return "record does not match one approved plan-derived manifest snapshot"
+    if (manifest_sha256(run, matches[0]) != acquisition.get("manifest_sha256")
+            or matches[0]["document_id"] != record.get("document_id")):
+        return "record manifest identity differs from the approved run"
     return None
 
 
@@ -61,6 +72,11 @@ def validate_dataset(text: Path, run: Path | None = None, check_raw: bool = True
     elif run is None and (text.parent / "plan.json").is_file():
         run = text.parent
     documents = sorted((text / "documents").glob("doc-*.json"))
+    allowed: dict[str, list[dict]] = {}
+    if run is not None:
+        items, _ = snapshot_items(run)
+        for item in items:
+            allowed.setdefault(item["document_id"], []).append(item)
     index = read_json(text / "index.json") if (text / "index.json").is_file() else []
     indexed = {entry["document_id"] for entry in index}
     failures, snapshot_failures, unreadable = [], [], []
@@ -79,7 +95,7 @@ def validate_dataset(text: Path, run: Path | None = None, check_raw: bool = True
         if problems:
             failures.append(dict(document_id=record.get("document_id"), problems=problems))
         if run is not None:
-            problem = check_snapshot(run, record)
+            problem = check_snapshot(run, record, allowed)
             if problem:
                 snapshot_failures.append(dict(document_id=record.get("document_id"), problem=problem,
                                               path=record.get("acquisition", {}).get("path")))

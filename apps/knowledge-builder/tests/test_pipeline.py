@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from swisstip.build.acceptance import load_acceptance
+from swisstip.build.curation import load_curation, save_curation
 from swisstip.builder.pipeline import STAGES, Pipeline, default_run_dir, next_release_id
 from swisstip.core.readiness import readiness_status
 from swisstip.core.release import load_release
@@ -130,6 +131,10 @@ class PipelineTests(unittest.TestCase):
     def pipeline(self, **options) -> Pipeline:
         return Pipeline(self.root, "test", log=self.logs.append, **options)
 
+    def test_pack_name_cannot_escape_the_workspace(self):
+        with self.assertRaisesRegex(ValueError, "lowercase kebab-case"):
+            Pipeline(self.root, "../../outside")
+
     def statuses(self, report) -> dict:
         return {s["stage"]: s["status"] for s in report["stages"]}
 
@@ -171,6 +176,31 @@ class PipelineTests(unittest.TestCase):
         explicit = self.pipeline(release_id="test-final").run_stages(start="build")
         self.assertEqual(self.statuses(explicit)["build"], "ran")
         self.assertEqual(load_release(self.root / "releases/test/release.json").manifest.release_id, "test-final")
+
+    def test_strict_build_refuses_relocated_reviewed_citations_before_writing(self):
+        self.pipeline().run_stages(until="validate-text")
+        self.write_curation()
+        first = self.pipeline(update_curation=True).run_stages(start="build", until="build")
+        self.assertEqual(self.statuses(first)["build"], "ran")
+        curation_path = self.root / "releases/test/curation.yaml"
+        build_report_path = self.root / "releases/test/build-report.json"
+        report = json.loads(build_report_path.read_text(encoding="utf-8"))
+        self.assertEqual(report["curation_sha256"], sha256(curation_path.read_bytes()))
+
+        curation = load_curation(curation_path)
+        citation = curation.concepts[0].facts[0].evidence[0]
+        citation.first_block, citation.last_block = 2, 3
+        save_curation(curation_path, curation)
+        release_before = (self.root / "releases/test/release.json").read_bytes()
+        report_before = build_report_path.read_bytes()
+
+        failed = self.pipeline(require_same_snapshot=True).run_stages(start="build", until="build")
+
+        build = next(stage for stage in failed["stages"] if stage["stage"] == "build")
+        self.assertEqual(build["status"], "failed")
+        self.assertIn("reopen fact review", build["error"])
+        self.assertEqual((self.root / "releases/test/release.json").read_bytes(), release_before)
+        self.assertEqual(build_report_path.read_bytes(), report_before)
 
     def test_the_place_files_are_embedded_and_a_changed_one_rebuilds_the_release(self):
         self.pipeline().run_stages(until="validate-text")
@@ -341,6 +371,19 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(entry["status"], "failed")
         self.assertIn("G4", entry["error"])
         self.assertIn("runway until", entry["error"])
+
+    def test_ready_stage_rejects_a_build_report_with_stale_artifact_hashes(self):
+        self.build_and_accept()
+        report_path = self.root / "releases/test/build-report.json"
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        report["curation_sha256"] = "0" * 64
+        report_path.write_text(json.dumps(report), encoding="utf-8")
+
+        entry = self.ready(attested_by="A. Person")
+
+        self.assertEqual(entry["status"], "failed")
+        self.assertIn("G2 stale bindings: curation_sha256", entry["error"])
+        self.assertFalse((self.root / "releases/test/readiness.json").exists())
 
     def test_ready_stage_reads_the_graded_answers_as_gate_g5(self):
         required = ACCEPTANCE.replace("pack: test\n", "pack: test\npolicy: {answer_check: required, answer_repetitions: 2}\n")

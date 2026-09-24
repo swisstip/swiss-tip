@@ -28,6 +28,11 @@ components = ["apps/mcp-server"]
 keywords = ["mcp", "mcp-server", "grounding", "switzerland"]
 classifiers = ["Topic :: Scientific/Engineering :: Artificial Intelligence"]
 
+[distributions.swisstip-calendar-connector]
+description = "Swiss TIP calendar connector: dataset bundles of dated events by postal code, served to the MCP server over HTTP"
+components = ["apps/calendar-connector"]
+keywords = ["mcp", "grounding", "switzerland", "open-data", "connector"]
+
 [distributions.swisstip-builder]
 description = "Swiss TIP workstation tools: source acquisition, text extraction, release build and the admin console"
 components = [

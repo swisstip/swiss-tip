@@ -23,6 +23,7 @@ from swisstip.build.curation import Curation, load_curation, save_curation
 from swisstip.build.places import PlaceFileError, place_register_for
 from swisstip.build.release_build import BuildError, build_release
 from swisstip.builder.pipeline import next_release_id
+from swisstip.builder.autopilot.store import PackWriteLock
 from swisstip.ingestion.catalog import save_source_catalog, validate_source_catalog
 
 from .checks import ChecksFile, save_checks
@@ -101,6 +102,10 @@ class PackLocks:
 LOCKS = PackLocks()
 
 
+def pack_file_lock(pack: PackData) -> PackWriteLock:
+    return PackWriteLock(pack.root, pack.pack)
+
+
 def check_unchanged(pack: PackData, cached, target: Path, expected_sha256: str | None) -> None:
     current = cached.sha256
     if expected_sha256 and current != expected_sha256:
@@ -132,7 +137,7 @@ def dry_build(pack: PackData, curation: Curation, *, allow_drop: bool = False) -
 def write_curation(pack: PackData, mutate, actor: str, reason: str, *, expected_sha256: str | None = None,
                    ids: list[str] | None = None, allow_drop: bool = False) -> dict:
     """Load, mutate, validate, dry build, save, audit (section 6.1). Returns the dry-build report."""
-    with LOCKS.lock(pack.pack):
+    with pack_file_lock(pack), LOCKS.lock(pack.pack):
         if not pack.curation_path.is_file():
             raise WriteRefused(f"no curation file at {pack.curation_path}")
         if pack.curation.error:
@@ -157,7 +162,7 @@ def write_curation(pack: PackData, mutate, actor: str, reason: str, *, expected_
 def write_catalogue(pack: PackData, mutate, actor: str, reason: str, *, expected_sha256: str | None = None,
                     ids: list[str] | None = None) -> dict:
     """The same shape for `sources.json`, with the planning check instead of a dry build (section 6.2)."""
-    with LOCKS.lock(pack.pack):
+    with pack_file_lock(pack), LOCKS.lock(pack.pack):
         if not pack.catalogue_path.is_file():
             raise WriteRefused(f"no catalogue at {pack.catalogue_path}")
         if pack.catalogue.error:
@@ -178,7 +183,7 @@ def write_catalogue(pack: PackData, mutate, actor: str, reason: str, *, expected
 
 
 def write_checks(pack: PackData, checks: ChecksFile, actor: str, reason: str, ids: list[str] | None = None) -> None:
-    with LOCKS.lock(pack.pack):
+    with pack_file_lock(pack), LOCKS.lock(pack.pack):
         before = pack.checks.sha256
         pack.checks_path.parent.mkdir(parents=True, exist_ok=True)
         save_checks(pack.checks_path, checks)

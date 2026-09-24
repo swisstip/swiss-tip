@@ -3,4 +3,6 @@
 The serving side imports this package and nothing from the build side.
 """
 
-RELEASE_SCHEMA_VERSION = "swiss-tip-release/v1"
+RELEASE_SCHEMA_VERSION = "swiss-tip-release/v2"
+DATASET_SCHEMA_VERSION = "swiss-tip-dataset/v1"
+CONNECTOR_SCHEMA_VERSION = "swiss-tip-connector/v1"

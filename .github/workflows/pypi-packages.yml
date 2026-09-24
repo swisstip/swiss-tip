@@ -1,5 +1,5 @@
-# Build the three PyPI distributions (swisstip-core, swisstip-mcp,
-# swisstip-builder) from the component source trees, test them, and publish
+# Build the four PyPI distributions (swisstip-core, swisstip-mcp,
+# swisstip-calendar-connector, swisstip-builder) from the component source trees, test them, and publish
 # them with PyPI trusted publishing, so no token is stored anywhere.
 #
 #   push a tag v<version>, e.g. v0.3.0      build, test, publish to PyPI
@@ -68,7 +68,7 @@ jobs:
       - name: Install the components and the build tools
         run: |
           python -m pip install build twine \
-            -e packages/core -e packages/runtime -e apps/mcp-server \
+            -e packages/core -e packages/runtime -e apps/mcp-server -e apps/calendar-connector \
             -e packages/ingestion -e "packages/extraction[office]" -e packages/build -e packages/concepts \
             -e apps/knowledge-builder -e "apps/admin-console[test]"
 
@@ -100,6 +100,16 @@ jobs:
           "$RUNNER_TEMP/serve/bin/swisstip-mcp" --release apps/mcp-server/tests/fixtures/release.json --health > /dev/null
           # The round trip starts the server with the interpreter that runs it, so it tests the installed wheel.
           "$RUNNER_TEMP/serve/bin/python" scripts/test/mcp/check_wheel.py
+
+      - name: Test the connector wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/connector"
+          "$RUNNER_TEMP/connector/bin/python" -m pip install \
+            "dist/swisstip_core-$VERSION-py3-none-any.whl" "dist/swisstip_calendar_connector-$VERSION-py3-none-any.whl"
+          # The synthetic bundle of the app's tests: no dataset of a pack is read.
+          "$RUNNER_TEMP/connector/bin/swisstip-calendar-connector" --dataset apps/calendar-connector/tests/fixtures/test-waste-bioabfall --health > /dev/null
+          # The conformance test starts the installed connector with the interpreter that runs it.
+          "$RUNNER_TEMP/connector/bin/python" scripts/test/connector/check_connector.py
 
       - name: Test the workstation wheel in a clean environment
         run: |
@@ -159,7 +169,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [mcp, builder]
+        package: [mcp, calendar-connector, builder]
     environment:
       name: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}-${{ matrix.package }}
       url: ${{ github.event_name == 'push' && 'https://pypi.org' || 'https://test.pypi.org' }}/project/swisstip-${{ matrix.package }}/
@@ -172,7 +182,9 @@ jobs:
           path: dist/
 
       - name: Select the files of swisstip-${{ matrix.package }}
-        run: mkdir upload && mv dist/swisstip_${{ matrix.package }}-* upload/
+        run: |
+          name="${{ matrix.package }}"
+          mkdir upload && mv dist/swisstip_${name//-/_}-* upload/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:

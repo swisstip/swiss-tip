@@ -1,6 +1,6 @@
 # Admin console - technical design
 
-**Last update:** 21 September 2026
+**Last update:** 23 September 2026
 
 **Status:** implemented, except the assistant draft of section 4.5, which
 waits for the concept-extraction provider port of `TODO.md`, and the live
@@ -559,7 +559,7 @@ the write shows this warning). No dry download.
 
 The review actions need one field the release format does not have:
 `reviewed_by` on `Provenance`, optional, a person's name. It is additive to
-`swiss-tip-release/v1` and `swiss-tip-curation/v1` and validated as
+`swiss-tip-release/v2` (or legacy v1) and `swiss-tip-curation/v1` and validated as
 non-empty when `review_status` is `human-reviewed`. The release format
 document gets one line in its provenance table.
 
@@ -720,7 +720,7 @@ log keys of the HTTP transport.
   (`reviewed_by`), or only in the audit log with a reviewer ID in the file?~~
   Settled as this design proposed: `reviewed_by` is an optional field of
   `Provenance`, validated as non-empty when `review_status` is
-  `human-reviewed`, in both `swiss-tip-release/v1` and
+   `human-reviewed`, in `swiss-tip-release/v2` (and legacy v1) and
   `swiss-tip-curation/v1`. The audit log keeps the write record as well.
 - Should `check_server.py` read `checks.yaml` so the console and the
   self-check share one list, or stay independent with its hardcoded

@@ -17,7 +17,7 @@ docs/architecture/acceptance-gate.md describes the whole gate.
 
 from datetime import UTC, date, datetime
 
-from swisstip.core.acceptance import AcceptanceFile, Case, Claim, ResolveStep, SearchStep
+from swisstip.core.acceptance import AcceptanceFile, Case, Claim, LookupStep, ResolveStep, SearchStep
 from swisstip.core.contracts import ConceptResolution, ToolError
 from swisstip.core.text import contains_phrase
 
@@ -62,6 +62,8 @@ def check_case(service: ReleaseService, case: Case, as_of: date) -> dict:
     for step in case.steps:
         if step.search is not None:
             steps.append(check_search(service, step.search, prefix, issues))
+        elif step.lookup is not None:
+            steps.append(check_lookup(service, step.lookup, as_of, prefix, issues))
         else:
             steps.append(check_resolve(service, step.resolve, as_of, prefix, issues, served))
     claims = [check_claim(service, claim, served, prefix, issues) for claim in case.claims]
@@ -164,6 +166,33 @@ def check_resolve(service: ReleaseService, step: ResolveStep, as_of: date, prefi
                 bases={item.concept_id: served_bases(item) for item in result.results}, passed=passed)
 
 
+def check_lookup(service: ReleaseService, step: LookupStep, as_of: date, prefix: str, issues: list[str]) -> dict:
+    """A lookup step, judged only when a registered connector serves the dataset in this replay."""
+    record = dict(tool="lookup", dataset_id=step.dataset_id, postal_code=step.postal_code)
+    connectors = service.connectors
+    if connectors is None or step.dataset_id not in connectors.datasets:
+        record.update(passed=True, judged=False, reason="no registered connector serves the dataset in this replay")
+        return record
+    request = step.request(as_of)
+    result = service.lookup(request)
+    if isinstance(result, ToolError):
+        issues.append(f"{prefix}: lookup of {step.dataset_id} rejected: {result.error.code.value}")
+        return dict(record, error=result.error.code.value, passed=False)
+    found: list[str] = []
+    named = [gap.dimension for gap in result.gaps]
+    dates = [event.date.isoformat() for event in result.events]
+    if step.expect_status is not None and result.status != step.expect_status:
+        found.append(f"{prefix}: lookup of {step.dataset_id} for {step.postal_code} expected {step.expect_status.value}, got {result.status.value}")
+    if step.expect_gap is not None and step.expect_gap not in named:
+        found.append(f"{prefix}: lookup of {step.dataset_id} for {step.postal_code} expected a {step.expect_gap} gap, got {named or 'none'}")
+    if step.expect_first_date is not None and (not dates or dates[0] != step.expect_first_date.isoformat()):
+        found.append(f"{prefix}: lookup of {step.dataset_id} for {step.postal_code} expected the first date "
+                     f"{step.expect_first_date.isoformat()}, got {dates[:1] or 'no date'}")
+    issues.extend(found)
+    return dict(record, as_of=request.as_of.isoformat(), status=result.status.value, gaps=named, dates=dates,
+                dataset_version=result.dataset_version, passed=not found)
+
+
 def served_bases(item: ConceptResolution) -> list[str]:
     """The distinct basis labels of a concept's served facts, whether stated on the facts or once on the concept."""
     return sorted({fact.basis or item.basis for fact in item.facts if fact.basis or item.basis})
@@ -216,14 +245,18 @@ def regression_run(report: dict) -> dict:
                 unjudged_steps=sum(1 for c in cases for s in c["searches"] if not s["judged"]), results=cases)
 
 
-def regression_report(reports: dict[str, dict | str], acceptance_sha256: str, regression_sha256: str) -> dict:
+def regression_report(reports: dict[str, dict | str], acceptance_sha256: str, regression_sha256: str,
+                      semantic_index: dict | None = None) -> dict:
     """`releases/<pack>/regression-report.json`: the regression pack replayed per retrieval mode.
 
     `reports` maps a mode (lexical, hybrid) to its check_acceptance report, or to the reason it was not run. `passed`
     is true when every mode ran and no blocking case failed in any of them."""
+    if isinstance(reports.get("hybrid"), dict) and semantic_index is None:
+        raise ValueError("a hybrid regression run requires its semantic index and retrieval settings")
     first = next(r for r in reports.values() if isinstance(r, dict))
     runs = {mode: regression_run(r) if isinstance(r, dict) else dict(skipped=r) for mode, r in reports.items()}
     return dict(schema_version=REGRESSION_REPORT_SCHEMA_VERSION, pack=first["pack"], release_id=first["release_id"],
                 content_sha256=first["content_sha256"], acceptance_sha256=acceptance_sha256,
                 regression_sha256=regression_sha256, checked_at=datetime.now(UTC).isoformat(), as_of=first["as_of"],
+                semantic_index=semantic_index,
                 passed=all("skipped" not in run and not run["failed"] for run in runs.values()), runs=runs)

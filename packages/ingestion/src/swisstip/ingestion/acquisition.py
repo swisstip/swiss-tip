@@ -24,7 +24,9 @@ import re
 import subprocess
 import tempfile
 import threading
-from urllib.parse import urldefrag, urlsplit
+import time
+import uuid
+from urllib.parse import unquote, urldefrag, urlsplit
 
 from .crawler import CrawlLimits, SafeCrawler, SourceDefinition
 
@@ -33,6 +35,7 @@ DOCUMENT_TYPES = ("application/pdf", "application/octet-stream", "text/plain", "
 PRINT_LOCK = threading.Lock()
 SUMMARY_SCHEMA = "swisstip.catalogue-download/v1"
 PLAN_SCHEMA = "swisstip.catalogue-download-plan/v1"
+BUDGET_SCHEMA = "swisstip.network-budget-ledger/v1"
 # Titles of error pages served with HTTP 200; the same pattern as the extraction's
 # ERROR_TITLE, which this standard-library package cannot import.
 ERROR_TITLE = re.compile(r"\s*(?:Error Page\s*\(404\)|404(?:\s*[-:]?\s*(?:Not Found|Page not found))?|"
@@ -87,6 +90,127 @@ def write_json(path: Path, value: object) -> None:
     temporary.replace(path)
 
 
+class NetworkBudgetExceeded(RuntimeError):
+    pass
+
+
+class NetworkBudgetLock:
+    """Serialize governed downloads; the OS releases the lock after a process crash."""
+
+    def __init__(self, output: Path, timeout: float = 10.0):
+        self.path = Path(output) / ".network-budget.lock"
+        self.timeout = timeout
+        self.stream = None
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.stream = self.path.open("a+b")
+        if self.stream.tell() == 0:
+            self.stream.write(b"0")
+            self.stream.flush()
+        deadline = time.monotonic() + self.timeout
+        while True:
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    self.stream.seek(0)
+                    msvcrt.locking(self.stream.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(self.stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return self
+            except OSError:
+                if time.monotonic() >= deadline:
+                    self.stream.close()
+                    raise NetworkBudgetExceeded(f"network budget is locked: {self.path}")
+                time.sleep(0.05)
+
+    def __exit__(self, exc_type, exc, traceback):
+        if self.stream is None:
+            return
+        if os.name == "nt":
+            import msvcrt
+            self.stream.seek(0)
+            msvcrt.locking(self.stream.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(self.stream.fileno(), fcntl.LOCK_UN)
+        self.stream.close()
+
+
+def _budget_ledger(output: Path, plan: dict) -> dict:
+    budget = plan.get("network_budget")
+    if not budget:
+        return {}
+    path = Path(output) / "network-budget.json"
+    if path.is_file():
+        ledger = read_json(path)
+        if (ledger.get("schema_version") != BUDGET_SCHEMA
+                or ledger.get("catalogue_sha256") != plan.get("catalogue_sha256")
+                or ledger.get("budget") != budget):
+            raise NetworkBudgetExceeded("network budget ledger does not match the confirmed plan")
+        return ledger
+    return {"schema_version": BUDGET_SCHEMA, "catalogue_sha256": plan["catalogue_sha256"],
+            "budget": budget, "attempts": []}
+
+
+def budget_usage(output: Path, plan: dict) -> dict | None:
+    if not plan.get("network_budget"):
+        return None
+    ledger = _budget_ledger(output, plan)
+    requests = sum(item.get("actual_requests", item["reserved_requests"])
+                   for item in ledger["attempts"])
+    bytes_used = sum(item.get("actual_bytes", item["reserved_bytes"])
+                     for item in ledger["attempts"])
+    budget = ledger["budget"]
+    return {"charged_requests": requests, "charged_bytes": bytes_used,
+            "remaining_requests": max(0, budget["max_requests"] - requests),
+            "remaining_bytes": max(0, budget["max_bytes"] - bytes_used),
+            "attempts": len(ledger["attempts"])}
+
+
+def reserve_network_attempt(output: Path, plan: dict, target: dict) -> tuple[str, CrawlLimits]:
+    ledger = _budget_ledger(output, plan)
+    usage = budget_usage(output, plan)
+    if usage is None:
+        raise ValueError("cannot reserve an attempt without a confirmed network budget")
+    requests = min(16, usage["remaining_requests"])
+    bytes_allowed = min(30_000_000, usage["remaining_bytes"])
+    if requests < 1 or bytes_allowed < 1:
+        raise NetworkBudgetExceeded("confirmed cumulative network budget is exhausted")
+    reservation_id = str(uuid.uuid4())
+    ledger["attempts"].append({
+        "reservation_id": reservation_id, "target_url": target["url"], "reserved_at": now(),
+        "reserved_requests": requests, "reserved_bytes": bytes_allowed,
+    })
+    write_json(Path(output) / "network-budget.json", ledger)
+    limits = CrawlLimits(max_depth=0, max_pages=1, max_requests=requests,
+                         max_total_bytes=bytes_allowed,
+                         max_response_bytes=min(25_000_000, bytes_allowed),
+                         max_duration_seconds=120, request_timeout_seconds=20,
+                         delay_seconds=2, max_redirects=6, max_links_per_page=100,
+                         max_queued_urls=1, max_failures=2)
+    return reservation_id, limits
+
+
+def complete_network_attempt(output: Path, plan: dict, reservation_id: str, result: dict) -> None:
+    report = result.get("report")
+    if not isinstance(report, dict):
+        return
+    ledger = _budget_ledger(output, plan)
+    matches = [item for item in ledger["attempts"] if item["reservation_id"] == reservation_id]
+    if len(matches) != 1:
+        raise NetworkBudgetExceeded("network budget reservation is missing or duplicated")
+    item = matches[0]
+    requests = report.get("requests_sent", 0)
+    bytes_used = report.get("bytes_downloaded", 0)
+    if (type(requests) is not int or type(bytes_used) is not int or requests < 0 or bytes_used < 0
+            or requests > item["reserved_requests"] or bytes_used > item["reserved_bytes"]):
+        raise NetworkBudgetExceeded("network attempt exceeded its durable reservation")
+    item.update(completed_at=now(), actual_requests=requests, actual_bytes=bytes_used)
+    write_json(Path(output) / "network-budget.json", ledger)
+
+
 def read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -102,11 +226,13 @@ def saved_and_intact(result: dict, output: Path) -> bool:
 
 
 def markdown_targets(path: Path) -> list[dict]:
-    """Every distinct explicit HTTP(S) link of a Markdown catalogue, in document order."""
+    """Every distinct explicit HTTPS link of a Markdown catalogue, in document order."""
     content = path.read_text(encoding="utf-8")
     targets: dict[str, dict] = {}
     for match in re.finditer(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", content):
         url = urldefrag(match.group(2))[0]
+        if urlsplit(url).scheme != "https":
+            raise ValueError(f"Markdown catalogue links must use HTTPS: {url}")
         entry = targets.setdefault(url, {"url": url, "url_id": url_id(url), "references": []})
         entry["references"].append({
             "label": " ".join(match.group(1).split()),
@@ -130,14 +256,27 @@ def registry_targets(path: Path, entries: list[dict]) -> list[dict]:
 
 
 def catalogue_targets(registry: Path, entries: list[dict], markdown: Path | None = None) -> list[dict]:
-    """Markdown links first (when given), then registry seeds; registry metadata is attached by URL."""
+    """Markdown links first, but only inside a selected registry entry's approved host and path."""
     by_url: dict[str, list[dict]] = {}
     for entry in entries:
         by_url.setdefault(entry["definition"]["start_url"], []).append(entry)
+
+    def matching(url: str) -> list[dict]:
+        parsed = urlsplit(url)
+        path = unquote(parsed.path or "/")
+        return [entry for entry in entries
+                if parsed.hostname in entry["definition"]["allowed_hosts"]
+                and any(prefix == "/" or path == prefix.rstrip("/")
+                        or path.startswith(prefix.rstrip("/") + "/")
+                        for prefix in entry["definition"]["allowed_path_prefixes"])]
+
     targets: dict[str, dict] = {}
     if markdown is not None:
         for target in markdown_targets(markdown):
-            targets[target["url"]] = {**target, "registry_entries": by_url.get(target["url"], [])}
+            attributed = matching(target["url"])
+            if not attributed:
+                raise ValueError(f"Markdown catalogue URL is outside the selected source allowlists: {target['url']}")
+            targets[target["url"]] = {**target, "registry_entries": attributed}
     for target in registry_targets(registry, entries):
         if target["url"] in targets:
             targets[target["url"]]["references"].extend(target["references"])
@@ -177,7 +316,8 @@ def error_page(result: dict, output: Path) -> bool:
     return False
 
 
-def snapshot(target: dict, output: Path, allowed_hosts: tuple[str, ...], transport: str = "urllib") -> dict:
+def snapshot(target: dict, output: Path, allowed_hosts: tuple[str, ...] | None = None,
+             transport: str = "urllib", limits: CrawlLimits | None = None) -> dict:
     folder = output / "pages" / target["url_id"]
     folder.mkdir(parents=True, exist_ok=True)
     attempt_number = 1
@@ -201,13 +341,15 @@ def snapshot(target: dict, output: Path, allowed_hosts: tuple[str, ...], transpo
         captured.append({**asdict(page), "relative_path": destination.relative_to(output).as_posix(),
                          "review_flags": flags, "processing_status": "NOT_PROCESSED"})
 
-    limits = CrawlLimits(max_depth=0, max_pages=1, max_requests=16,
-                         max_total_bytes=30_000_000, max_response_bytes=25_000_000,
-                         max_duration_seconds=120, request_timeout_seconds=20,
-                         delay_seconds=2, max_redirects=6, max_links_per_page=100,
-                         max_queued_urls=1, max_failures=2)
+    limits = limits or CrawlLimits(max_depth=0, max_pages=1, max_requests=16,
+                                  max_total_bytes=30_000_000, max_response_bytes=25_000_000,
+                                  max_duration_seconds=120, request_timeout_seconds=20,
+                                  delay_seconds=2, max_redirects=6, max_links_per_page=100,
+                                  max_queued_urls=1, max_failures=2)
+    hosts = tuple(target.get("allowed_redirect_hosts") or allowed_hosts or ())
+    prefixes = tuple(target.get("allowed_path_prefixes") or ("/",))
     source = SourceDefinition(source_id=target["url_id"], start_url=target["url"],
-                              allowed_hosts=allowed_hosts, allowed_path_prefixes=("/",))
+                              allowed_hosts=hosts, allowed_path_prefixes=prefixes)
     started = now()
     try:
         report = SafeCrawler(source, limits, allow_query_strings=True,
@@ -256,6 +398,9 @@ def summary(output: Path, plan: dict, title: str | None = None) -> dict:
         supplements.append({"relative_path": path.relative_to(output).as_posix(),
                             "counts": supplement["counts"], "saved_bytes": supplement["saved_bytes"]})
     value["supplements"] = supplements
+    usage = budget_usage(output, plan)
+    if usage is not None:
+        value["network_usage"] = usage
     catalogue = [item for item in results if not item.get("attribution")]
     discovered = [item for item in results if item.get("attribution")]
     value["catalogue_counts"] = dict(Counter(item["status"] for item in catalogue))

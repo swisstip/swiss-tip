@@ -8,7 +8,7 @@ version = "0.3.0"
 description = "Swiss TIP release build: curation file plus text dataset to a validated knowledge release"
 requires-python = ">=3.14"
 dependencies = [
-    "pydantic>=2.11,<3",
+    "pydantic>=2.12,<3",
     "pyyaml==6.0.3",
     "swisstip-core",
     "swisstip-extraction",
@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 swisstip-build-release = "swisstip.build.build_cli:main"
 swisstip-coverage = "swisstip.build.coverage_cli:main"
+swisstip-build-dataset = "swisstip.build.dataset_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

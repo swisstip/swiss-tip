@@ -12,7 +12,7 @@ dependencies = [
     "jinja2>=3.1,<4",
     "python-multipart>=0.0.20,<1",
     "uvicorn>=0.30,<1",
-    "pydantic>=2.11,<3",
+    "pydantic>=2.12,<3",
     "PyYAML>=6,<7",
     "swisstip-core",
     "swisstip-ingestion",
@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["httpx>=0.27,<1"]
+test = ["httpx2>=2.13,<3"]
 
 [project.scripts]
 swisstip-admin = "swisstip.admin_console.app:main"

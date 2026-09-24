@@ -1,15 +1,16 @@
 # PyPI distributions
 
-**Last update:** 21 September 2026
+**Last update:** 23 September 2026
 
 The repository keeps one `pyproject.toml` per component under `packages/` and
-`apps/`, for editable development installs. PyPI gets three distributions
+`apps/`, for editable development installs. PyPI gets four distributions
 that bundle them; the module names do not change.
 
 | Distribution | Components | Installed by |
 | --- | --- | --- |
 | `swisstip-core` | `packages/core`, `packages/runtime` | the other two, at the same version |
 | `swisstip-mcp` | `apps/mcp-server` | the container image, MCP clients through `uvx` |
+| `swisstip-calendar-connector` | `apps/calendar-connector` | the calendar connector image, a server operator who serves a pack's datasets |
 | `swisstip-builder` | `packages/ingestion`, `packages/extraction`, `packages/build`, `packages/concepts`, `apps/knowledge-builder`, `apps/admin-console` | a curator's workstation |
 
 Knowledge releases are not published to PyPI.

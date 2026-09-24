@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Workflow - {{ pack.pack }}{% endblock %}
+{% block content %}
+<h1>Knowledge-base workflow</h1>
+<p class="small muted">Durable state under <code>.local/{{ pack.pack }}/autopilot/</code>. Claude may submit
+proposals; only this human-facing screen records approvals, network confirmation, fact-review completion and
+final attestation.</p>
+
+{% if not workflow and not integrity_error and not read_only %}
+<h2>Initialize</h2>
+<form method="post" action="/packs/{{ pack.pack }}/workflow" class="card">
+  <label for="wf-topic">High-level topic</label>
+  <textarea id="wf-topic" name="topic" required></textarea>
+  <div class="filters">
+    <div><label for="wf-mode">Review mode</label>
+      <select id="wf-mode" name="review_mode">
+        <option value="full-review">Full review</option>
+        <option value="fast-track">Fast track</option>
+      </select></div>
+    <div><label for="wf-profile">Delegation profile</label>
+      <input id="wf-profile" name="delegation_profile" type="text" placeholder="required for fast track"></div>
+    <div><label for="wf-model">Exact reviewer model identity</label>
+      <input id="wf-model" name="delegation_model" type="text" placeholder="required for fast track"></div>
+    <div><label for="wf-prompt-sha">Reviewer prompt SHA-256</label>
+      <input id="wf-prompt-sha" name="delegation_prompt_sha256" type="text" placeholder="required for fast track"></div>
+    <div><label for="wf-schema-sha">Reviewer schema SHA-256</label>
+      <input id="wf-schema-sha" name="delegation_response_schema_sha256" type="text" placeholder="required for fast track"></div>
+  </div>
+  <button type="submit">Initialize workflow</button>
+</form>
+{% endif %}
+
+<div id="workflow-status" hx-get="/packs/{{ pack.pack }}/workflow/status" hx-trigger="load, every 2s"
+     hx-swap="innerHTML">
+  {% include "workflow/status_body.html" %}
+</div>
+{% endblock %}

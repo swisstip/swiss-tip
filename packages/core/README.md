@@ -1,6 +1,6 @@
 # swisstip-core
 
-**Last update:** 20 September 2026
+**Last update:** 23 September 2026
 
 The knowledge release format of Swiss TIP: Pydantic models for the release
 file a pack publishes (`swiss-tip-release/v1`) and the validator the build
@@ -28,3 +28,12 @@ section 2.
 The format, the provenance kinds and review statuses, and every check of the
 validator are described in
 [docs/architecture/release-format.md](../../docs/architecture/release-format.md).
+
+`swisstip.core.datasets` and `swisstip.core.connector` hold the dataset
+release (`swiss-tip-dataset/v1`, the bundle a connector serves, with its
+validator) and the contract between the server and a dataset connector
+(`swiss-tip-connector/v1`, with the reference semantics of the calendar
+lookup). The caller-facing `lookup` tool and its gap dimensions are in
+`swisstip.core.contracts`, carried by the schema bundle next to the four
+tools. Design and status:
+[docs/architecture/dataset-connectors.md](../../docs/architecture/dataset-connectors.md).

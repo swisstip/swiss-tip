@@ -52,6 +52,7 @@ packages must be installed first (`packages/core`, `packages/ingestion`,
 | Path | Screen | Writes |
 | --- | --- | --- |
 | `/` | Packs overview: sources, text, curation and release per pack | a new pack's `sources.json` |
+| `/packs/<pack>/workflow` | Governed A1-A6 state, live progress, proposals, verified events and human checkpoints | workflow decisions and checkpoint records under `.local/` |
 | `/packs/<pack>/sources` | Catalogue table with acquisition review and record columns, discovered pages, coverage matrix | `sources.json` |
 | `/packs/<pack>/runs` | Stage strip, job log, run history, run form, relocation review | starts jobs, `curation.yaml` |
 | `/packs/<pack>/documents` | Document list, reading view with block selection, diff of a superseded record | nothing |
@@ -68,6 +69,14 @@ acquisition report. Approved items appear as accepted scope, while their
 recorded acquisition and extraction statuses remain available. Scope approval
 does not change the review status of a fact or the coverage matrix's reviewed
 stage.
+
+The workflow screen also discovers a pack that exists only under
+`.local/<pack>/autopilot/`, before an approved catalogue has been promoted.
+It polls the verified state every two seconds, shows only persisted progress
+metrics, and records approvals with the console actor. In local mode that actor
+is asserted with `--actor`; hosted mode uses the authenticated editor and
+requires same-origin workflow form submissions. Claude's coordinator CLI has
+no approval or attestation operation.
 
 Every identifier is a link: a `document_id` opens the reading view, a
 `fact_id` the fact form, a `concept_id` the concept form, a `source_id` the

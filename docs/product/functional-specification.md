@@ -463,3 +463,11 @@ publish in a language the search index does not yet weigh needs its terms
 measured the way the existing ones were. Everything else - more sources,
 more concepts, more reviewers - is pipeline work against the gates
 described above.
+
+One extension is proposed and not yet built: dataset connectors, sidecar
+containers that serve tables a municipality publishes as open data (the
+first being the waste-collection calendars of the City of Zurich) behind a
+published concept, with the same provenance and gap vocabulary as the
+facts and without any query leaving the server at answer time. The design
+and the internal contract are in
+[dataset-connectors.md](../architecture/dataset-connectors.md).

@@ -1,0 +1,23 @@
+schema_version: swiss-tip-dataset-curation/v1
+dataset_id: test-waste-bioabfall
+type: calendar
+title: Organic waste collection days, test city
+label: Organic waste (Bioabfall)
+pack: test-pack
+concept_id: test-organic-waste
+jurisdiction: CH-ZH-261
+publisher: Entsorgung + Recycling Zürich
+publisher_url: https://data.example.ch/dataset/entsorgungskalender_bioabfall
+licence: CC0-1.0
+sources:
+- url: https://data.example.ch/dataset/entsorgungskalender_bioabfall/download/entsorgungskalender_test_2026.csv
+importer:
+  name: csv-columns
+  columns:
+    postal_code: PLZ
+    date: Abholdatum
+period:
+  start: '2026-01-01'
+  end: '2026-12-31'
+notes:
+- Fixture of the build tests; the URL is never fetched.

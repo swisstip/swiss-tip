@@ -11,7 +11,7 @@ curation file, the source catalogue and the checks file.</p>
   {% set card = item.card %}
   <section class="card">
     <h2 style="margin-top:0">
-      <a href="/packs/{{ card.pack }}/sources">{{ card.pack }}</a>
+      <a href="/packs/{{ card.pack }}/workflow">{{ card.pack }}</a>
       {% if item.job %}<span class="badge warn">job {{ item.job.kind }} running</span>{% endif %}
       {% if card.catalogue_changed %}<span class="badge warn">catalogue changed since the run</span>{% endif %}
     </h2>
@@ -82,6 +82,7 @@ curation file, the source catalogue and the checks file.</p>
     </div>
 
     <p class="small">
+      <a href="/packs/{{ card.pack }}/workflow">workflow</a> -
       <a href="/packs/{{ card.pack }}/runs">runs</a> -
       <a href="/packs/{{ card.pack }}/review">review queue</a> -
       <a href="/packs/{{ card.pack }}/release">release</a> -

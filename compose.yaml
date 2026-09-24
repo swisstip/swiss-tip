@@ -19,6 +19,16 @@
 #   SWISSTIP_PORT=9000 docker compose up -d --wait              another host port
 #   SWISSTIP_REGISTRY=ghcr.io/<owner> docker compose up -d      images of another owner, or local builds
 #
+# The pack's calendar connector, when the pack has datasets: a fourth
+# container behind the profile "calendar", which joins the server's network
+# namespace like the sidecar, so the server reaches it on 127.0.0.1:8100
+# and nobody else does. The server registers it through SWISSTIP_CONNECTORS,
+# offers the datasets on resolve and lists the lookup tool; without the
+# profile the variable stays empty and nothing changes.
+#
+#   SWISSTIP_CONNECTORS=http://127.0.0.1:8100 docker compose --profile calendar up -d --wait
+#   docker compose --profile calendar logs -f calendar
+#
 # A browser interface for the same server, when wanted: the OpenCode agent
 # in a third container (docker/opencode), behind the profile "demo". It is a
 # test image, not the product, and it calls a model over the internet.
@@ -44,11 +54,19 @@ services:
     image: ${SWISSTIP_REGISTRY:-ghcr.io/swisstip}/swiss-tip:${SWISSTIP_PACK:?set SWISSTIP_PACK to the pack to serve}-slim
     # Appended to the image's server command line: the index the image carries.
     command: ["--semantic-index", "/srv/swiss-tip/semantic-index.json"]
+    environment:
+      # Empty means no connector; the profile "calendar" below is registered with http://127.0.0.1:8100.
+      - SWISSTIP_CONNECTORS=${SWISSTIP_CONNECTORS:-}
     ports:
       - "${SWISSTIP_PORT:-8000}:8000"
 
   embeddings:
     image: ${SWISSTIP_REGISTRY:-ghcr.io/swisstip}/swiss-tip-ollama:qwen3-embedding-0.6b
+    network_mode: "service:swiss-tip"
+
+  calendar:
+    profiles: ["calendar"]
+    image: ${SWISSTIP_REGISTRY:-ghcr.io/swisstip}/swiss-tip-calendar:${SWISSTIP_PACK:?set SWISSTIP_PACK to the pack to serve}
     network_mode: "service:swiss-tip"
 
   demo:

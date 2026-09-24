@@ -46,15 +46,18 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 import uvicorn
 
-from swisstip.core.contracts import TOOL_CONTRACTS, ToolError, tool_output_schema
+from swisstip.core.contracts import ToolError, tool_output_schema
 from swisstip.core.readiness import readiness_status
 from swisstip.core.validation import ReleaseInvalid
-from swisstip.runtime.semantic import OllamaEmbedder, SemanticError, SemanticSearch, load_index
-from swisstip.runtime.service import ReleaseService
+from swisstip.runtime.connectors import ConnectorRegistry
+from swisstip.runtime.semantic import (OllamaEmbedder, SemanticError, SemanticSearch, load_index,
+                                       semantic_index_binding)
+from swisstip.runtime.service import ALL_TOOL_CONTRACTS, ReleaseService
 
 from . import SERVER_NAME, SERVER_VERSION
 
 RELEASE_VARIABLE = "SWISSTIP_RELEASE"
+CONNECTORS_VARIABLE = "SWISSTIP_CONNECTORS"
 MCP_PATH = "/mcp"
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
 
@@ -68,9 +71,9 @@ def create_server(service: ReleaseService) -> Server:
     @server.list_tools()
     async def list_tools():
         return [types.Tool(name=name, description=service.tool_description(name), inputSchema=service.tool_input_schema(name),
-                           outputSchema=tool_output_schema(result),
+                           outputSchema=tool_output_schema(ALL_TOOL_CONTRACTS[name][1]),
                            annotations=types.ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-                for name, (_, result) in TOOL_CONTRACTS.items()]
+                for name in service.tools()]
 
     @server.call_tool(validate_input=False)
     async def call_tool(name, arguments):
@@ -148,6 +151,7 @@ def health(service: ReleaseService, readiness: dict | None = None) -> dict:
                 review_statuses=manifest.review_statuses,
                 institution_levels=manifest.institution_levels, basis_kinds=manifest.basis_kinds,
                 readiness=readiness or dict(status="candidate", reason="readiness not checked"),
+                connectors=service.connectors.health() if service.connectors is not None else [],
                 search=dict(configured_mode="hybrid" if service.semantic_search else
                             "lexical-fallback" if service.semantic_error else "lexical",
                             model=service.semantic_search.index.model if service.semantic_search else None,
@@ -198,6 +202,8 @@ def main(argv=None) -> int:
     parser.add_argument("--semantic-timeout", type=float, default=10, help="maximum seconds per local embedding request")
     parser.add_argument("--semantic-min-score", type=float, default=0.5, help="minimum cosine similarity for semantic candidates")
     parser.add_argument("--semantic-candidates", type=int, default=10, help="maximum semantic candidates before rank fusion")
+    parser.add_argument("--connector", action="append", metavar="URL",
+                        help=f"a dataset connector to register (repeatable); default ${CONNECTORS_VARIABLE}, comma-separated")
     args = parser.parse_args(argv)
     logging.basicConfig(stream=sys.stderr, level=args.log_level.upper(), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     if args.print_client_config and args.url:
@@ -219,22 +225,50 @@ def main(argv=None) -> int:
     except (OSError, ValueError, ReleaseInvalid) as exc:
         print(json.dumps(dict(status="error", release=str(args.release), error=str(exc))), file=sys.stderr if not args.health else sys.stdout)
         return 2
-    readiness = readiness_status(args.release)
+    index = None
+    embedder = None
+    semantic_binding = None
+    if args.semantic_index is not None:
+        try:
+            index = load_index(args.semantic_index, service.release)
+            semantic_binding = semantic_index_binding(
+                args.semantic_index, index, min_score=args.semantic_min_score,
+                candidate_limit=args.semantic_candidates)
+            embedder = OllamaEmbedder(model=index.model, base_url=args.ollama_url,
+                                      timeout_seconds=args.semantic_timeout)
+            if args.require_ready and embedder.model_digest() != index.model_digest:
+                raise SemanticError("Local Ollama model digest differs from the attested semantic index.")
+            if args.require_ready:
+                probe = SemanticSearch(index, embedder, min_score=args.semantic_min_score,
+                                       candidate_limit=args.semantic_candidates)
+                probe.scores("Swiss TIP semantic readiness probe")
+        except (OSError, ValueError, SemanticError) as exc:
+            if args.require_ready:
+                print(json.dumps(dict(status="error", release=str(args.release),
+                                      error=f"the release is not ready: semantic search is unavailable: {exc}")),
+                      file=sys.stderr if not args.health else sys.stdout)
+                return 2
+            service.semantic_error = str(exc)
+            logging.getLogger(SERVER_NAME).warning("semantic search unavailable; lexical fallback: %s", exc)
+    readiness = readiness_status(args.release, semantic_index=semantic_binding)
     if args.require_ready and readiness["status"] != "ready":
         print(json.dumps(dict(status="error", release=str(args.release), error=f"the release is not ready: {readiness['reason']}")),
               file=sys.stderr if not args.health else sys.stdout)
         return 2
     if readiness["status"] != "ready" and not args.health:
         logging.getLogger(SERVER_NAME).warning("serving a candidate release, not a ready one: %s", readiness["reason"])
-    if args.semantic_index is not None:
+    if args.semantic_index is not None and index is not None and embedder is not None:
         try:
-            index = load_index(args.semantic_index, service.release)
-            embedder = OllamaEmbedder(model=index.model, base_url=args.ollama_url, timeout_seconds=args.semantic_timeout)
             service.semantic_search = SemanticSearch(index, embedder, min_score=args.semantic_min_score,
                                                      candidate_limit=args.semantic_candidates)
         except (OSError, ValueError, SemanticError) as exc:
             service.semantic_error = str(exc)
             logging.getLogger(SERVER_NAME).warning("semantic search unavailable; lexical fallback: %s", exc)
+    connectors = args.connector or [item.strip() for item in os.environ.get(CONNECTORS_VARIABLE, "").split(",") if item.strip()]
+    if connectors:
+        # Registration reads each manifest once; an unreachable connector is probed again on every health request,
+        # and the release's own tools never wait for one.
+        service.connectors = ConnectorRegistry(connectors, service.release)
     if args.health:
         print(json.dumps(health(service, readiness), indent=2))
         return 0

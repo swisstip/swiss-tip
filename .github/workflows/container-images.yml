@@ -6,6 +6,7 @@
 #   mcp       the MCP image only, on the slim one in ghcr.io
 #   ollama    the embedding sidecar only, out of the MCP image in ghcr.io
 #   opencode  the OpenCode image, which holds the agent and its web interface only
+#   calendar  the calendar connector image, swisstip-calendar-connector without a dataset
 #
 # These are the images that hold no knowledge release. The images that hold
 # one are built, tested and pushed by the workflow of the same name in the
@@ -76,10 +77,10 @@ on:
       images:
         description: Images to build
         type: choice
-        options: [all, mcp-slim, mcp, ollama, opencode]
+        options: [all, mcp-slim, mcp, ollama, opencode, calendar]
         default: all
       swisstip_mcp_version:
-        description: swisstip-mcp version (the tag of both MCP images)
+        description: swisstip-mcp version (the tag of both MCP images and of the calendar connector image)
         type: string
         default: 0.3.0
       package_index:
@@ -118,13 +119,14 @@ jobs:
 
       - name: Select images
         run: |
-          slim=0; mcp=0; sidecar=0; opencode=0
+          slim=0; mcp=0; sidecar=0; opencode=0; calendar=0
           case "$IMAGES" in
-            all)      slim=1; mcp=1; sidecar=1; opencode=1 ;;
+            all)      slim=1; mcp=1; sidecar=1; opencode=1; calendar=1 ;;
             mcp-slim) slim=1 ;;
             mcp)      mcp=1 ;;
             ollama)   sidecar=1 ;;
             opencode) opencode=1 ;;
+            calendar) calendar=1 ;;
             *) echo "unknown selection $IMAGES"; exit 1 ;;
           esac
           # A rehearsal takes swisstip-mcp from TestPyPI, with PyPI behind it for the dependencies.
@@ -152,13 +154,15 @@ jobs:
             echo "BUILD_MCP=$mcp"
             echo "BUILD_SIDECAR=$sidecar"
             echo "BUILD_OPENCODE=$opencode"
+            echo "BUILD_CALENDAR=$calendar"
             echo "REGISTRY=$registry"
             echo "MCP_IMAGE=$registry/swiss-tip-mcp"
             echo "SIDECAR_IMAGE=$registry/swiss-tip-ollama"
             echo "OPENCODE_IMAGE=$registry/swiss-tip-opencode"
+            echo "CALENDAR_IMAGE=$registry/swiss-tip-calendar-connector"
             echo "SYNTHETIC_PACK=$RUNNER_TEMP/synthetic"
           } >> "$GITHUB_ENV"
-          echo "slim=$slim mcp=$mcp sidecar=$sidecar opencode=$opencode version=$VERSION registry=$registry"
+          echo "slim=$slim mcp=$mcp sidecar=$sidecar opencode=$opencode calendar=$calendar version=$VERSION registry=$registry"
           echo "index=$PACKAGE_INDEX ${index:-https://pypi.org/simple/}, branch $REF_NAME of $DEFAULT_BRANCH, latest pushed: $latest"
 
       # The check client, and the synthetic release the images are tested on: no test here reads a pack.
@@ -258,6 +262,26 @@ jobs:
             echo "the server was restarted by the demo profile"; exit 1
           fi
           compose --profile demo down
+          echo "$tags" >> "$RUNNER_TEMP/push.txt"
+
+      - name: Build and test the calendar connector image
+        if: env.BUILD_CALENDAR == '1'
+        run: |
+          # The connector image carries the swisstip package of this version and no dataset, so its tags follow
+          # the MCP image's rule. It is tested with the synthetic bundle of the app's tests mounted and the
+          # conformance test of the connector contract run against it.
+          tags="$CALENDAR_IMAGE:$VERSION"
+          if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $CALENDAR_IMAGE:latest"; fi
+          tag_args=""; for tag in $tags; do tag_args="$tag_args -t $tag"; done
+          docker build -f docker/calendar-connector/Dockerfile --build-arg SWISSTIP_VERSION="$VERSION" \
+            --build-arg PACKAGE_INDEX="$INDEX_URL" \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            $tag_args .
+          docker run -d --name calendar -p 8101:8100 \
+            -v "$PWD/apps/calendar-connector/tests/fixtures:/srv/swiss-tip/datasets:ro" "$CALENDAR_IMAGE:$VERSION"
+          for attempt in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8101/health && break; sleep 1; done
+          python scripts/test/connector/check_connector.py --url http://127.0.0.1:8101 || { docker logs calendar | tail -40; exit 1; }
+          docker rm -f calendar
           echo "$tags" >> "$RUNNER_TEMP/push.txt"
 
       - name: Push the tested images

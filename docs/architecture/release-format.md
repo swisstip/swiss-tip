@@ -1,12 +1,12 @@
 # Knowledge release and curation file
 
-**Last update:** 21 September 2026
+**Last update:** 23 September 2026
 
 **Status:** implemented in `packages/core` (release
 models, basis labels and validator) and `packages/build` (curation file and
 release build); the served releases name the institution of every page and
 the basis of every excerpt (section 2, "Institutions and basis")<br>
-**Schema versions:** `swiss-tip-release/v1`, `swiss-tip-curation/v1`<br>
+**Schema versions:** `swiss-tip-release/v2` (legacy v1 remains readable), `swiss-tip-curation/v1`<br>
 **Relation to the tool contracts:** the server maps release records onto the
 tool results of [tool-contracts.md](tool-contracts.md); the release carries
 more (hashes, provenance, block IDs) than any tool returns.

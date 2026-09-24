@@ -8,7 +8,7 @@ version = "0.3.0"
 description = "Swiss TIP knowledge release format: Pydantic models and the release validator"
 requires-python = ">=3.14"
 dependencies = [
-    "pydantic>=2.11,<3",
+    "pydantic>=2.12,<3",
 ]
 
 [project.scripts]

@@ -2,7 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import CATALOGUE_URL, FAILED_URL, FEDLEX_HTML_URL, FEDLEX_URL, IN_SCOPE_URL, OUT_OF_SCOPE_URL, make_run
+from support import (CATALOGUE_URL, FAILED_URL, FEDLEX_HTML_URL, FEDLEX_URL, IN_SCOPE_URL,
+                     OUT_OF_SCOPE_URL, make_run, save_page)
 from swisstip.extraction.run_reader import RunError, load_plan, read_verified, select_items, snapshot_items
 
 
@@ -65,6 +66,12 @@ class RunReaderTests(unittest.TestCase):
     def test_plan_is_required(self):
         with self.assertRaises(RunError):
             load_plan(Path(self.temporary.name))
+
+    def test_an_unplanned_saved_manifest_is_refused(self):
+        save_page(self.run / "pages", "https://attacker.example/injected.html",
+                  [(b"<html>Injected</html>", "html", "text/html", [])])
+        with self.assertRaisesRegex(RunError, "outside the approved acquisition plan"):
+            snapshot_items(self.run)
 
 
 if __name__ == "__main__":

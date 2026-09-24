@@ -359,6 +359,9 @@ class ReleaseBuildTests(unittest.TestCase):
         self.curation.place_register = "../places/missing.json"
         with self.assertRaisesRegex(PlaceFileError, "cannot read"):
             place_register_for(self.curation, curation_path)
+        self.curation.place_register = "../../outside.json"
+        with self.assertRaisesRegex(PlaceFileError, "leaves the packs workspace"):
+            place_register_for(self.curation, curation_path)
 
     def test_a_register_must_list_every_published_jurisdiction(self):
         register = place_register_for(self.curation, self.write_place_files())

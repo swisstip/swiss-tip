@@ -119,6 +119,10 @@ def pick_candidate(request: Request, pack: PackData = Depends(get_pack), actor: 
                 citation = fact.evidence[number - 1]
                 citation.document_id, citation.first_block, citation.last_block = document_id, first_block, last_block
                 citation.anchor = Anchor(**make_anchor(record, first_block, last_block))
+                if fact.provenance.review_status == "human-reviewed":
+                    fact.provenance.review_status = "assistant-authored-unreviewed"
+                    fact.provenance.reviewed_by = None
+                    fact.provenance.reviewed_on = None
 
     write_curation(pack, mutate, actor, f"relocate citation {number} of fact {fact_id} onto {document_id}"
                    f" blocks {first_block}-{last_block}", expected_sha256=sha256 or None, ids=[fact_id])

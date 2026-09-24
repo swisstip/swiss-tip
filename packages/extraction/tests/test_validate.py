@@ -50,6 +50,25 @@ class ValidateTests(unittest.TestCase):
         detail = self.checks(report)["saved responses present with the recorded hash"]["detail"]
         self.assertEqual(detail[0]["problem"], "saved response hash differs")
 
+    def test_a_self_consistent_record_without_a_plan_manifest_is_refused(self):
+        path = next((self.text / "documents").glob("doc-*.json"))
+        record = read_json(path)
+        injected = self.run / "pages" / "injected" / "attempt-001" / "response.html"
+        injected.parent.mkdir(parents=True)
+        raw = b"<html><p>Injected but self-hashed</p></html>"
+        injected.write_bytes(raw)
+        record["acquisition"]["path"] = injected.relative_to(self.run).as_posix()
+        record["acquisition"]["raw_sha256"] = sha256(raw)
+        record["acquisition"]["manifest_path"] = "pages/injected/latest.json"
+        record["acquisition"]["manifest_sha256"] = "0" * 64
+        path.write_text(json.dumps(record), encoding="utf-8")
+
+        report = validate_dataset(self.text)
+
+        self.assertFalse(report["passed"])
+        detail = self.checks(report)["saved responses present with the recorded hash"]["detail"]
+        self.assertIn("approved plan-derived manifest", detail[0]["problem"])
+
     def test_index_mismatch_and_missing_view_are_reported(self):
         view = next((self.text / "reading").glob("*.md"))
         view.unlink()

@@ -641,6 +641,9 @@ class SafeCrawler:
                     raise ScopeViolation(str(exc)) from exc
                 next_path = urllib.parse.urlsplit(next_url).path
                 robots_exception = allow_robots_path and next_path == "/robots.txt"
+                if (urllib.parse.urlsplit(current_url).scheme == "https"
+                        and urllib.parse.urlsplit(next_url).scheme != "https"):
+                    raise ScopeViolation("redirect downgrades HTTPS to HTTP")
                 if not self._is_in_scope(next_url) and not robots_exception:
                     raise ScopeViolation(self._redact_query(next_url))
                 if urllib.parse.urlsplit(next_url).query and not self.allow_query_strings:

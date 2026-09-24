@@ -1,0 +1,147 @@
+{% if integrity_error %}
+  <p class="alert"><strong>Workflow integrity check failed.</strong> {{ integrity_error }}</p>
+{% elif not workflow %}
+  <p class="muted">No workflow has been initialized for this pack.</p>
+{% else %}
+  <section class="card">
+    <div class="row"><span class="label">State</span><strong>{{ workflow.state.value }}</strong>
+      <span class="badge {{ 'ok' if workflow.state.value == 'ready' else 'warn' }}">revision {{ workflow.revision }}</span></div>
+    <div class="row"><span class="label">Mode</span><span>{{ workflow.review_mode.value }}</span>
+      <span>events {{ workflow.event_sequence }}</span></div>
+    <div class="row"><span class="label">Topic</span><span>{{ workflow.topic }}</span></div>
+  </section>
+
+  {% if progress %}
+  <h2>Current reported activity</h2>
+  <section class="card">
+    <p><strong>{{ progress.summary }}</strong></p>
+    <p class="small muted">reported {{ progress.at }} by {{ progress.actor.actor_id }}</p>
+    {% if progress.metrics %}<div class="row">
+      {% for name, value in progress.metrics.items() %}<span><strong>{{ name }}</strong>: {{ value }}</span>{% endfor %}
+    </div>{% endif %}
+  </section>
+  {% endif %}
+
+  <h2>Approval gates</h2>
+  <div class="stages">
+  {% for gate, progress in workflow.gates.items() %}
+    <div class="stage {{ 'ran' if progress.status.value in ('approved', 'not-required') else 'failed' if progress.status.value == 'rejected' else 'skipped' }}">
+      <strong>{{ gate.value }}</strong><br>{{ progress.status.value }}
+    </div>
+  {% endfor %}
+  </div>
+  <p class="small">Gate states: {{ gate_counts }}. Decisions by actor: {{ actor_counts }}.</p>
+
+  {% if proposal %}
+  <h2>Pending human decision: {{ proposal.gate.value }}</h2>
+  <section class="card">
+    <p><strong>{{ proposal.summary }}</strong></p>
+    <p class="small muted">proposal revision {{ proposal.revision }}, created by
+      {{ proposal.created_by.kind.value }} <span class="mono">{{ proposal.created_by.actor_id }}</span></p>
+    <pre>{{ proposal.details | as_json }}</pre>
+    {% if proposal.input_sha256s %}<details><summary>Bound inputs</summary><pre>{{ proposal.input_sha256s | as_json }}</pre></details>{% endif %}
+    {% if proposal.delegation_uses %}
+    <details open><summary>Fast-track support reviews</summary>
+      <div class="scroll"><table><thead><tr><th>Class</th><th>Member</th><th>Verdict</th><th>Handling</th><th>Reason</th></tr></thead>
+        <tbody>{% for use in proposal.delegation_uses %}<tr>
+          <td>{{ use.decision_class.value }}</td><td><code>{{ use.member_id }}</code><br><code>{{ use.member_sha256 }}</code></td>
+          <td>{{ use.verdict.value }}</td><td><strong>{{ use.handling.value }}</strong></td><td>{{ use.reason }}</td>
+        </tr>{% endfor %}</tbody></table></div>
+      <p class="small">These support verdicts do not approve the gate. Applied means the artifact contains the exact reviewed member;
+        human-review means the member changed or was escalated; omitted means those reviewed bytes are absent.</p>
+    </details>
+    {% endif %}
+    {% for item in proposal_artifacts %}
+    <details open><summary>{{ item.name }} - {{ item.reference.bytes }} bytes - <code>{{ item.reference.sha256 }}</code></summary>
+      {% if item.promotion %}<p class="small">Destination: <code>{{ item.promotion.destination }}</code>;
+        expected prior SHA-256: <code>{{ item.promotion.expected_sha256 or '(new file)' }}</code></p>{% endif %}
+      <pre>{{ item.preview }}</pre>
+      <p class="small"><a href="/packs/{{ pack.pack }}/workflow/artifacts/{{ item.reference.sha256 }}" target="_blank"
+        rel="noopener">View complete text</a> ·
+        <a href="/packs/{{ pack.pack }}/workflow/artifacts/{{ item.reference.sha256 }}?download=true">Download exact bytes</a></p>
+    </details>
+    {% endfor %}
+    {% if not read_only %}
+    <form method="post" action="/packs/{{ pack.pack }}/workflow/decision">
+      <input type="hidden" name="expected_revision" value="{{ workflow.revision }}">
+      <input type="hidden" name="proposal_sha256" value="{{ workflow.gates[proposal.gate].proposal.sha256 }}">
+      <label for="wf-note">Decision note</label>
+      <textarea id="wf-note" name="note" placeholder="Required for request changes or reject"></textarea>
+      <button type="submit" name="action" value="approve">Approve</button>
+      <button class="secondary" type="submit" name="action" value="request-changes">Request changes</button>
+      <button class="danger" type="submit" name="action" value="reject">Reject build</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if not read_only and workflow.state.value == 'awaiting_download_confirmation' %}
+  <h2>Confirm network plan</h2>
+  {% if not network_packet.ready %}
+  <section class="card"><p>{{ network_packet.message }}</p></section>
+  {% else %}
+  <form method="post" action="/packs/{{ pack.pack }}/workflow/confirm-download" class="card">
+    <input type="hidden" name="expected_revision" value="{{ workflow.revision }}">
+    <p>The plan and catalogue bytes are bound into the workflow before acquisition starts.</p>
+    <p>{{ network_packet.target_count }} targets; request ceiling {{ network_packet.request_ceiling }} of
+      {{ network_packet.max_requests }}; byte ceiling {{ network_packet.max_bytes }}; host ceiling
+      {{ network_packet.max_hosts }}. Catalogue <code>{{ network_packet.catalogue_sha256 }}</code>.</p>
+    <p>Source plugins: <code>{{ network_packet.plugins | as_json }}</code></p>
+    <div class="scroll"><table><thead><tr><th>URL</th><th>Redirect hosts</th><th>Path prefixes</th></tr></thead>
+      <tbody>{% for item in network_packet.targets %}<tr><td><code>{{ item.url }}</code></td>
+        <td>{{ item.hosts | join(', ') }}</td><td>{{ item.paths | join(', ') }}</td></tr>{% endfor %}</tbody></table></div>
+    <label for="wf-confirm-pack">Type <code>{{ pack.pack }}</code> to confirm</label>
+    <input id="wf-confirm-pack" name="confirm_pack" type="text" required>
+    <button type="submit">Confirm approved network plan</button>
+  </form>
+  {% endif %}
+  {% endif %}
+
+  {% if not read_only and workflow.state.value == 'awaiting_fact_review' %}
+  <h2>Human fact-review checkpoint</h2>
+  <form method="post" action="/packs/{{ pack.pack }}/workflow/complete-fact-review" class="card">
+    <input type="hidden" name="expected_revision" value="{{ workflow.revision }}">
+    <p>This verifies the current curation and rebuilt release. Full-review mode accepts only human-reviewed facts.</p>
+    <button type="submit">Verify completed fact review</button>
+  </form>
+  {% endif %}
+
+  {% if not read_only and workflow.state.value == 'awaiting_attestation' %}
+  <h2>Final human attestation</h2>
+  {% if not attestation_packet.ready %}
+  <section class="card"><p>{{ attestation_packet.message }}</p><p class="small">Missing: {{ attestation_packet.missing | join(', ') }}</p></section>
+  {% else %}
+  <form method="post" action="/packs/{{ pack.pack }}/workflow/attest" class="card">
+    <input type="hidden" name="expected_revision" value="{{ workflow.revision }}">
+    <p><strong>{{ attestation_packet.release_id }}</strong>, content
+      <code>{{ attestation_packet.content_sha256 }}</code></p>
+    <p>{{ attestation_packet.counts.topics }} topics, {{ attestation_packet.counts.concepts }} concepts,
+      {{ attestation_packet.counts.facts }} facts, {{ attestation_packet.counts.evidence }} evidence excerpts,
+      {{ attestation_packet.counts.documents }} documents.</p>
+    <p>Review: {{ attestation_packet.review_statuses }}. Dropped facts: {{ attestation_packet.dropped }}.</p>
+    <p>Acceptance: {{ attestation_packet.acceptance.cases }} cases; failed
+      {{ attestation_packet.acceptance.failed }}; quarantined {{ attestation_packet.acceptance.quarantined }}.</p>
+    <p>Regression passed: {{ attestation_packet.regression.passed }}.</p>
+    <details><summary>Coverage, limitations and exact file hashes</summary>
+      <h3>Coverage</h3><pre>{{ attestation_packet.coverage | as_json }}</pre>
+      <h3>Limitations</h3><ul>{% for item in attestation_packet.limitations %}<li>{{ item }}</li>{% endfor %}</ul>
+      <h3>Files</h3><pre>{{ attestation_packet.files | as_json }}</pre>
+    </details>
+    <p>Runs readiness gates G1-G6 with your console identity and records the exact release and suite bytes.</p>
+    <button type="submit">Run gates and attest</button>
+  </form>
+  {% endif %}
+  {% endif %}
+
+  <h2>Verified event stream</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>#</th><th>At</th><th>Actor</th><th>Event</th><th>Summary</th></tr></thead>
+    <tbody>{% for event in events | reverse %}
+      <tr><td class="num">{{ event.sequence }}</td><td class="mono small">{{ event.at }}</td>
+        <td>{{ event.actor.kind.value }}: <span class="mono">{{ event.actor.actor_id }}</span></td>
+        <td class="mono">{{ event.kind }}</td><td>{{ event.summary }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+{% endif %}

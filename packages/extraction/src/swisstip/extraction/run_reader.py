@@ -96,6 +96,10 @@ def snapshot_items(run: Path, plan: dict | None = None) -> tuple[list[dict], lis
         url = manifest["url"]
         target = targets.get(url)
         source_page_url = manifest.get("source_page_url")
+        if plugin_id is None and target is None:
+            raise RunError(f"Unplanned page manifest is outside the approved acquisition plan: {pointer}")
+        if plugin_id is not None and (not source_page_url or source_page_url not in targets):
+            raise RunError(f"Plugin document does not resolve from an approved plan target: {pointer}")
         source_url = source_page_url or url
         snapshots = manifest.get("snapshots") or []
         if not snapshots:
@@ -130,7 +134,7 @@ def select_items(items: list[dict], *, scope: str = "attributed", kinds: list[st
     selected = []
     for item in items:
         kind = item["attribution"]["kind"]
-        if scope == "attributed" and kind not in ATTRIBUTED_KINDS and kind != "unplanned":
+        if scope == "attributed" and kind not in ATTRIBUTED_KINDS:
             continue
         if kinds and kind not in kinds:
             continue

@@ -7,5 +7,5 @@ docs/architecture/admin-console.md.
 """
 
 CONSOLE_NAME = "swisstip-admin"
-CONSOLE_VERSION = "0.2.2"
+CONSOLE_VERSION = "0.3.0"
 CHECKS_SCHEMA_VERSION = "swiss-tip-checks/v1"

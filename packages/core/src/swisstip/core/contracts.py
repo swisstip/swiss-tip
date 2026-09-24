@@ -50,6 +50,11 @@ GapDimension = Literal[
     "concept_not_published",
     "context_not_covered",
     "review_status_not_met",
+    # The four of the lookup tool (docs/architecture/dataset-connectors.md, section 6).
+    "postal_code_not_covered",
+    "period_not_published",
+    "no_dates_in_range",
+    "connector_unavailable",
 ]
 
 # The wire contract repeats the release format's review statuses instead of importing them, so the
@@ -367,6 +372,78 @@ class CoverageGap(Strict):
     published_values: list[str]
 
 
+# --- lookup -----------------------------------------------------------------
+# Additive on schema v4: the tool of the dataset connectors (docs/architecture/dataset-connectors.md). It is served
+# only when a connector is registered, so it has a table of its own next to TOOL_CONTRACTS.
+
+
+class Period(Strict):
+    start: date = Field(description="First published date, inclusive.")
+    end: date = Field(description="Last published date, inclusive; next year's file is not published before it exists.")
+
+
+class LookupOffer(Strict):
+    """What resolve says about a dataset a caller can look up for the concept."""
+
+    dataset_id: str = Field(description="What to send to lookup.")
+    type: str = Field(description="calendar: dates for a postal code.")
+    title: str
+    label: str
+    jurisdiction: str = Field(description="The municipality the dataset is published for.")
+    requires: list[str] = Field(description="Input fields lookup needs: ask the user for them when the conversation has not given them.")
+    accepts: list[str] = Field(description="Optional input fields of lookup.")
+    period: Period
+    publisher: str
+
+
+class LookupRequest(Strict):
+    dataset_id: str = Field(description="From a resolve result's lookups.")
+    postal_code: str = Field(pattern=r"^\d{4}$", description="Four digits, as the user gave it.")
+    as_of: date | None = Field(default=None, description="The date the next dates count from; omit for today.")
+    start: date | None = Field(default=None, description="First date wanted; omit for as_of.")
+    end: date | None = Field(default=None, description="Last date wanted, inclusive; omit for the end of the published period.")
+    limit: int = Field(default=3, ge=1, le=60, description="1 for the next date only, up to 60 for a whole year.")
+    release_id: str | None = None
+
+
+class LookupEvent(Strict):
+    date: date
+    label: str
+    location: str | None = Field(default=None, description="Where the event happens, when the publisher names a place.")
+
+
+class LookupSource(Strict):
+    url: str
+    sha256: str
+    bytes: int
+    downloaded_on: date
+
+
+class LookupProvenance(Strict):
+    publisher: str
+    publisher_url: str = Field(description="The publisher's page for the dataset; cite it.")
+    licence: str
+    sources: list[LookupSource]
+    period: Period
+    dataset_version: str
+
+
+class LookupResult(Strict):
+    release_id: str
+    dataset_id: str
+    dataset_version: str
+    type: str
+    label: str
+    status: Status = Field(description="SUPPORTED with at least one event, else OUT_OF_COVERAGE with a gap.")
+    as_of: date
+    events: list[LookupEvent]
+    truncated: bool = Field(description="More dates than limit fell into the range.")
+    provenance: LookupProvenance
+    gaps: list[CoverageGap]
+    guidance_for_caller: str | None = None
+    limitations: list[str]
+
+
 class ConceptResolution(Strict):
     concept_id: str
     status: Status
@@ -389,6 +466,10 @@ class ConceptResolution(Strict):
         "What users commonly ask about this concept that the release does not publish (for example a fee, a document "
         "list or live availability). Say that the service does not publish it and point to the cited page; do not "
         "fill it in from general knowledge. Omitted when empty."))
+    lookups: list[LookupOffer] = Field(default_factory=list, exclude_if=lambda value: not value, description=(
+        "Datasets served behind this concept by a registered connector, for a date the facts cannot give (the next "
+        "collection day for a postal code). Call lookup with the dataset_id and the fields it requires; never derive "
+        "such a date from the facts. Omitted when no dataset stands behind the concept for the resolved place."))
 
 
 def page_citations(cited: list[tuple[str, dict]]) -> list[Citation]:
@@ -566,6 +647,18 @@ TOOL_DESCRIPTIONS = {
         "language and citation URL for up to five evidence_ids, exactly as returned by resolve (or fact_ids, "
         "which return the evidence of that fact). Only needed to quote the source verbatim; resolve already "
         "returns the statements and citations."),
+    "lookup": (
+        "Read the published dates of a dataset a resolve result offered in lookups, for one four-digit postal code: "
+        "for example the next collection days of a kind of waste. The facts of the concept give the rule; the "
+        "dataset gives the dates, taken unchanged from the publisher's open-data file and not reviewed by a "
+        "person. Send the dataset_id of the offer, the postal code the user gave (ask for it when the conversation "
+        "has not given it; never guess one from the municipality), as_of (normally today), and limit 1 for the "
+        "next date only, or start and end for a range such as a month. SUPPORTED returns the dates oldest first; "
+        "OUT_OF_COVERAGE names the gap: a postal code the dataset does not hold (published_values lists the ones it "
+        "holds), a range outside the published period (typically next year before its file exists), no date left "
+        "in the range, or a connector that is not running (the facts are unaffected). State the dates as published "
+        "by the named publisher for that postal code, cite provenance.publisher_url, and follow "
+        "guidance_for_caller."),
 }
 
 TOOL_CONTRACTS = {
@@ -573,6 +666,11 @@ TOOL_CONTRACTS = {
     "search": (SearchRequest, SearchResult),
     "resolve": (ResolveRequest, ResolveResult),
     "get_evidence": (GetEvidenceRequest, GetEvidenceResult),
+}
+
+# Served only while a dataset connector is registered; part of the schema bundle, not of every server's tool list.
+CONNECTOR_TOOL_CONTRACTS = {
+    "lookup": (LookupRequest, LookupResult),
 }
 
 
@@ -618,7 +716,7 @@ def schema_bundle():
             name: {"description": TOOL_DESCRIPTIONS[name],
                    "input": tool_input_schema(request),
                    "output": tool_output_schema(result)}
-            for name, (request, result) in TOOL_CONTRACTS.items()
+            for name, (request, result) in {**TOOL_CONTRACTS, **CONNECTOR_TOOL_CONTRACTS}.items()
         },
     }
 

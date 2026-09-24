@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-calendar-connector"
+version = "0.3.0"
+description = "Swiss TIP calendar connector: dataset bundles of dated events by postal code, served to the MCP server over HTTP"
+requires-python = ">=3.14"
+dependencies = [
+    "pydantic>=2.11,<3",
+    "starlette>=0.48",
+    "uvicorn>=0.31.1",
+    "swisstip-core",
+]
+
+[project.scripts]
+swisstip-calendar-connector = "swisstip.calendar_connector.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
