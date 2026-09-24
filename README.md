@@ -64,8 +64,11 @@ whatever release is loaded; the snapshot below describes the current one.
   (`stadt-zuerich.ch`); every fact cites an exact excerpt with its URL, access
   date and hash.
 
-Coverage grows with each release, so the counts and topics live in the pack,
-not here; ask the running server with `get_coverage`, or read `/health`.
+**Current release — `mvp-zurich-2026-09-24-v1`:** 20 topics, 212 concepts and
+**1,273 facts, all human-reviewed**, cited to 1,531 excerpts across 336 official
+documents; source snapshot 2026-09-23, stale from 2026-11-22. Coverage grows
+with each release, so these figures are a snapshot: the running server reports
+the live numbers through `get_coverage` and `/health`.
 
 ## Run the server
 
