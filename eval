@@ -1,0 +1,5 @@
+#!/bin/sh
+PYTHONPATH="apps/mcp-evals/src${PYTHONPATH:+:$PYTHONPATH}" \
+	exec .venv/bin/python -m swisstip.mcp_evals.runner \
+	--config apps/mcp-evals/evals/config.yaml \
+	--cases apps/mcp-evals/evals/cases "$@"

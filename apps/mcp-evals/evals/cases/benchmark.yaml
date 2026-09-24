@@ -1,0 +1,8 @@
+cases:
+  - case_id: example
+    category: simple
+    difficulty: standard
+    question: Replace this example with a question from the pack acceptance suite.
+    expected_answer: The expected answer from the reviewed release.
+    expected_claims: ["expected answer"]
+    expected_tools: [search, resolve]

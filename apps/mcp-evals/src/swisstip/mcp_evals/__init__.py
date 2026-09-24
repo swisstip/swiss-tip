@@ -1,0 +1,1 @@
+"""Local evaluation harness for Swiss TIP MCP callers."""

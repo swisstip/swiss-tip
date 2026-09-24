@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swisstip-mcp-evals"
+version = "0.2.0"
+description = "Local DeepEval harness for comparing agents against the Swiss TIP MCP server"
+requires-python = ">=3.14"
+dependencies = [
+    "deepeval>=2.0",
+    "pydantic>=2.12,<3",
+    "pyyaml==6.0.3",
+]
+
+[project.scripts]
+swisstip-mcp-evals = "swisstip.mcp_evals.runner:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = true
