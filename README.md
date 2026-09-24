@@ -58,6 +58,30 @@ in any directory; the checkout route above tests this source instead:
 uvx swisstip-quickstart mvp-zurich
 ```
 
+### Only Docker, nothing else
+
+One command, and everything is inside the image: the server, the
+`mvp-zurich` release with its readiness attestation and semantic index, and a
+CPU-only Ollama with the `qwen3-embedding:0.6b` model, so search is hybrid
+(lexical plus embeddings) from the first request. No clone, no Python, no uv,
+no API key and no model download.
+
+```shell
+docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
+```
+
+The image is about 850 MB and the server answers about 15 seconds after it
+starts. `curl -s http://127.0.0.1:8000/health` then reports `"status": "ok"`,
+the release ID, a `readiness` status of `ready` and `search.configured_mode`
+`hybrid`; any MCP client connects to `http://127.0.0.1:8000/mcp`:
+
+```shell
+claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
+```
+
+The [other ways to run it](#run-the-server) below are the same release in
+different packaging, down to a 165 MB image without the model.
+
 ## How it works
 
 ```text
@@ -112,41 +136,42 @@ the live numbers through `get_coverage` and `/health`.
 
 ## Run the server
 
-The server holds no knowledge: every way of running it names the release it
-serves. In the commands below, `<packs>` is a clone of the packs repository
-[swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) (or a directory of
-files downloaded from one of its GitHub releases) and `<pack>` is a pack name
-in it — the published one is **`mvp-zurich`**. A release is the pack directory
-`<packs>/releases/<pack>`, holding `release.json` and `readiness.json`.
-
-The quickest path needs **no clone**: a pack's own image from the packs
-repository carries its release, and Docker Compose adds the embedding sidecar
-for hybrid search (`/mcp` and `/health` on port 8000):
+Every way of running the server names the release it serves; the server holds
+no knowledge of its own. The **full pack image carries everything** and is the
+shortest route:
 
 ```shell
-docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich          # one container, lexical search
-SWISSTIP_PACK=mvp-zurich docker compose up -d --wait                        # server + embedding sidecar, hybrid search
-claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
+docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
 ```
 
-To serve a release directory instead — with [uv](https://docs.astral.sh/uv/)
-and the published package from PyPI, or with the slim MCP image and the pack
-mounted (here shown for the MVP pack after `git clone` of the packs repo into
-`../swiss-tip-mvp`):
+It bundles the MCP server, the release with its readiness record and semantic
+index, and the embedding model, so search is **hybrid** from the first
+request. Each `search` result names its `retrieval_mode`: `hybrid`, or
+`lexical-fallback` with the reason if the bundled model is ever unreachable.
+Use `-p 9000:8000` for another host port, and an immutable tag such as
+`mvp-zurich-2026-09-24-v1` instead of the moving tag `mvp-zurich` to pin a
+release.
+
+The alternatives serve the same release in different packaging:
+
+| Way | Command | Search | Size |
+| --- | --- | --- | --- |
+| Full pack image, model inside | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` | hybrid | ~850 MB |
+| Two containers: slim server plus the embedding sidecar ([compose.yaml](compose.yaml), no clone of the packs needed) | `SWISSTIP_PACK=mvp-zurich docker compose up -d --wait` | hybrid | ~165 MB + ~830 MB |
+| Slim pack image alone, no model | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich-slim` | lexical only | ~165 MB |
+| From PyPI with [uv](https://docs.astral.sh/uv/), a release directory | `uvx swisstip-mcp --release <packs>/releases/<pack>/release.json --require-ready --transport streamable-http` | lexical; hybrid needs a local Ollama | - |
+| From this checkout, after the installation below | `./.venv/bin/python -m swisstip.mcp_server.server --release <packs>/releases/<pack>/release.json --transport streamable-http` (`.venv/Scripts/python.exe` on Windows) | lexical; same note | - |
+
+In the last two, `<packs>` is a clone of the packs repository
+[swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) (or a directory of
+files downloaded from one of its GitHub releases) and `<pack>` is a pack name
+in it; the published one is **`mvp-zurich`**. After the quick start above,
+`<packs>/releases/<pack>` is `.local/packs/mvp-zurich` of this checkout. For
+example:
 
 ```shell
 git clone https://github.com/swisstip/swiss-tip-mvp ../swiss-tip-mvp
 uvx swisstip-mcp --release ../swiss-tip-mvp/releases/mvp-zurich/release.json --require-ready --transport streamable-http
-docker run --rm -p 8000:8000 -v "$PWD/../swiss-tip-mvp/releases/mvp-zurich:/srv/swiss-tip:ro" ghcr.io/swisstip/swiss-tip-mcp:latest-slim
-```
-
-The general form, for any `<packs>` clone and `<pack>` name — from this
-checkout, after the installation below (`.venv/Scripts/` on Windows,
-`.venv/bin/` on macOS and Linux); after the quick start, `<packs>/releases/<pack>`
-is `.local/packs/<pack>` of this checkout:
-
-```shell
-./.venv/Scripts/python.exe -m swisstip.mcp_server.server --release <packs>/releases/<pack>/release.json --transport streamable-http
 ```
 
 Any MCP client connects to `http://127.0.0.1:8000/mcp` (Streamable HTTP, no
