@@ -72,63 +72,55 @@ the live numbers through `get_coverage` and `/health`.
 
 ## Run the server
 
-The server holds no knowledge: every way of running it names the release it
-serves. In the commands below, `<packs>` is a clone of the packs repository
-[swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) (or a directory of
-files downloaded from one of its GitHub releases) and `<pack>` is a pack name
-in it — the published one is **`mvp-zurich`**. A release is the pack directory
-`<packs>/releases/<pack>`, holding `release.json` and `readiness.json`.
+Docker is the primary and only recommended preference to run Swiss TIP locally: container images carry the curated knowledge release, required dependencies, and optional embedding models without needing local Python environments or knowledge-base repository checkouts. Going forward, a hosted cloud endpoint will also be available for direct remote connection.
 
-The quickest path needs **no clone**: a pack's own image from the packs
-repository carries its release, and Docker Compose adds the embedding sidecar
-for hybrid search (`/mcp` and `/health` on port 8000):
+### 1. Run locally with Docker (Preferred)
 
-```shell
-docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich          # one container, lexical search
-SWISSTIP_PACK=mvp-zurich docker compose up -d --wait                        # server + embedding sidecar, hybrid search
-claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
-```
+To run the published MVP knowledge base (**`mvp-zurich`**):
 
-To serve a release directory instead — with [uv](https://docs.astral.sh/uv/)
-and the published package from PyPI, or with the slim MCP image and the pack
-mounted (here shown for the MVP pack after `git clone` of the packs repo into
-`../swiss-tip-mvp`):
+- **Lexical search (single container):**
+  ```shell
+  docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
+  ```
 
-```shell
-git clone https://github.com/swisstip/swiss-tip-mvp ../swiss-tip-mvp
-uvx swisstip-mcp --release ../swiss-tip-mvp/releases/mvp-zurich/release.json --require-ready --transport streamable-http
-docker run --rm -p 8000:8000 -v "$PWD/../swiss-tip-mvp/releases/mvp-zurich:/srv/swiss-tip:ro" ghcr.io/swisstip/swiss-tip-mcp:latest-slim
-```
+- **Hybrid search (server + embedding sidecar via Docker Compose):**
+  ```shell
+  SWISSTIP_PACK=mvp-zurich docker compose up -d --wait
+  ```
 
-The general form, for any `<packs>` clone and `<pack>` name — from this
-checkout, after the installation below (`.venv/Scripts/` on Windows,
-`.venv/bin/` on macOS and Linux):
+- **Connect your MCP client:**
+  ```shell
+  claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
+  ```
+
+Any MCP client connects to `http://127.0.0.1:8000/mcp` (Streamable HTTP, no authentication), and `http://127.0.0.1:8000/health` shows the loaded release, readiness gates, and review status.
+
+### 2. Cloud endpoint (Hosted service, coming soon)
+
+Going forward, a hosted cloud endpoint will be available so assistants and MCP clients can connect directly without running local containers or local infrastructure:
 
 ```shell
-./.venv/Scripts/python.exe -m swisstip.mcp_server.server --release <packs>/releases/<pack>/release.json --transport streamable-http
+# Direct cloud connection (coming soon)
+claude mcp add --transport http swiss-tip https://mcp.swiss-tip.ch/mcp
 ```
 
-Any MCP client connects to `http://127.0.0.1:8000/mcp` (Streamable HTTP, no
-authentication), and `/health` shows the release and its review status.
-Details, stdio, client configurations and hybrid search with a local
-embedding model are in the [server README](apps/mcp-server/README.md) and
-under [container images](docker/README.md).
+For advanced developer workflows (e.g. running from source, mounting local packs, or stdio debugging), see the [server README](apps/mcp-server/README.md) and [container images documentation](docker/README.md).
 
 ## Install and test
 
-You need Python 3.14 or newer. The tests take about a minute, use no
+For development and contributing, you need Python 3.14 or newer. The tests take about a minute, use no
 network and depend on no knowledge base: they run on synthetic fixtures.
 
 ```shell
-python -m venv .venv
-./.venv/Scripts/python.exe -m pip install -e packages/core -e packages/runtime -e packages/build -e packages/ingestion -e "packages/extraction[office]" -e packages/concepts -e apps/mcp-server -e apps/knowledge-builder -e apps/admin-console -e apps/calendar-connector
-for t in packages/*/tests apps/*/tests; do ./.venv/Scripts/python.exe -m unittest discover -s "$t" || break; done
-./.venv/Scripts/python.exe scripts/test/mcp/check_wheel.py
+python3.14 -m venv .venv
+./.venv/bin/pip install -e packages/core -e packages/runtime -e packages/build -e packages/ingestion -e "packages/extraction[office]" -e packages/concepts -e apps/mcp-server -e apps/knowledge-builder -e apps/admin-console -e apps/calendar-connector
+for t in packages/*/tests apps/*/tests; do ./.venv/bin/python -m unittest discover -s "$t" || break; done
+./.venv/bin/python scripts/test/mcp/check_wheel.py
 ```
 
 The loop runs every unit test; the last command runs a client round trip
-over stdio against the real server on the synthetic release. On macOS or
-Linux, use `.venv/bin/`. The checks of the packs themselves (their suites,
+over stdio against the real server on the synthetic release. On Windows, use
+`.venv\Scripts\`. The checks of the packs themselves (their suites,
 reports, readiness records and catalogues) live in the packs repository.
 
 ## Build a knowledge base
@@ -139,8 +131,8 @@ the acceptance suite and writes the readiness record. It runs on a packs
 directory, a clone of the packs repository:
 
 ```shell
-./.venv/Scripts/python.exe -m swisstip.builder.cli <pack> --packs-dir <packs>
-./.venv/Scripts/python.exe -m swisstip.admin_console.app --packs-dir <packs> --actor "A. Person"
+./.venv/bin/python -m swisstip.builder.cli <pack> --packs-dir <packs>
+./.venv/bin/python -m swisstip.admin_console.app --packs-dir <packs> --actor "A. Person"
 ```
 
 The [knowledge builder](apps/knowledge-builder/README.md) describes the
