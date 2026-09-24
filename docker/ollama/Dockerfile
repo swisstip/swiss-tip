@@ -20,10 +20,10 @@
 # nothing is pulled from the Ollama registry here. The build starts Ollama
 # once and fails unless the copied model has the expected manifest digest.
 #
-#   docker build -t swiss-tip-mcp:0.3.1 docker/mcp
+#   docker build -t swiss-tip-mcp:0.4.0 docker/mcp
 #   docker build -t swiss-tip-ollama:qwen3-embedding-0.6b docker/ollama
 
-ARG MCP_IMAGE=swiss-tip-mcp:0.3.1
+ARG MCP_IMAGE=swiss-tip-mcp:0.4.0
 ARG PYTHON_IMAGE=python:3.14-slim
 
 FROM ${MCP_IMAGE} AS mcp

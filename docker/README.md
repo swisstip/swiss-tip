@@ -2,7 +2,7 @@
 
 **Last update:** 23 September 2026
 
-The images of the Swiss TIP MCP server with `swisstip-mcp` 0.3.1 from PyPI.
+The images of the Swiss TIP MCP server with `swisstip-mcp` 0.4.0 from PyPI.
 The slim MCP image carries no knowledge release and no model; the MCP
 image adds a bundled Ollama with `qwen3-embedding:0.6b`. Two images serve a
 release in two containers: a slim release image, the slim MCP image plus one
@@ -25,14 +25,14 @@ directory that holds a pack's files.
 
 | Image | Dockerfile | Build context | Contains |
 | --- | --- | --- | --- |
-| `swiss-tip-mcp:0.3.1-slim` | [mcp-slim/Dockerfile](mcp-slim/Dockerfile) | the repository root | `swisstip-mcp` 0.3.1 only; the release is mounted on `/srv/swiss-tip` |
-| `swiss-tip-mcp:0.3.1` | [mcp/Dockerfile](mcp/Dockerfile) | `docker/mcp` | the slim MCP image, plus CPU-only Ollama 0.34.0 on `127.0.0.1:11434` and `qwen3-embedding:0.6b`; no release |
+| `swiss-tip-mcp:0.4.0-slim` | [mcp-slim/Dockerfile](mcp-slim/Dockerfile) | the repository root | `swisstip-mcp` 0.4.0 only; the release is mounted on `/srv/swiss-tip` |
+| `swiss-tip-mcp:0.4.0` | [mcp/Dockerfile](mcp/Dockerfile) | `docker/mcp` | the slim MCP image, plus CPU-only Ollama 0.34.0 on `127.0.0.1:11434` and `qwen3-embedding:0.6b`; no release |
 | `swiss-tip:<pack>` | the pack's Dockerfile in the packs repository | `releases/<pack>` | the MCP image, plus `release.json`, `readiness.json`, `semantic-index.json` and the pack's image `README.md`: the release image, labelled with the release ID and content digest |
 | `swiss-tip:<pack>-slim` | [slim/Dockerfile](slim/Dockerfile), one for every pack | `releases/<pack>` | the slim release image: the slim MCP image, plus the pack's `release.json`, `readiness.json`, `semantic-index.json` and its image `README.md` where it has one, with the same labels; no Ollama and no model, so lexical search on its own and hybrid search beside the sidecar |
 | `swiss-tip-ollama:qwen3-embedding-0.6b` | [ollama/Dockerfile](ollama/Dockerfile) | `docker/ollama` | the embedding sidecar: `python:3.14-slim`, plus the CPU-only Ollama 0.34.0 and the `qwen3-embedding:0.6b` model copied out of the MCP image, on `127.0.0.1:11434`; no server and no release |
 | `swiss-tip-demo:<pack>` | the demo Dockerfile in the packs repository | its directory there | test image: a pack image, plus the OpenCode agent and its web interface on port 4096, configured against the MCP server on the container's loopback, with a proxy for the routes the interface needs and the server does not answer, and a welcome panel with the pack's coverage and sample questions; its configuration, plugin, proxy and start script are those of `docker/opencode` |
 | `swiss-tip-opencode` | [opencode/Dockerfile](opencode/Dockerfile) | the repository root | test image: `python:3.14-slim`, plus the OpenCode agent, its web interface on port 4096, and the configuration, plugin, proxy and a generic welcome panel from `docker/opencode`; no server, no release and no model - the MCP server is named by `SWISSTIP_MCP_URL` |
-| `swiss-tip-calendar-connector:0.3.1` | [calendar-connector/Dockerfile](calendar-connector/Dockerfile) | the repository root | `swisstip-calendar-connector` 0.3.1 only, the first [dataset connector](../docs/architecture/dataset-connectors.md): HTTP on port 8100 for the MCP server, no dataset; bundles are mounted on `/srv/swiss-tip/datasets`, one subdirectory each |
+| `swiss-tip-calendar-connector:0.4.0` | [calendar-connector/Dockerfile](calendar-connector/Dockerfile) | the repository root | `swisstip-calendar-connector` 0.4.0 only, the first [dataset connector](../docs/architecture/dataset-connectors.md): HTTP on port 8100 for the MCP server, no dataset; bundles are mounted on `/srv/swiss-tip/datasets`, one subdirectory each |
 | `swiss-tip-calendar:<pack>` | the pack's calendar Dockerfile in the packs repository | `datasets/<pack>` | the calendar connector image, plus the pack's dataset bundles; the profile `calendar` of `compose.yaml` starts it beside the server |
 
 Semantic search is hybrid: lexical matching fused with the embedding ranking
@@ -57,10 +57,10 @@ point, so every image built on it carries them.
 The order matters: each image builds on the previous one.
 
 ```shell
-docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.3.1-slim .
-docker build -t swiss-tip-mcp:0.3.1 docker/mcp
+docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.4.0-slim .
+docker build -t swiss-tip-mcp:0.4.0 docker/mcp
 docker build -f docker/opencode/Dockerfile -t local/swiss-tip-opencode:latest .
-docker build -f docker/calendar-connector/Dockerfile -t local/swiss-tip-calendar-connector:0.3.1 .
+docker build -f docker/calendar-connector/Dockerfile -t local/swiss-tip-calendar-connector:0.4.0 .
 docker build -t local/swiss-tip-ollama:qwen3-embedding-0.6b docker/ollama
 docker build -f docker/slim/Dockerfile --build-arg PACK=<pack> -t local/swiss-tip:<pack>-slim <packs>/releases/<pack>
 ```
@@ -111,7 +111,7 @@ images", "Run workflow").
 | --- | --- |
 | `images`, here | `all` (both MCP images, sidecar, OpenCode, calendar connector), `mcp-slim`, `mcp`, `ollama` (the sidecar), `opencode`, `calendar` |
 | `images`, in the packs repository | `all` (every pack, then the demo), `packs`, a pack's name, `demo` |
-| `swisstip_mcp_version` | the `swisstip-mcp` version, which is the tag of both MCP images: built here, pulled there; default `0.3.1` |
+| `swisstip_mcp_version` | the `swisstip-mcp` version, which is the tag of both MCP images: built here, pulled there; default `0.4.0` |
 | `package_index` | `pypi`, or `testpypi` to rehearse a version that is not released yet; in the packs repository it names where the check client comes from |
 | `code_ref`, in the packs repository | the branch, tag or commit of this repository whose slim Dockerfile and `compose.yaml` are used; default `main` |
 | `push` | push the tested images; off builds and tests only |
@@ -230,8 +230,8 @@ after the image name are added to the server's command line.
 Lexical search:
 
 ```shell
-docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.1-slim
-docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.1-slim --transport stdio
+docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.4.0-slim
+docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.4.0-slim --transport stdio
 ```
 
 Hybrid search with the embedding sidecar: it joins the server's network
@@ -240,7 +240,7 @@ the packs' indexes were built with.
 
 ```shell
 docker run -d --name swiss-tip -p 8000:8000 \
-  -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.1-slim \
+  -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.4.0-slim \
   --semantic-index /srv/swiss-tip/semantic-index.json
 docker run -d --name swiss-tip-embeddings --network container:swiss-tip swiss-tip-ollama:qwen3-embedding-0.6b
 ```
@@ -581,7 +581,7 @@ digest changes. Build it with the MCP image, so that it matches the
 model it is served with:
 
 ```shell
-docker run --rm -v "$PWD/releases/<pack>:/kb" swiss-tip-mcp:0.3.1 \
+docker run --rm -v "$PWD/releases/<pack>:/kb" swiss-tip-mcp:0.4.0 \
   python -m swisstip.runtime.search_cli index \
   --release /kb/release.json --output /kb/semantic-index.json --timeout 600
 ```

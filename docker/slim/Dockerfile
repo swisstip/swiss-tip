@@ -9,7 +9,7 @@
 # ghcr.io/<owner>/swiss-tip:<release_id>-slim by the workflow of the packs
 # repository.
 #
-#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.3.1-slim .
+#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.4.0-slim .
 #   docker build -f docker/slim/Dockerfile --build-arg PACK=<pack> -t swiss-tip:<pack>-slim <packs>/releases/<pack>
 #   docker run --rm -p 8000:8000 swiss-tip:<pack>-slim          MCP on http://127.0.0.1:8000/mcp
 #   docker run --rm -i swiss-tip:<pack>-slim --transport stdio
@@ -25,7 +25,7 @@
 # when the release does not validate or is not ready, and when the semantic
 # index was not built for exactly this release.
 
-ARG BASE_IMAGE=swiss-tip-mcp:0.3.1-slim
+ARG BASE_IMAGE=swiss-tip-mcp:0.4.0-slim
 FROM ${BASE_IMAGE}
 ARG PACK=""
 ARG RELEASE_ID=""

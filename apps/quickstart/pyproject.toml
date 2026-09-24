@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swisstip-quickstart"
-version = "0.3.1"
+version = "0.4.0"
 description = "Swiss TIP quickstart: fetch a published knowledge pack, verify it against its readiness record and run the first tests"
 requires-python = ">=3.14"
 dependencies = [
