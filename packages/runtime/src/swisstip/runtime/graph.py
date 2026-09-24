@@ -44,9 +44,10 @@ LEVEL_WORD = {"municipal": "municipality", "cantonal": "canton"}
 DEPENDENCE_RANK = {"none": 0, "canton": 1, "municipality": 2}
 
 GUIDANCE = ("Orientation from the knowledge graph, not citable evidence. In your next turn call search with "
-            "next_search (and the user's place, when known), then resolve the relevant concepts; answer only from "
-            "resolve's facts and cite only its URLs. Use the graph to understand who decides and where the user turns, "
-            "and to phrase the search, not as a source to quote.")
+            "next_search.query, the question as asked, and do not add next_search.terms or other words from the graph "
+            "to it; the terms are the official names to recognise the right office and concepts in the results. Then "
+            "resolve the relevant concepts with the user's place, when known; answer only from resolve's facts and cite "
+            "only its URLs. Use the graph to understand who decides and where the user turns, not as a source to quote.")
 GUIDANCE_ROOT = ("The root page of the knowledge graph: the levels of the state, the principles they work under and the "
                  "domains the graph knows. Call get_knowledge_graph with the user's question and place for the domains "
                  "that concern it.")
@@ -216,9 +217,12 @@ class GraphIndex:
                     jurisdiction: Jurisdiction) -> NextSearch | None:
         if not domain_ids:
             return None
+        # The terms name the best-matched domain and its offices, to recognise them in search's results; they are not
+        # added to the query, since a second domain's words pull search off the subject.
         terms: list[str] = []
-        reached = {e.to_id for d in domain_ids for e in self.out_edges[d] if e.relation in ("first_contact", "executed_by")}
-        for node in [self.nodes[d] for d in domain_ids] + [n for n in nodes if n.node_id in reached]:
+        best = domain_ids[0]
+        reached = {e.to_id for e in self.out_edges[best] if e.relation in ("first_contact", "executed_by")}
+        for node in [self.nodes[best]] + [n for n in nodes if n.node_id in reached]:
             for term in [node.names.get("de"), node.names.get("en")]:
                 if term and term not in terms and term.casefold() not in (question or "").casefold():
                     terms.append(term)

@@ -184,8 +184,13 @@ the user said (the place of work is not the place of residence), to resolve no
 cantonal or municipal concept before the place is known, and never to assume
 one.
 
-`next_search` carries the query, official terms of the matched domains and
-roles, and the place when one was given. `covered_topics` names the release's
+`next_search` carries the query (the question as asked), the official names of
+the best-matched domain and its offices, and the place when one was given. The
+guidance tells the caller to search with the query unchanged and use the terms
+only to recognise the right office and concepts in the results: in a
+simulation over the regression pack, appending the terms of every matched
+domain to the query pulled search off the subject (588 of 707 cases passing,
+against 665 for the question alone). `covered_topics` names the release's
 topics that publish facts for the matched domains; when it is empty the
 guidance says the release does not cover the subject. Every served item states
 its review status (once for the whole result when all agree), every edge its

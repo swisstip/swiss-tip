@@ -640,9 +640,10 @@ class PlaceDependence(Strict):
 
 
 class NextSearch(Strict):
-    query: str = Field(description="The query for search, in a query language of the server.")
+    query: str = Field(description="The query for search: the question as asked. Send it unchanged.")
     terms: list[str] = Field(default_factory=list, exclude_if=lambda value: not value, description=(
-        "Official terms of the matched domains and roles, to add when the question does not use them."))
+        "Official names of the best-matched domain and its offices, to recognise them in search's results and "
+        "resolve's facts. Do not add them to the query."))
     jurisdiction: Jurisdiction | None = Field(default=None, exclude_if=lambda value: value is None, description=(
         "The place to send with search and resolve; omitted when the request named none."))
 
@@ -700,8 +701,8 @@ TOOL_DESCRIPTIONS = {
         "in the local languages, the laws with their SR numbers, the authoritative source, and the pitfalls a generic "
         "answer falls into. place_dependence says whether the answer depends on the canton or municipality and, when "
         "the request did not say, the question to ask (derive the place from what the user said first; the place of "
-        "work is not the place of residence). next_search gives the query and place for search, which you call in the "
-        "next turn, then resolve. covered_topics empty means this release publishes no facts on the subject: say so, "
+        "work is not the place of residence). next_search gives the query (the question as asked; add no graph terms "
+        "to it) and place for search, which you call in the next turn, then resolve. covered_topics empty means this release publishes no facts on the subject: say so, "
         "and name the authoritative source only as where to look. The graph is orientation, not citable evidence: "
         "answer only from resolve's facts. Without question and node_ids it returns the root page: the levels, the "
         "principles and the domains."),

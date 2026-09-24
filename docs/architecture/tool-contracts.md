@@ -1039,7 +1039,7 @@ the state, the principles and every domain with `covered`.
 | `edges` | `from_id`, `relation`, `to_id`, `statement`, `place` (holds there and inside it), `source_url`, `review_status` when it differs |
 | `covered_topics` | Topics of the release that publish facts for the matched domains; empty means the release does not cover the subject |
 | `place_dependence` | `depends_on` (`municipality`, `canton`, `none`), `known`, `reason`, `ask` when the place is not known precisely enough |
-| `next_search` | `query`, `terms` (official terms of the matched domains and roles), `jurisdiction` when one was given |
+| `next_search` | `query` (the question as asked, to send unchanged), `terms` (official names of the best-matched domain and its offices, to recognise them in the results; not to be added to the query), `jurisdiction` when one was given |
 | `review_status` | The review status of every item that states none |
 | `guidance_for_caller`, `limitations` | What to do next, and the graph's review counts |
 
