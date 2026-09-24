@@ -77,6 +77,7 @@ def crawler_for(
     max_pages: int = 10,
     max_response_bytes: int = 10_000,
     allowed_hosts: tuple[str, ...] = (),
+    respect_robots: bool = True,
 ) -> tuple[SafeCrawler, FakeOpener]:
     opener = FakeOpener(responses)
     source = SourceDefinition(
@@ -102,6 +103,7 @@ def crawler_for(
     crawler = SafeCrawler(
         source,
         limits,
+        respect_robots=respect_robots,
         opener=opener,
         resolver=public_resolver,
     )
@@ -144,6 +146,29 @@ class SafeCrawlerTests(unittest.TestCase):
         self.assertIn("out-of-scope", reasons)
         self.assertIn("query-string-disabled", reasons)
         self.assertIn("robots-disallowed", reasons)
+
+    def test_override_fetches_disallowed_url_and_records_overridden_status(self) -> None:
+        # With respect_robots off, the Disallow rule is not enforced: the operator has permission for the host.
+        # robots.txt is not fetched at all, and the report records the override rather than dropping the signal.
+        robots = b"User-agent: *\nDisallow: /allowed/blocked\n"
+        start = b'<a href="/allowed/blocked">blocked</a>'
+        crawler, opener = crawler_for(
+            {
+                "https://official.example/robots.txt": FakeResponse(
+                    200, robots, content_type="text/plain"
+                ),
+                "https://official.example/allowed/start": FakeResponse(200, start),
+                "https://official.example/allowed/blocked": FakeResponse(200, b"<html/>"),
+            },
+            respect_robots=False,
+        )
+
+        report = crawler.crawl()
+
+        self.assertEqual(report.robots_status, "overridden")
+        self.assertIn("https://official.example/allowed/blocked", opener.requested)
+        self.assertNotIn("https://official.example/robots.txt", opener.requested)
+        self.assertNotIn("robots-disallowed", {item.reason for item in report.skipped})
 
     def test_browser_compatible_agent_still_obeys_its_own_robots_group(self) -> None:
         robots = (

@@ -1,6 +1,6 @@
 # Repository instructions
 
-**Last update:** 20 September 2026
+**Last update:** 24 September 2026
 
 ## Python environment
 
@@ -8,6 +8,12 @@
   installation, formatting, linting, and tests: the repository-local `.venv`,
   or the `.venv` of the folder that holds this repository and the packs
   repository (`swiss-tip-mvp`) side by side.
+- uv is the other way to the same environment: the root `pyproject.toml` is
+  a uv workspace of every component, `uv run <command>` and
+  `uv sync --group build` create the repository-local `.venv` from `uv.lock`,
+  and a change to a component's dependencies is followed by `uv lock`, so the
+  lockfile stays current. The components' own `pyproject.toml` files remain
+  the source of their metadata; the root file declares none of its own.
 - On Windows, invoke `.venv\Scripts\python.exe` directly. On macOS/Linux, invoke
   `.venv/bin/python` directly. Do not rely on an activated shell or a system
   `python`/`pip` executable.
@@ -34,7 +40,8 @@
   the release it serves with `--release` or `SWISSTIP_RELEASE`; the knowledge
   builder and the admin console take the packs directory with `--packs-dir`
   or `SWISSTIP_PACKS`; the image build takes `--pack-dir`. A default that
-  points at a particular pack is a defect.
+  points at a particular pack is a defect. The quickstart names the packs
+  repository, not a pack: the pack is its argument.
 - Documentation and docstrings name paths as `releases/<pack>/...` and
   `.local/<pack>/...`, relative to the packs directory. A measurement that
   was made on a particular release keeps that release's ID: it is a record.

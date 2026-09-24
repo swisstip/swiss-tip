@@ -16,7 +16,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from swisstip.core.acceptance import AcceptanceAnswers, AcceptanceFile, Case, ResolveStep, SearchStep
+from swisstip.core.acceptance import AcceptanceAnswers, AcceptanceFile, Case, LookupStep, ResolveStep, SearchStep
 
 from .acceptance import REGRESSION_FILE, load_acceptance
 
@@ -212,8 +212,7 @@ def render_case(case: Case, results: dict[str, dict], answers: AcceptanceAnswers
     lines.append("")
     if case.steps:
         lines += ["**Steps**", ""]
-        lines += [f"{number}. {describe_search(step.search) if step.search else describe_resolve(step.resolve)}"
-                  for number, step in enumerate(case.steps, 1)]
+        lines += [f"{number}. {describe_step(step)}" for number, step in enumerate(case.steps, 1)]
         lines.append("")
     if case.claims:
         lines += ["**Claims on served facts**", ""]
@@ -232,6 +231,33 @@ def render_case(case: Case, results: dict[str, dict], answers: AcceptanceAnswers
         lines += answer_criteria(case)
     lines += latest_results(case, results, answers)
     return lines
+
+
+def describe_step(step) -> str:
+    if step.search:
+        return describe_search(step.search)
+    if step.resolve:
+        return describe_resolve(step.resolve)
+    return describe_lookup(step.lookup)
+
+
+def describe_lookup(step: LookupStep) -> str:
+    """A lookup of a dataset a connector serves; judged only when the replay has a connector."""
+    key = f"zone \"{step.zone}\"" if step.zone is not None else f"postal code {step.postal_code}"
+    text = f"`lookup` `{step.dataset_id}` for {key}"
+    if step.as_of:
+        text += f", as of {step.as_of.isoformat()}"
+    if step.start or step.end:
+        text += f", {step.start.isoformat() if step.start else 'start'} to {step.end.isoformat() if step.end else 'end'}"
+    expects = []
+    if step.expect_status:
+        expects.append(f"`{step.expect_status.value}`")
+    if step.expect_gap:
+        expects.append(f"gap `{step.expect_gap}`")
+    if step.expect_first_date:
+        expects.append(f"first date {step.expect_first_date.isoformat()}")
+    text += " - expects " + " with ".join(expects) if expects else ""
+    return text + " (judged only with a connector)"
 
 
 def describe_search(step: SearchStep) -> str:

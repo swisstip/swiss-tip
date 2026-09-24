@@ -1,6 +1,6 @@
 # swisstip-mcp-server
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
 The Swiss TIP MCP server: the four tools of
 [docs/architecture/tool-contracts.md](../../docs/architecture/tool-contracts.md)
@@ -47,6 +47,16 @@ The packs of the MVP are published in
 | `--semantic-candidates N` | Semantic candidates before fusion with lexical ranks; default 10 |
 | `--connector URL` | A dataset connector to register (repeatable; default `SWISSTIP_CONNECTORS`, comma-separated): its manifest is read once at startup, every dataset that stands behind a concept of the served release is bound to it, `resolve` then offers the dataset in `lookups` and the fifth tool `lookup` is listed. An unreachable connector is logged, probed again on every `/health` request, and never delays the release's own tools; the health payload lists every connector with its status and the datasets registered and rejected. See [docs/architecture/dataset-connectors.md](../../docs/architecture/dataset-connectors.md) |
 
+## Fetch a pack and run the first tests
+
+`swisstip-quickstart <pack>` ([apps/quickstart](../quickstart/README.md))
+fetches a published pack from the packs repository, verifies it against its
+readiness record and runs the first tests on it, the round trip of this
+server among them (`swisstip.mcp_server.roundtrip`, shared with
+`scripts/test/mcp/check_wheel.py`); `--serve` then serves the pack with this
+server. From its published package, `uvx swisstip-quickstart <pack>` needs
+no clone.
+
 ## Run from PyPI with uv
 
 The published package `swisstip-mcp` serves the release of a checkout
@@ -58,15 +68,20 @@ is the pack directory of a clone, or `release.json` and `readiness.json`
 downloaded from the repository's GitHub release of that knowledge base.
 
 ```shell
+uvx swisstip-quickstart <pack>
 uvx swisstip-mcp --release releases/<pack>/release.json --require-ready --health
 uvx swisstip-mcp --release releases/<pack>/release.json --require-ready --transport streamable-http
 claude mcp add swiss-tip -- uvx swisstip-mcp --release /absolute/path/to/releases/<pack>/release.json --require-ready
 ```
 
-The second line serves `http://127.0.0.1:8000/mcp` with `/health` beside it,
-like the container. The third gives a client a stdio server of its own; the
-path is absolute because the client chooses the working directory. Other
-clients take the same command and arguments in their `mcpServers` entry.
+The first line needs no clone at all: the quickstart of the section above,
+from its own package `swisstip-quickstart`, fetches the pack into
+`.local/packs/<pack>` of the current directory, runs the tests and prints
+the commands below with `uvx` in front. The third line serves `http://127.0.0.1:8000/mcp` with
+`/health` beside it, like the container. The fourth gives a client a stdio
+server of its own; the path is absolute because the client chooses the
+working directory. Other clients take the same command and arguments in
+their `mcpServers` entry.
 
 Search is lexical. Hybrid search needs an Ollama with the index's model on a
 loopback address. Without an installed Ollama, the embedding sidecar image

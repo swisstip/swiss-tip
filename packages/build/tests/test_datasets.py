@@ -130,5 +130,51 @@ class DatasetBuildTests(unittest.TestCase):
         self.assertEqual(len(self.fetched), 1)
 
 
+class ZoneBuildTests(unittest.TestCase):
+    """A publisher that keys its dates by collection zone (Basel, St. Gallen) instead of postal code."""
+
+    ZONE_CSV = "zone;termin\nL  West;2026-09-24\nA;2026-09-25\nA;2026-09-22\nA;2026-09-22\n".encode("utf-8-sig")
+    FINDER = "https://www.example.ch/apps/zonensuche"
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.sources = Path(self.temporary.name) / "sources"
+        base = load_dataset_curation(FIXTURES / "dataset.yaml").model_dump(mode="json", exclude_none=True)
+        base["importer"] = dict(name="csv-columns", columns=dict(zone="zone", date="termin"))
+        base["zone_lookup_url"] = self.FINDER
+        self.data = base
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def build(self, **changes):
+        curation = type(load_dataset_curation(FIXTURES / "dataset.yaml")).model_validate({**self.data, **changes})
+        return build_dataset(curation, self.sources, fetch=lambda url: self.ZONE_CSV, today=date(2026, 9, 24), created_at=CREATED)
+
+    def test_rows_are_keyed_by_zone_with_spacing_normalised(self):
+        rows, repeated = import_csv_columns(self.ZONE_CSV, Columns(zone="zone", date="termin"), "zones.csv")
+        self.assertEqual([(row.zone, row.date.isoformat()) for row in rows],
+                         [("A", "2026-09-22"), ("A", "2026-09-25"), ("L West", "2026-09-24")])
+        self.assertEqual(repeated, 1)
+        self.assertTrue(all(row.postal_code is None for row in rows))
+
+    def test_a_zone_bundle_carries_its_zones_and_finder(self):
+        dataset, report = self.build()
+        manifest = dataset.manifest
+        self.assertEqual((manifest.key, manifest.zones, manifest.postal_codes, manifest.zone_lookup_url),
+                         ("zone", ["A", "L West"], [], self.FINDER))
+        self.assertEqual(report["zones"], 2)
+        self.assertIn(self.FINDER, manifest.limitations[1])
+        self.assertEqual(validate_dataset(dataset, self.sources), [])
+
+    def test_a_zone_column_needs_a_finder_and_a_postal_code_column_refuses_one(self):
+        with self.assertRaises(BuildError):
+            self.build(zone_lookup_url=None)
+        with self.assertRaises(BuildError):
+            self.build(importer=dict(name="csv-columns", columns=dict(postal_code="zone", date="termin")))
+        with self.assertRaises(ValueError):
+            Columns(zone="zone", postal_code="PLZ", date="termin")
+
+
 if __name__ == "__main__":
     unittest.main()

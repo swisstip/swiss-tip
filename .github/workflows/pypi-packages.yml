@@ -1,10 +1,13 @@
-# Build the four PyPI distributions (swisstip-core, swisstip-mcp,
+# Build the five PyPI distributions (swisstip-core, swisstip-mcp, swisstip-quickstart,
 # swisstip-calendar-connector, swisstip-builder) from the component source trees, test them, and publish
 # them with PyPI trusted publishing, so no token is stored anywhere.
 #
-#   push a tag v<version>, e.g. v0.3.0      build, test, publish to PyPI
-#   run the workflow by hand with a version  build, test, publish to TestPyPI
+#   push a tag v<version>, e.g. v0.3.0      build, test, publish
+#   run the workflow by hand with a version  build, test, publish
 #   push to any branch                       build and test only, nothing is published
+#
+# A release candidate (a version ending in rc<N>, e.g. 0.3.0rc1) goes to
+# TestPyPI, every other version to PyPI, whichever of the two triggers it.
 #
 # A branch push is how the build is verified before a release tag exists: the
 # publish jobs below run for a tag and for a manual run only, so a branch push
@@ -23,7 +26,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish to TestPyPI, PEP 440 normalised, e.g. 0.3.0rc1
+        description: Version to publish, PEP 440 normalised; 0.3.0rc1 goes to TestPyPI, 0.3.0 to PyPI
         required: true
         type: string
 
@@ -37,6 +40,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      index: ${{ steps.version.outputs.index }}
     steps:
       - uses: actions/checkout@v7
 
@@ -45,6 +50,7 @@ jobs:
           python-version: "3.14"
 
       - name: Version
+        id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
@@ -57,7 +63,13 @@ jobs:
             version="$(python scripts/pypi/check_versions.py).dev0"
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
-          echo "Building version $version"
+          # A release candidate is published to TestPyPI, every other version to PyPI.
+          case "$version" in
+            *rc[0-9]*) index=testpypi ;;
+            *) index=pypi ;;
+          esac
+          echo "index=$index" >> "$GITHUB_OUTPUT"
+          echo "Building version $version for $index"
 
       # The distributions take their version from the command line of build_distributions.py, not from the
       # component files, so a file left at the previous version would be published under the tag's version
@@ -68,7 +80,7 @@ jobs:
       - name: Install the components and the build tools
         run: |
           python -m pip install build twine \
-            -e packages/core -e packages/runtime -e apps/mcp-server -e apps/calendar-connector \
+            -e packages/core -e packages/runtime -e apps/mcp-server -e apps/quickstart -e apps/calendar-connector \
             -e packages/ingestion -e "packages/extraction[office]" -e packages/build -e packages/concepts \
             -e apps/knowledge-builder -e "apps/admin-console[test]"
 
@@ -100,6 +112,17 @@ jobs:
           "$RUNNER_TEMP/serve/bin/swisstip-mcp" --release apps/mcp-server/tests/fixtures/release.json --health > /dev/null
           # The round trip starts the server with the interpreter that runs it, so it tests the installed wheel.
           "$RUNNER_TEMP/serve/bin/python" scripts/test/mcp/check_wheel.py
+
+      - name: Test the quickstart wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/quick"
+          "$RUNNER_TEMP/quick/bin/python" -m pip install \
+            "dist/swisstip_core-$VERSION-py3-none-any.whl" "dist/swisstip_mcp-$VERSION-py3-none-any.whl" \
+            "dist/swisstip_quickstart-$VERSION-py3-none-any.whl"
+          # The synthetic release as a fetched pack, checked and tested offline: no request and no knowledge base.
+          # The round trip inside starts the server of the same environment, so it tests the installed wheels.
+          "$RUNNER_TEMP/quick/bin/python" scripts/test/container/synthetic_pack.py --out "$RUNNER_TEMP/quick-packs/test"
+          "$RUNNER_TEMP/quick/bin/swisstip-quickstart" test --no-fetch --packs-dir "$RUNNER_TEMP/quick-packs"
 
       - name: Test the connector wheel in a clean environment
         run: |
@@ -140,14 +163,14 @@ jobs:
   # One job per distribution, each in its own environment (pypi-core,
   # testpypi-mcp, ...): PyPI accepts a pending trusted publisher for a
   # repository, workflow and environment for one project name only. The core
-  # goes first, because the other two require it at the same version.
+  # goes first, because the others require it at the same version.
   publish-core:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}-core
-      url: ${{ github.event_name == 'push' && 'https://pypi.org' || 'https://test.pypi.org' }}/project/swisstip-core/
+      name: ${{ needs.build.outputs.index }}-core
+      url: ${{ needs.build.outputs.index == 'testpypi' && 'https://test.pypi.org' || 'https://pypi.org' }}/project/swisstip-core/
     permissions:
       id-token: write
     steps:
@@ -162,17 +185,17 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: upload/
-          repository-url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          repository-url: ${{ needs.build.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
 
   publish:
-    needs: publish-core
+    needs: [build, publish-core]
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [mcp, calendar-connector, builder]
+        package: [mcp, quickstart, calendar-connector, builder]
     environment:
-      name: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}-${{ matrix.package }}
-      url: ${{ github.event_name == 'push' && 'https://pypi.org' || 'https://test.pypi.org' }}/project/swisstip-${{ matrix.package }}/
+      name: ${{ needs.build.outputs.index }}-${{ matrix.package }}
+      url: ${{ needs.build.outputs.index == 'testpypi' && 'https://test.pypi.org' || 'https://pypi.org' }}/project/swisstip-${{ matrix.package }}/
     permissions:
       id-token: write
     steps:
@@ -189,4 +212,4 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: upload/
-          repository-url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          repository-url: ${{ needs.build.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}

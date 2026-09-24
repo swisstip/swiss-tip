@@ -35,7 +35,7 @@ from starlette.routing import Route
 import uvicorn
 
 from swisstip.core.connector import (ConnectorError, ConnectorLookupRequest, ConnectorLookupResponse, ConnectorManifest,
-                                     DatasetSummary, calendar_lookup, summary_of)
+                                     DatasetSummary, WrongKey, calendar_lookup, summary_of)
 from swisstip.core.datasets import Dataset, load_dataset, validate_dataset
 
 from . import CONNECTOR_ID, CONNECTOR_VERSION
@@ -81,7 +81,10 @@ class ConnectorService:
             message = (f"dataset {request.dataset_id} failed validation and is not served: {issue}" if issue else
                        f"unknown dataset {request.dataset_id!r}; served: {served}")
             return ConnectorError(message=message, path="dataset_id")
-        return calendar_lookup(dataset, request)
+        try:
+            return calendar_lookup(dataset, request)
+        except WrongKey as exc:
+            return ConnectorError(message=str(exc), path="zone" if request.zone is not None else "postal_code")
 
     def health(self, today: date | None = None) -> dict:
         today = today or date.today()

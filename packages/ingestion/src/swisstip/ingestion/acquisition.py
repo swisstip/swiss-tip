@@ -317,7 +317,7 @@ def error_page(result: dict, output: Path) -> bool:
 
 
 def snapshot(target: dict, output: Path, allowed_hosts: tuple[str, ...] | None = None,
-             transport: str = "urllib", limits: CrawlLimits | None = None) -> dict:
+             transport: str = "urllib", limits: CrawlLimits | None = None, respect_robots: bool = True) -> dict:
     folder = output / "pages" / target["url_id"]
     folder.mkdir(parents=True, exist_ok=True)
     attempt_number = 1
@@ -352,7 +352,7 @@ def snapshot(target: dict, output: Path, allowed_hosts: tuple[str, ...] | None =
                               allowed_hosts=hosts, allowed_path_prefixes=prefixes)
     started = now()
     try:
-        report = SafeCrawler(source, limits, allow_query_strings=True,
+        report = SafeCrawler(source, limits, allow_query_strings=True, respect_robots=respect_robots,
                              opener=CurlOpener() if transport == "curl" else None,
                              document_content_types=DOCUMENT_TYPES,
                              on_page=save, on_document=save).crawl().to_dict()

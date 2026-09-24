@@ -1313,6 +1313,7 @@
                   "context_not_covered",
                   "review_status_not_met",
                   "postal_code_not_covered",
+                  "zone_not_covered",
                   "period_not_published",
                   "no_dates_in_range",
                   "connector_unavailable"
@@ -1657,7 +1658,7 @@
                 "type": "string"
               },
               "type": {
-                "description": "calendar: dates for a postal code.",
+                "description": "calendar: dates for a postal code or a collection zone.",
                 "title": "Type",
                 "type": "string"
               },
@@ -1675,7 +1676,7 @@
                 "type": "string"
               },
               "requires": {
-                "description": "Input fields lookup needs: ask the user for them when the conversation has not given them.",
+                "description": "Input fields lookup needs, postal_code or zone: ask the user for them when the conversation has not given them.",
                 "items": {
                   "type": "string"
                 },
@@ -1696,6 +1697,35 @@
               "publisher": {
                 "title": "Publisher",
                 "type": "string"
+              },
+              "zones": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "When requires names zone: the collection zones the publisher uses, as published.",
+                "title": "Zones"
+              },
+              "zone_lookup_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "When requires names zone: the publisher's page where the user finds their zone from the address. Give it to the user; never guess a zone from an address.",
+                "title": "Zone Lookup Url"
               }
             },
             "required": [
@@ -2160,10 +2190,32 @@
             "type": "string"
           },
           "postal_code": {
-            "description": "Four digits, as the user gave it.",
-            "pattern": "^\\d{4}$",
-            "title": "Postal Code",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Four digits, as the user gave it, when the offer requires postal_code.",
+            "title": "Postal Code"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "pattern": "^\\S(?:.{0,38}\\S)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The collection zone as the user gave it, when the offer requires zone.",
+            "title": "Zone"
           },
           "as_of": {
             "anyOf": [
@@ -2229,8 +2281,7 @@
           }
         },
         "required": [
-          "dataset_id",
-          "postal_code"
+          "dataset_id"
         ],
         "title": "LookupRequest",
         "type": "object"
@@ -2251,6 +2302,7 @@
                   "context_not_covered",
                   "review_status_not_met",
                   "postal_code_not_covered",
+                  "zone_not_covered",
                   "period_not_published",
                   "no_dates_in_range",
                   "connector_unavailable"

@@ -71,27 +71,34 @@ def run(url: str) -> None:
     check("GET /health answers 200 with one line per dataset",
           health_status == 200 and {d["dataset_id"] for d in health.get("datasets", [])} == {d.dataset_id for d in manifest.datasets})
     for dataset in served:
-        first = dataset.postal_codes[0]
-        status, answer = lookup(url, dict(dataset_id=dataset.dataset_id, postal_code=first, start=dataset.period.start.isoformat(), limit=2))
+        zoned = dataset.key == "zone"
+        field, name = ("zone", "zone") if zoned else ("postal_code", "postal code")
+        held = (dataset.zones or []) if zoned else dataset.postal_codes
+        check(f"{dataset.dataset_id}: requires names its key, {field}", dataset.requires == [field])
+        first = held[0]
+        status, answer = lookup(url, dict(dataset_id=dataset.dataset_id, **{field: first}, start=dataset.period.start.isoformat(), limit=2))
         if answer is not None:
             dates = [event.date for event in answer.events]
-            check(f"{dataset.dataset_id}: the first postal code {first} answers SUPPORTED, oldest first, at most 2",
+            check(f"{dataset.dataset_id}: the first {name} {first} answers SUPPORTED, oldest first, at most 2",
                   status == 200 and answer.status == "SUPPORTED" and 0 < len(dates) <= 2 and dates == sorted(dates)
                   and all(dataset.period.start <= day <= dataset.period.end for day in dates)
                   and answer.provenance.dataset_version == dataset.dataset_version)
-        outside = next(code for code in ("0000", "9999", "1234") if code not in dataset.postal_codes)
-        status, answer = lookup(url, dict(dataset_id=dataset.dataset_id, postal_code=outside, limit=1))
+        candidates = ("no such zone", "ZZZ", "Q9") if zoned else ("0000", "9999", "1234")
+        outside = next(code for code in candidates if code not in held)
+        gap = "zone_not_covered" if zoned else "postal_code_not_covered"
+        status, answer = lookup(url, dict(dataset_id=dataset.dataset_id, **{field: outside}, limit=1))
         if answer is not None:
-            check(f"{dataset.dataset_id}: postal code {outside} answers the postal_code_not_covered gap",
-                  status == 200 and answer.status == "OUT_OF_COVERAGE" and [g.dimension for g in answer.gaps] == ["postal_code_not_covered"]
-                  and answer.gaps[0].published_values == dataset.postal_codes)
+            check(f"{dataset.dataset_id}: {name} {outside} answers the {gap} gap",
+                  status == 200 and answer.status == "OUT_OF_COVERAGE" and [g.dimension for g in answer.gaps] == [gap]
+                  and answer.gaps[0].published_values == held)
         after = (dataset.period.end + timedelta(days=1)).isoformat()
-        status, answer = lookup(url, dict(dataset_id=dataset.dataset_id, postal_code=first, start=after, limit=1))
+        status, answer = lookup(url, dict(dataset_id=dataset.dataset_id, **{field: first}, start=after, limit=1))
         if answer is not None:
             check(f"{dataset.dataset_id}: a range from {after} answers the period_not_published gap",
                   status == 200 and answer.status == "OUT_OF_COVERAGE" and [g.dimension for g in answer.gaps] == ["period_not_published"])
-        status, answer = lookup(url, dict(dataset_id=dataset.dataset_id, postal_code="12", limit=1))
-        check(f"{dataset.dataset_id}: a malformed postal code is an HTTP 400 INVALID_ARGUMENT",
+        malformed = dict(postal_code="8001") if zoned else dict(postal_code="12")
+        status, answer = lookup(url, dict(dataset_id=dataset.dataset_id, **malformed, limit=1))
+        check(f"{dataset.dataset_id}: {'the other key' if zoned else 'a malformed postal code'} is an HTTP 400 INVALID_ARGUMENT",
               status == 400 and isinstance(answer, ConnectorError))
     status, answer = lookup(url, dict(dataset_id="no-such-dataset", postal_code="8001", limit=1))
     check("an unknown dataset_id is an HTTP 400 INVALID_ARGUMENT", status == 400 and isinstance(answer, ConnectorError))

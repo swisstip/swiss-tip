@@ -150,7 +150,8 @@ class LookupStep(Strict):
     not judged, so a pack's readiness never depends on a sidecar."""
 
     dataset_id: str = Field(min_length=1)
-    postal_code: str = Field(pattern=r"^\d{4}$")
+    postal_code: str | None = Field(default=None, pattern=r"^\d{4}$", description="For a dataset keyed by postal code.")
+    zone: str | None = Field(default=None, description="For a dataset keyed by zone, as a user would give it.")
     as_of: date | None = Field(default=None, description="Overrides the policy date for this step.")
     start: date | None = None
     end: date | None = None
@@ -167,8 +168,12 @@ class LookupStep(Strict):
         return self
 
     def request(self, as_of: date) -> LookupRequest:
-        return LookupRequest(dataset_id=self.dataset_id, postal_code=self.postal_code, as_of=self.as_of or as_of,
-                             start=self.start, end=self.end, limit=self.limit)
+        return LookupRequest(dataset_id=self.dataset_id, postal_code=self.postal_code, zone=self.zone,
+                             as_of=self.as_of or as_of, start=self.start, end=self.end, limit=self.limit)
+
+    @property
+    def key_label(self) -> str:
+        return f"zone {self.zone}" if self.zone is not None else str(self.postal_code)
 
 
 class Step(Strict):

@@ -219,16 +219,21 @@ NORM_OR_AUTHORITY = {"act", "ordinance", "treaty", "directive", "guidance"}
 # Dataset connectors (docs/architecture/dataset-connectors.md): the facts give the rule, a registered dataset gives
 # the dates. Said once per resolve result when a concept carries an offer, and on every lookup result.
 GUIDANCE_LOOKUP_OFFER = (" A dataset of published dates stands behind a concept of this result (lookups): to name a "
-                         "date, such as the next collection day, ask the user for the four-digit postal code unless the "
-                         "conversation gave it, then call lookup with the offer's dataset_id; never derive a date from "
-                         "the facts.")
-GUIDANCE_LOOKUP_SUPPORTED = ("State these dates as published by {publisher} for postal code {postal_code}, oldest first, "
+                         "date, such as the next collection day, ask the user for what the offer's requires names unless "
+                         "the conversation gave it - the four-digit postal code, or the collection zone - then call lookup "
+                         "with the offer's dataset_id; never derive a date from the facts.")
+GUIDANCE_LOOKUP_ZONE = (" An offer that requires zone serves dates by the publisher's collection zone ({zones}): most "
+                        "residents do not know theirs, so ask for it and give them the publisher's page that finds it from "
+                        "the address, zone_lookup_url; never guess a zone from an address, a street or a postal code.")
+GUIDANCE_LOOKUP_SUPPORTED = ("State these dates as published by {publisher} for {key}, oldest first, "
                              "and cite provenance.publisher_url. They are rows of the publisher's open-data file, not "
                              "reviewed statements, and the file covers {start} to {end}; say so when the user asks "
                              "beyond it. Do not compute further dates from the interval between these.")
 GUIDANCE_LOOKUP_OUT_OF_COVERAGE = ("No published date answers this request, for the reason named in gaps: tell the user "
                                    "what the gap says, and do not derive a date from the facts or from general "
                                    "knowledge. For postal_code_not_covered, ask the user to check the postal code; for "
+                                   "zone_not_covered, give the user the zones it lists and the publisher's page for "
+                                   "finding theirs; for "
                                    "period_not_published, say that the publisher has not published that period yet; "
                                    "for connector_unavailable, say that the dates cannot be read at the moment and that "
                                    "the facts are unaffected.")
@@ -829,7 +834,7 @@ class ReleaseService:
             return []
         return [LookupOffer(dataset_id=s.dataset_id, type=s.type, title=s.title, label=s.label, jurisdiction=s.jurisdiction,
                             requires=s.requires, accepts=s.accepts, period=Period(start=s.period.start, end=s.period.end),
-                            publisher=s.publisher)
+                            publisher=s.publisher, zones=s.zones, zone_lookup_url=s.zone_lookup_url)
                 for s in self.connectors.offers(concept_id, requested)]
 
     def narrower_published_elsewhere(self, topic_id: str, requested: str) -> tuple[str, list[str]] | None:
@@ -890,6 +895,9 @@ class ReleaseService:
             text += GUIDANCE_NARROWER_NOT_PUBLISHED
         if any(result.lookups for result in results):
             text += GUIDANCE_LOOKUP_OFFER
+            zoned = sorted({zone for result in results for offer in result.lookups for zone in offer.zones or []})
+            if zoned:
+                text += GUIDANCE_LOOKUP_ZONE.format(zones=", ".join(zoned))
         text += self.scope_guidance(scope)
         if any(result.facts for result in results):
             text += " Write the whole answer in the language of the user's question, even when the excerpts are in another language."
@@ -985,8 +993,14 @@ class ReleaseService:
             return argument_error("dataset_id", f"Unknown dataset_id {request.dataset_id!r}; the registered datasets are "
                                                 f"{registered}. Take it from a resolve result's lookups.")
         summary: DatasetSummary = self.connectors.datasets[request.dataset_id].summary
+        key = summary.key or "postal_code"
+        given = request.zone if request.zone is not None else request.postal_code
+        if (request.zone is not None) != (key == "zone"):
+            other = "zone" if request.zone is not None else "postal_code"
+            return argument_error(other, f"Dataset {request.dataset_id} is keyed by {key}: give {key}, as the offer's "
+                                         f"requires says, not {other}.")
         as_of = request.as_of or date.today()
-        body = dict(dataset_id=request.dataset_id, postal_code=request.postal_code, start=(request.start or as_of).isoformat(),
+        body = dict(dataset_id=request.dataset_id, **{key: given}, start=(request.start or as_of).isoformat(),
                     end=request.end.isoformat() if request.end else None, limit=request.limit)
         provenance = LookupProvenance(
             publisher=summary.publisher, publisher_url=summary.publisher_url, licence=summary.licence,
@@ -1005,7 +1019,8 @@ class ReleaseService:
         if isinstance(answer, ConnectorError):
             return argument_error(answer.path or "lookup", answer.message)
         status = Status.SUPPORTED if answer.status == "SUPPORTED" else Status.OUT_OF_COVERAGE
-        guidance = (GUIDANCE_LOOKUP_SUPPORTED.format(publisher=summary.publisher, postal_code=request.postal_code,
+        named = f"zone {given}" if key == "zone" else f"postal code {given}"
+        guidance = (GUIDANCE_LOOKUP_SUPPORTED.format(publisher=summary.publisher, key=named,
                                                     start=summary.period.start.isoformat(), end=summary.period.end.isoformat())
                     if status == Status.SUPPORTED else GUIDANCE_LOOKUP_OUT_OF_COVERAGE)
         return LookupResult(

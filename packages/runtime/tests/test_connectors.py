@@ -175,5 +175,62 @@ class LookupToolTests(unittest.TestCase):
         self.assertEqual(result.provenance.dataset_version, "2026-09-23-v1")
 
 
+FINDER = "https://www.example.ch/apps/zonensuche"
+
+
+def zone_dataset() -> Dataset:
+    rows = [DatasetRow(zone="A", date=date(2026, 9, 25)), DatasetRow(zone="L West", date=date(2026, 9, 24))]
+    item = dataset("zone-waste", rows=[DatasetRow(postal_code="8001", date=date(2026, 9, 28))])
+    manifest = item.manifest.model_copy(update=dict(postal_codes=[], key="zone", zones=["A", "L West"], zone_lookup_url=FINDER,
+                                                    row_count=len(rows)))
+    zoned = Dataset(manifest=manifest, rows=rows)
+    zoned.manifest.content_sha256 = content_hash(zoned)
+    return zoned
+
+
+class ZoneLookupTests(unittest.TestCase):
+    """A dataset keyed by the publisher's collection zone: the offer says so and names the zone finder."""
+
+    def setUp(self):
+        self.connector = FakeConnector([zone_dataset()])
+        self.service = ReleaseService(sample_release(), connectors=ConnectorRegistry([URL], sample_release(), client=self.connector))
+
+    def test_the_offer_requires_the_zone_and_names_the_finder(self):
+        result = self.service.dispatch("resolve", {"concept_ids": ["city-arrival"], "jurisdiction": {"municipality_id": "CH-ZH-261"},
+                                                   "as_of": "2026-09-23"})
+        [offer] = result.results[0].lookups
+        self.assertEqual((offer.requires, offer.zones, offer.zone_lookup_url), (["zone"], ["A", "L West"], FINDER))
+        self.assertIn("never guess a zone", result.guidance_for_caller)
+        self.assertIn("A, L West", result.guidance_for_caller)
+
+    def test_lookup_forwards_the_zone_as_the_user_spelled_it(self):
+        result = self.service.dispatch("lookup", {"dataset_id": "zone-waste", "zone": "zone l-west", "as_of": "2026-09-23"})
+        self.assertEqual((result.status.value, [e.date.isoformat() for e in result.events]), ("SUPPORTED", ["2026-09-24"]))
+        self.assertIn("zone zone l-west", result.guidance_for_caller)
+        self.assertEqual(self.connector.calls[-1][1]["zone"], "zone l-west")
+        unknown = self.service.dispatch("lookup", {"dataset_id": "zone-waste", "zone": "Q", "as_of": "2026-09-23"})
+        self.assertEqual((unknown.gaps[0].dimension, unknown.gaps[0].published_values), ("zone_not_covered", ["A", "L West"]))
+        self.assertIn("zone_not_covered", unknown.guidance_for_caller)
+
+    def test_the_other_key_is_refused_before_the_connector_is_asked(self):
+        calls = len(self.connector.calls)
+        error = self.service.dispatch("lookup", {"dataset_id": "zone-waste", "postal_code": "8001"})
+        self.assertIsInstance(error, ToolError)
+        self.assertIn("keyed by zone", error.error.issues[0].message)
+        self.assertEqual(len(self.connector.calls), calls)
+        self.assertIsInstance(self.service.dispatch("lookup", {"dataset_id": "zone-waste"}), ToolError)
+
+    def test_a_lookup_step_takes_a_zone(self):
+        from swisstip.core.acceptance import AcceptanceFile
+        from swisstip.runtime.acceptance import check_acceptance
+        suite = AcceptanceFile(pack="test", cases=[dict(
+            case_id="Z-1", label="Next collection in zone L West", question="When is the next collection in zone L West?",
+            expected_answer="2026-09-24.", steps=[dict(lookup=dict(dataset_id="zone-waste", zone="L West", as_of="2026-09-23",
+                                                                    limit=1, expect_first_date="2026-09-24"))])])
+        report = check_acceptance(self.service, suite)
+        [step] = report["results"][0]["steps"]
+        self.assertEqual((report["passed"], step["zone"], step["dates"]), (True, "L West", ["2026-09-24"]))
+
+
 if __name__ == "__main__":
     unittest.main()

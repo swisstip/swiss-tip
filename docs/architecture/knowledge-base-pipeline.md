@@ -271,7 +271,10 @@ reports (`release.json`, `build-report.json`, `acceptance-report.json`,
   `readiness.json` and `semantic-index.json`) and the pack README as
   assets, so the release can be served without the image or a clone.
 - Point the tags in `run_image_test.py`, the server README and the docker
-  README at the new release.
+  README at the new release. `swisstip-quickstart <pack>` of this repository
+  needs no pointing: it fetches the pack at `main` of the packs repository,
+  so the pushed release is what it serves and tests, and a tag on that
+  commit lets `--ref` name the release by its ID.
 - PyPI (`pypi-packages.yml`, triggered by a `v*` tag) is only needed when
   the code of the packages changed; a new release alone needs no new
   package version. A new package version also needs this repository's
