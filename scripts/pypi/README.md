@@ -3,13 +3,14 @@
 **Last update:** 24 September 2026
 
 The repository keeps one `pyproject.toml` per component under `packages/` and
-`apps/`, for editable development installs. PyPI gets four distributions
+`apps/`, for editable development installs. PyPI gets five distributions
 that bundle them; the module names do not change.
 
 | Distribution | Components | Installed by |
 | --- | --- | --- |
-| `swisstip-core` | `packages/core`, `packages/runtime` | the other two, at the same version |
+| `swisstip-core` | `packages/core`, `packages/runtime` | the others, at the same version |
 | `swisstip-mcp` | `apps/mcp-server` | the container image, MCP clients through `uvx` |
+| `swisstip-quickstart` | `apps/quickstart` | a first-time user through `uvx swisstip-quickstart <pack>`: fetches a published pack and runs the first tests; requires `swisstip-mcp` |
 | `swisstip-calendar-connector` | `apps/calendar-connector` | the calendar connector image, a server operator who serves a pack's datasets |
 | `swisstip-builder` | `packages/ingestion`, `packages/extraction`, `packages/build`, `packages/concepts`, `apps/knowledge-builder`, `apps/admin-console` | a curator's workstation |
 
@@ -65,13 +66,16 @@ the component files. `check_versions.py` is the guard: every
 built must be it, so a tag `v0.3.0` on a checkout that still says `0.2.5`
 fails the run before anything is built.
 
-The build job runs every component's offline tests, builds the three
+The build job runs every component's offline tests, builds the
 distributions, checks their metadata with `twine check --strict`, installs the
 server wheel into a clean environment (health check and the stdio round trip
 of `scripts/test/mcp/check_wheel.py` on a synthetic release, and a check that
-no build tooling came with it), and installs the workstation wheel into
-another (every command's `--help`, and the admin console serving a page and
-its static files from a packs directory without packs). The build depends
+no build tooling came with it), the quickstart wheel into another (the
+synthetic release written as a fetched pack and checked offline with
+`--no-fetch`, round trip included), the connector wheel into a third, and
+installs the workstation wheel into a fourth (every command's `--help`, and
+the admin console serving a page and its static files from a packs directory
+without packs). The build depends
 on no knowledge base: the packs are checked in their own repository,
 [swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp), so a pack that
 is being rebuilt or waits for its attestation cannot fail a package build.
@@ -89,21 +93,25 @@ Every distribution is uploaded from its own job in its own GitHub
 environment, because PyPI accepts a pending publisher for one repository,
 workflow and environment combination for one project name only.
 
-1. **PyPI** (<https://pypi.org/manage/account/publishing/>): add three pending
-   publishers with owner `swisstip`, repository `swiss-tip` and
-   workflow `pypi-packages.yml`: project `swisstip-core` with environment
-   `pypi-core`, `swisstip-mcp` with `pypi-mcp`, and `swisstip-builder` with
-   `pypi-builder`. The first upload creates each project; its pending
-   publisher then becomes its publisher.
+1. **PyPI** (<https://pypi.org/manage/account/publishing/>): add one pending
+   publisher per distribution with owner `swisstip`, repository `swiss-tip`
+   and workflow `pypi-packages.yml`: project `swisstip-core` with environment
+   `pypi-core`, `swisstip-mcp` with `pypi-mcp`, `swisstip-quickstart` with
+   `pypi-quickstart`, `swisstip-calendar-connector` with
+   `pypi-calendar-connector` and `swisstip-builder` with `pypi-builder`. The
+   first upload creates each project; its pending publisher then becomes its
+   publisher. A project that exists already gets its publisher on its own
+   settings page instead (`pypi.org/manage/project/<name>/settings/publishing/`).
 2. **TestPyPI** (<https://test.pypi.org/manage/account/publishing/>, a separate
    account): the same, with the environments `testpypi-core`,
-   `testpypi-mcp`, `testpypi-calendar-connector` and `testpypi-builder`.
+   `testpypi-mcp`, `testpypi-quickstart`, `testpypi-calendar-connector` and
+   `testpypi-builder`.
 3. **GitHub** (repository Settings, Environments): create the `pypi-*` and
    `testpypi-*` environments. A manual run publishes from the branch it is
    started on, so limit the `pypi-*` ones to tags matching `v*` and the
    default branch,
    and add yourself as a required reviewer of `pypi-core`: a tag push then
-   waits for one approval before anything is uploaded, and the other two
+   waits for one approval before anything is uploaded, and the other
    packages follow only after the core is published.
 
 ## Using the installed packages

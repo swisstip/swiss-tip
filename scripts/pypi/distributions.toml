@@ -46,3 +46,8 @@ components = [
 keywords = ["mcp", "grounding", "switzerland", "crawler", "curation"]
 drop-extras = ["test"]
 classifiers = ["Environment :: Web Environment", "Framework :: FastAPI"]
+
+[distributions.swisstip-quickstart]
+description = "Swiss TIP quickstart: fetch a published knowledge pack, verify it against its readiness record and run the first tests"
+components = ["apps/quickstart"]
+keywords = ["mcp", "grounding", "switzerland", "quickstart"]
