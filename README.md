@@ -75,11 +75,11 @@ every `search` result names its own `retrieval_mode` as well. The tag
 `mvp-zurich` always serves the newest attested release of that pack; the
 packs repository also publishes a tag per release for pinning an exact one.
 
-**The hosted setup, on your machine.** The single image above serves all
-five tools. The hosted instance splits the same parts over three containers
-- the slim server, the embedding sidecar and the calendar connector. To run
-those same three images, use the Compose file of this repository; it is all
-you need, no clone:
+**The same parts in three containers.** The single image above serves all
+five tools, and it is the image the hosted instance runs. The Compose file
+of this repository splits the same parts over three containers - the slim
+server, the embedding sidecar and the calendar connector - for a host that
+wants to run or restart them apart; it is all you need, no clone:
 
 ```shell
 curl -fsSLO https://raw.githubusercontent.com/swisstip/swiss-tip/main/compose.yaml
@@ -110,8 +110,8 @@ search and the calendar connector: five tools, `get_coverage`, `search`,
 `content_sha256` and the `readiness` attestation. The `content_sha256` equals
 `manifest.content_sha256` in
 [`releases/mvp-zurich/release.json`](https://github.com/swisstip/swiss-tip-mvp/blob/main/releases/mvp-zurich/release.json)
-of the packs repository, and the Compose command above starts the same
-images on your machine.
+of the packs repository, and the `docker run` command above starts the same
+image on your machine.
 
 **What the tool results say.** The server composes no answer; every result
 carries a typed status and a `guidance_for_caller` that tells the assistant
@@ -132,7 +132,6 @@ What is weak or missing is listed in the packs repository's
 
 ```text
 official page -> saved text -> quoted excerpt -> reviewed fact -> versioned release -> MCP tools
-open-data table -> pinned dataset bundle -> calendar connector -> lookup
 ```
 
 A knowledge base ships as one versioned, hashed release bundle. It is built

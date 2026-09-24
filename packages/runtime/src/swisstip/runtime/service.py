@@ -21,7 +21,8 @@ from pydantic import ValidationError
 
 from swisstip.core.basis import DEFAULT_RANKING_POLICY, basis_weight, concept_authority, fact_weight
 from swisstip.core.connector import ConnectorError, DatasetSummary
-from swisstip.core.contracts import (CONNECTOR_TOOL_CONTRACTS, SCHEMA_VERSION, TOOL_CONTRACTS, TOOL_DESCRIPTIONS, Citation,
+from swisstip.core.contracts import (CONNECTOR_TOOL_CONTRACTS, SCHEMA_VERSION, SEARCH_DESCRIPTION_LANGUAGES,
+                                     TOOL_CONTRACTS, TOOL_DESCRIPTIONS, Citation,
                                      ConceptResolution, ConceptSummary,
                                      ContextField, CoverageGap, CoverageRoot, CoverageTopic, DecisionRule, ErrorBody,
                                      ErrorCode, Evidence, ExecutedScope, Fact, FreshnessPolicy, GetCoverageRequest,
@@ -150,23 +151,32 @@ RESULT_LIMITATIONS_NOTE = ("Not a legal review: English paraphrases of the cited
 SEARCH_LANGUAGE_RETRY = (" One exception: if the question is in a language other than {languages} and this query was "
                          "not already translated, search once more with its key terms translated into {preferred} "
                          "before declining.")
-# With several query languages the note opens with the rule of one search: callers sent an English question in English
-# and in German, side by side, and both searches found the same concepts (mvp-zurich-2026-09-19-v15, lexical and
-# hybrid). The better-indexed language is named only as the target of a translation, no longer as "preferred". The
-# wording alone does not stop a caller that opens with two parallel calls; the caller's own prompt does
+# The note opens with the translation: an untranslated French question about a driving licence read strong on the
+# registration concepts whose few French terms it shared (mvp-zurich-2026-09-24-v5, hybrid), and a strong result
+# invites no second search. The other national languages are named, because the questions a Swiss server gets come in
+# them. With several query languages the rule of one search follows: callers sent an English question in English and
+# in German, side by side, and both searches found the same concepts (mvp-zurich-2026-09-19-v15, lexical and hybrid).
+# The better-indexed language is named only as the target of a translation, not as "preferred". The wording alone
+# does not stop a caller that opens with two parallel calls; the caller's own prompt does
 # (docs/architecture/tool-contracts.md, section 4.2).
-QUERY_LANGUAGE_NOTE = ("{one_search}Write the search query in {languages}: lexical search matches only {these}. Send a "
-                       "question in {one_of} as asked, without translating it; translate the key terms of a "
-                       "question in any other language into {preferred} before searching, and still answer in the "
-                       "user's language.")
+QUERY_LANGUAGE_NOTE = ("Translate first: when a question is in a language other than {languages}{others}, search with "
+                       "its key terms translated into {preferred}, and still answer in the user's language; an "
+                       "untranslated query can match the wrong concept. {one_search}Write the search query in "
+                       "{languages}: lexical search matches only {these}, and a question already in {one_of} is sent "
+                       "as asked.")
+QUERY_LANGUAGE_OTHERS = " ({languages}, for example)"
 QUERY_LANGUAGE_ONE_SEARCH = ("Search ONCE per question, in {languages}, never in more than one of them: a second "
                              "search in another language rarely finds other concepts. ")
-INSTRUCTIONS = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. Scope: "
-                "{scope} A question normally takes two calls: search with the question and, when known, the user's "
-                "canton or municipality as jurisdiction, then resolve the relevant "
-                "concept_ids with the user's jurisdiction, today's date and the context the question implies. "
-                "Call get_coverage only when unsure whether the question is in scope, and get_evidence only for a "
-                "verbatim quote. {languages} Follow guidance_for_caller in every result.")
+NATIONAL_LANGUAGES = ("de", "fr", "it", "rm")
+# The rules come before the scope: a client that cuts the instructions short (Claude Code keeps 2,048 characters)
+# keeps the two calls, the translation and the guidance, and the scope also reaches the caller through get_coverage
+# and every weak or empty search result.
+INSTRUCTIONS = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. "
+                "{languages} A question normally takes two calls: search with the question and, when known, the "
+                "user's canton or municipality as jurisdiction, then resolve the relevant concept_ids with the user's "
+                "jurisdiction, today's date and the context the question implies. Call get_coverage only when unsure "
+                "whether the question is in scope, and get_evidence only for a verbatim quote. Follow "
+                "guidance_for_caller in every result. Scope: {scope}")
 # The release's context vocabulary, sent once per session with the instructions and again on the resolve schema,
 # because a client may drop either. A caller that knows the fields and their published values before its first call
 # fills the context on the first resolve instead of learning it from a NEEDS_CONTEXT round trip. The mapping from
@@ -414,8 +424,10 @@ class ReleaseService:
         codes = [item.code for item in self.query_languages]
         if codes:
             several = len(codes) > 1
+            others = [code for code in NATIONAL_LANGUAGES if code not in codes]
             self.query_language_note = QUERY_LANGUAGE_NOTE.format(
                 languages=language_list(codes), these="these languages" if several else "this language",
+                others=QUERY_LANGUAGE_OTHERS.format(languages=language_list(others)) if others else "",
                 one_search=QUERY_LANGUAGE_ONE_SEARCH.format(languages=language_list(codes)) if several else "",
                 one_of="one of them" if several else "it", preferred=language_name(codes[0]))
             retry = SEARCH_LANGUAGE_RETRY.format(languages=language_list(codes), preferred=language_name(codes[0]))
@@ -435,10 +447,10 @@ class ReleaseService:
         return names
 
     def tool_description(self, name: str) -> str:
-        """The contract's description, with this release's query languages on search."""
+        """The contract's description, with this release's query-language note in place of the generic one on search."""
         description = TOOL_DESCRIPTIONS[name]
         if name == "search" and self.query_language_note:
-            description += " This server: " + self.query_language_note
+            description = description.replace(SEARCH_DESCRIPTION_LANGUAGES, "This server: " + self.query_language_note)
         return description
 
     def tool_input_schema(self, name: str) -> dict:

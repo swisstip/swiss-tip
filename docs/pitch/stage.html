@@ -35,13 +35,25 @@
   The screen is the jury's by default. "p", or ?rehearse in the address,
   shows the presenter's aids - the time mark and stage direction on each
   slide, the key hints and the arrows - and makes the clock legible.
+
+  The slides wear the Swiss {ai} Weeks branding (ai-weeks.ch): Manrope, the
+  aubergine, red, magenta and lila of its stylesheet, its hero gradient and
+  its buttons square at the bottom-left corner. Manrope is the one thing
+  fetched; offline the slides fall back to the system font. The replay pane
+  keeps the look of the interface it was recorded in.
 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
   :root {
-    --bg: #f7f6f4; --panel: #ffffff; --line: #e3e0dc;
-    --ink: #1c1b1a; --dim: #5f5a54; --accent: #c22f2f; --ok: #2f8a5b;
+    --bg: #fbf8fd; --panel: #ffffff; --line: #eadff1;
+    --ink: #220030; --dim: #5e4d68; --accent: #e4043f; --ok: #9c0ee8;
+    --magenta: #c9077e; --lila: #cd86f3; --violet: #9c0ee8;
+    --hero: linear-gradient(90deg, #e4043f 0%, #c9077e 50%, #cd86f3 100%);
     --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --sans: Manrope, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --corner: 10px 10px 10px 0;      /* ai-weeks.ch: square at the bottom-left */
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -59,6 +71,20 @@
   #stage { position: relative; display: flex; flex-direction: column;
            padding: clamp(28px, 4vh, 64px) clamp(32px, 4vw, 80px) 0;
            min-width: 0; min-height: 0; overflow: hidden; }
+  #stage::before { content: ""; position: absolute; left: 0; right: 0; top: 0;
+                   height: 5px; background: var(--hero); }
+
+  /* The Swiss {ai} Weeks line, on every slide: the claim and its four words. */
+  #brand { display: flex; align-items: baseline; flex-wrap: wrap; gap: .3em 1.4em;
+           padding-bottom: clamp(10px, 1.6vh, 20px); border-bottom: 1px solid var(--line); }
+  #brand .claim { font-size: clamp(20px, 1.7vw, 32px); font-weight: 800;
+                  letter-spacing: -.02em; color: var(--ink); }
+  .brace { background: var(--hero); -webkit-background-clip: text; background-clip: text;
+           color: transparent; }
+  #brand .words { font-size: clamp(11px, .8vw, 14px); font-weight: 700; color: var(--dim);
+                  text-transform: uppercase; letter-spacing: 1.26px; }
+  .grad { background: var(--hero); -webkit-background-clip: text; background-clip: text;
+          color: transparent; }
   #slides { flex: 1; position: relative; min-height: 0; }
   .slide {
     position: absolute; inset: 0; opacity: 0; pointer-events: none;
@@ -77,8 +103,9 @@
   body.rehearse #hint { display: inline; }
   body.rehearse button.nav { display: inline-block; }
   h1 { font-size: clamp(30px, 3.4vw, 58px); line-height: 1.12; margin: 0;
-       font-weight: 650; letter-spacing: -.02em; }
-  h2 { font-size: clamp(22px, 2.2vw, 36px); line-height: 1.2; margin: 0; font-weight: 600; }
+       font-weight: 800; letter-spacing: -.03em; }
+  h2 { font-size: clamp(22px, 2.2vw, 36px); line-height: 1.2; margin: 0; font-weight: 700;
+       letter-spacing: -.015em; }
   p  { font-size: clamp(17px, 1.35vw, 25px); line-height: 1.45; margin: 0;
        color: var(--dim); max-width: 26ch; }
   .wide { max-width: 34ch; }
@@ -88,12 +115,12 @@
                line-height: 1.7; color: var(--dim); }
   .split { display: grid; grid-template-columns: auto 1fr; gap: clamp(20px, 2.5vw, 48px);
            align-items: center; min-height: 0; }
-  .split img { max-height: min(52vh, 520px); width: auto; border-radius: 10px;
+  .split img { max-height: min(52vh, 520px); width: auto; border-radius: var(--corner);
                border: 1px solid var(--line); display: block; }
   .split h2 { margin-bottom: .35em; text-wrap: balance; }
   pre.run { font-family: var(--mono); font-size: clamp(9.5px, .7vw, 14px);
             line-height: 1.75; color: var(--ink); background: var(--panel);
-            border: 1px solid var(--line); border-radius: 8px;
+            border: 1px solid var(--line); border-radius: var(--corner);
             padding: .9em 1.1em; margin: 2em 0 .9em; white-space: pre;
             overflow-x: auto; max-width: 100%; }
   .split p + p { margin-top: .7em; }
@@ -106,32 +133,32 @@
            width: calc(var(--h) * 1.22); height: var(--h); }
   .split .shots img.shot { position: absolute; max-height: none; }
   .shots img.shot-kb { right: 0; top: 0; height: var(--h); width: auto;
-                    box-shadow: 0 6px 24px rgba(28, 27, 26, .07); }
+                    box-shadow: 0 6px 24px rgba(34, 0, 48, .08); }
   .split.maps > div:last-child { justify-self: end; padding-right: clamp(0px, 2vw, 40px); }
   .shots img.shot-waste { left: 0; top: calc(var(--h) * .3); width: calc(var(--h) * .8);
-                    height: auto; box-shadow: 0 14px 40px rgba(28, 27, 26, .18); }
+                    height: auto; box-shadow: 0 14px 40px rgba(34, 0, 48, .2); }
   /* The other assistant's answer, a phone screenshot (1080x2520) cut at 3:4
      from the top: the question and the wrong date, not the steps below. */
   .split.wrong ul { margin: .6em 0; }
-  .split.wrong p.fine { color: var(--accent); font-weight: 650; margin-top: .9em;
+  .split.wrong p.fine { color: var(--accent); font-weight: 700; margin-top: .9em;
                         padding: .35em .7em; border-left: 4px solid var(--accent);
-                        background: rgba(194, 47, 47, .07); width: fit-content; }
+                        background: rgba(228, 4, 63, .07); width: fit-content; }
   .split img.bad { height: min(74vh, 780px); max-height: none; aspect-ratio: 3 / 4;
                    object-fit: cover; object-position: top;
-                   box-shadow: 0 10px 32px rgba(28, 27, 26, .12); }
+                   box-shadow: 0 10px 32px rgba(34, 0, 48, .14); }
   body.backup pre.run { width: fit-content; font-size: clamp(12px, .95vw, 18px); }
   .cite { font-family: var(--mono); font-size: clamp(13px, 1.15vw, 22px);
-          color: var(--dim); border-left: 3px solid var(--ok); padding-left: 14px;
+          color: var(--dim); border-left: 3px solid; border-image: var(--hero) 1; padding-left: 14px;
           line-height: 1.6; }
 
   pre.card { font-family: var(--mono); font-size: clamp(13px, 1.15vw, 22px);
              line-height: 1.75; color: var(--ink); background: var(--panel);
-             border: 1px solid var(--line); border-radius: 10px;
+             border: 1px solid var(--line); border-radius: var(--corner);
              padding: clamp(16px, 2vw, 30px); margin: 0; white-space: pre; overflow: auto; }
   pre.card b { color: var(--dim); font-weight: 400; }
 
   svg.arch { width: 100%; max-height: min(64vh, 760px); display: block; }
-  svg.arch .box { fill: var(--panel); stroke: #cdc7c0; stroke-width: 1.2; }
+  svg.arch .box { fill: var(--panel); stroke: #d9c9e3; stroke-width: 1.2; }
   svg.arch .box.ok { stroke: var(--ok); stroke-width: 2; }
   svg.arch .box.key { stroke: var(--ink); stroke-width: 2; }
   svg.arch .t { fill: var(--ink); font-family: var(--sans); font-size: 21px; font-weight: 600; }
@@ -139,21 +166,21 @@
   svg.arch .lane { fill: var(--dim); font-family: var(--mono); font-size: 13px; letter-spacing: .1em; }
   svg.arch .arrow { stroke: var(--dim); stroke-width: 1.6; fill: none; marker-end: url(#tip); }
   svg.arch .arrow.both { marker-start: url(#tip); }
-  svg.arch .link { stroke: #cdc7c0; stroke-width: 1.4; fill: none; stroke-dasharray: 4 4; }
+  svg.arch .link { stroke: #d9c9e3; stroke-width: 1.4; fill: none; stroke-dasharray: 4 4; }
   svg.arch .rule { stroke: var(--line); stroke-width: 1; }
   svg.arch .head { fill: var(--dim); }
 
   /* -------------------------------------------------------- the controls */
   #bar { display: flex; align-items: center; gap: 16px;
          padding: 18px 0 20px; border-top: 1px solid var(--line); margin-top: 18px; }
-  button.nav { font: inherit; font-size: 15px; background: var(--panel); color: var(--ink);
-               border: 1px solid var(--line); border-radius: 7px; padding: 7px 15px; cursor: pointer; }
-  button.nav:hover { border-color: var(--dim); }
+  button.nav { font: inherit; font-size: 15px; font-weight: 700; background: var(--ink); color: #fff;
+               border: 0; border-radius: 7px 7px 7px 0; padding: 8px 16px; cursor: pointer; }
+  button.nav:hover { background: var(--accent); }
   #dots { display: flex; gap: 7px; margin-left: 4px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); cursor: pointer; }
-  .dot.on { background: var(--ink); }
+  .dot.on { background: var(--hero); width: 22px; border-radius: 4px 4px 4px 0; }
   #clock { margin-left: auto; font-family: var(--mono); font-size: 14px;
-           color: #cfcac4; font-variant-numeric: tabular-nums; cursor: pointer; }
+           color: #d9c9e3; font-variant-numeric: tabular-nums; cursor: pointer; }
   body.rehearse #clock { font-size: 22px; color: var(--dim); }
   #clock.warn { color: #b7791f; }
   #clock.over { color: var(--accent); }
@@ -174,7 +201,8 @@
     --text: #1c1b1a; --muted: #6f6b66; --query: #a08b6e; --link: #2563c9;
     flex: 1; min-height: 0; display: flex; flex-direction: column;
     background: var(--face); color: var(--text);
-    font-family: var(--sans); font-size: var(--ui); line-height: 1.5;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: var(--ui); line-height: 1.5;
     border-radius: 12px; overflow: hidden;
     border: 1px solid var(--edge); box-shadow: 0 8px 30px rgba(28, 27, 26, .08);
   }
@@ -245,6 +273,10 @@
 <body>
 
 <main id="stage">
+  <header id="brand">
+    <span class="claim">shape <span class="brace">{ai}</span> together</span>
+    <span class="words">Hands-on, trustworthy, ethical and open</span>
+  </header>
   <div id="slides">
 
     <section class="slide on">
@@ -260,7 +292,7 @@
              alt="Another chat assistant: register within 14 days of arrival, no later than September 30, 2026">
         <div>
           <h2>A normal assistant gave<br>
-            <span class="kill">a true rule. The wrong date.</span></h2>
+            <span class="kill">a true rule, but the wrong date.</span></h2>
           <ul>
             <li>it said: fourteen days from arrival &mdash; <b>September 30</b></li>
             <li>it never said: <b>register before your first working day</b></li>
@@ -302,7 +334,7 @@ SEM &middot; Canton of Zurich &middot; as_of the day it ran</div>
 
     <section class="slide">
       <div class="mark">0:55 &middot; close</div>
-      <h1>The evidence layer<br>your assistant can cite.</h1>
+      <h1>The evidence layer<br>your assistant can <span class="grad">cite.</span></h1>
       <p class="wide">Zurich, from the residence permit<br>to the rubbish calendar.<br>Same pipeline for any canton.</p>
     </section>
 
