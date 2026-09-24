@@ -1,7 +1,7 @@
 configs:
   opencode-gpt-4-1:
     harness: opencode
-    model: openai/gpt-4
+    model: openai/gpt-4.1
     command: [opencode, run, "--format", "json", "--model", "{model}", "{question}"]
   codex-gpt-5-5:
     harness: codex
