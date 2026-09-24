@@ -80,10 +80,6 @@ and `search.configured_mode` `hybrid`; any MCP client connects to
 claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
 ```
 
-If port 8000 is already taken, the run fails with `Bind for 0.0.0.0:8000
-failed: port is already allocated`; publish another host port instead, for
-example `-p 9000:8000`, and use it in the two commands above.
-
 The [other ways to run it](#run-the-server) below are the same release in
 different packaging, down to a 165 MB image without the model.
 
@@ -153,9 +149,9 @@ It bundles the MCP server, the release with its readiness record and semantic
 index, and the embedding model, so search is **hybrid** from the first
 request. Each `search` result names its `retrieval_mode`: `hybrid`, or
 `lexical-fallback` with the reason if the bundled model is ever unreachable.
-Use `-p 9000:8000` for another host port, and an immutable tag such as
-`mvp-zurich-2026-09-24-v1` instead of the moving tag `mvp-zurich` to pin a
-release.
+The tag `mvp-zurich` always serves the newest attested release of that pack,
+so it is the one to use; the packs repository also publishes a tag per release
+for pinning an exact one.
 
 The alternatives serve the same release in different packaging:
 
