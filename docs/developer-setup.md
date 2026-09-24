@@ -59,45 +59,55 @@ OpenCode demo interface are described under
 
 ## Quick start with uv
 
-One clone and one command. It needs [uv](https://docs.astral.sh/uv/) and
-nothing else: no Python has to be installed, uv fetches Python 3.14 when the
-machine has none. uv itself is one line (then open a new terminal):
-`curl -LsSf https://astral.sh/uv/install.sh | sh` on macOS and Linux,
-`powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
-on Windows.
+One command. It needs [uv](https://docs.astral.sh/uv/) and nothing else: no
+Python has to be installed, uv fetches Python 3.14 when the machine has
+none. uv comes with `uvx` and installs with one line, then open a new
+terminal:
+
+```shell
+# macOS and Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+```powershell
+# Windows
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Without cloning, in any directory, from the published package on PyPI:
+
+```shell
+uvx swisstip-quickstart mvp-zurich
+```
+
+With a clone, on the checkout's own source, installed into `.venv` first:
 
 ```shell
 git clone https://github.com/swisstip/swiss-tip.git && cd swiss-tip
 uv run swisstip-quickstart mvp-zurich
 ```
 
-The command installs the server from this checkout into `.venv`, downloads
-the current attested release of the `mvp-zurich` knowledge base from the
-packs repository into `.local/packs/mvp-zurich/` (outside Git), and runs the
-first tests on it with no model and no further network: the release
-validates and its readiness record attests exactly the downloaded file, the
-semantic index is bound to that release, the pack's acceptance suite and
-regression pack are replayed against it, and a client round trip over MCP
-runs against the server. It prints one line per check and ends with the
-commands that serve the pack and connect a client:
+Either way, the command downloads the current attested release of the
+`mvp-zurich` knowledge base from the packs repository into
+`.local/packs/mvp-zurich/` under the current directory (outside Git in a
+checkout), and runs the first tests on it with no model and no further
+network: the release validates and its readiness record attests exactly the
+downloaded file, the semantic index is bound to that release, the pack's
+acceptance suite and regression pack are replayed against it, and a client
+round trip over MCP runs against the server. It prints one line per check
+and ends with the commands that serve the pack and connect a client, in the
+form it was started with (`uvx ...` or `uv run ...`):
 
 ```shell
-uv run swisstip-quickstart mvp-zurich --serve                 # MCP on http://127.0.0.1:8000/mcp, /health beside it
-uv run swisstip-mcp --release .local/packs/mvp-zurich/release.json --require-ready --print-client-config opencode
-uv run swisstip-quickstart mvp-zurich --no-fetch              # the same checks again, offline
+uvx swisstip-quickstart mvp-zurich --serve                    # MCP on http://127.0.0.1:8000/mcp, /health beside it
+uvx swisstip-mcp --release .local/packs/mvp-zurich/release.json --require-ready --print-client-config opencode
+uvx swisstip-quickstart mvp-zurich --no-fetch                 # the same checks again, offline
 ```
 
-`uv run swisstip-quickstart --help` lists the rest: another pack, a commit
+`uvx swisstip-quickstart --help` lists the rest: another pack, a commit
 or tag of the packs repository, hybrid search beside the embedding sidecar,
 and `--url` for the round trip against a running container. Details are in
 the [quickstart README](../apps/quickstart/README.md).
-
-Without a clone, the same from the published package `swisstip-quickstart`,
-in any directory; the checkout route above tests this source instead:
-
-```shell
-uvx swisstip-quickstart mvp-zurich
-```
 
 ## Serve a release from source or from PyPI
 
@@ -106,7 +116,8 @@ A release is a pack directory holding `release.json`, `readiness.json` and
 repository [swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) (or the
 same files downloaded from one of its GitHub releases) and `<pack>` is a pack
 name in it; the published one is `mvp-zurich`. After the quick start above,
-`<packs>/releases/<pack>` is `.local/packs/mvp-zurich` of this checkout.
+`<packs>/releases/<pack>` is `.local/packs/mvp-zurich` of the directory it
+ran in.
 
 ```shell
 git clone https://github.com/swisstip/swiss-tip-mvp ../swiss-tip-mvp
@@ -193,22 +204,3 @@ rebuilding the index before the pack is attested. Embedding is not
 bit-reproducible: a rebuild of the same release with the same model produces
 an equivalent index with a different `content_sha256`, which is why a
 rebuilt index needs the pack to be re-attested.
-
-## Source etiquette
-
-Acquisition is operator-triggered and **build-time only**: the MCP server
-never crawls at request time, it serves a prebuilt, hashed release. The
-downloader (`swisstip-download`) respects `robots.txt` and its crawl delays,
-identifies itself, stays within a per-host rate limit and a declared budget,
-and **fails closed** when a robots policy cannot be read.
-
-This is the default and the recommended setting. Whoever builds the content
-can override it per run with `--no-obey-robots`, accepting all the
-consequences; the run then records `robots_status: "overridden"` in its
-report so the decision is auditable rather than silent. The default (`--obey-robots`) leaves the
-fail-closed behaviour in place.
-
-```shell
-swisstip-download --catalogue releases/<pack>/sources.json --output releases/<pack> --download
-swisstip-download --catalogue releases/<pack>/sources.json --output releases/<pack> --download --no-obey-robots
-```
