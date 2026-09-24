@@ -1,6 +1,6 @@
 # Concept extraction - technical design
 
-**Last update:** 21 September 2026
+**Last update:** 24 September 2026
 
 **Status:** phases 1 to 3 implemented and tested in `packages/concepts`;
 offline tests cover the pipeline, providers, recovery, exchange, packaging
@@ -764,6 +764,12 @@ Tests, each on synthetic records built in a temporary directory, no network:
 | Legacy | Quote found once, with and without the heading prefix; ambiguous and missing quotes dropped and listed; record found by hash and by URL |
 
 ## 10. Remaining phases
+
+- Planned: a graph mode that proposes knowledge-graph nodes and edges with a
+  configured provider (for example Apertus through Swisscom, falling back to
+  the active profile) and packages them as `model-candidate` items of
+  `graph.yaml`; today the graph is written by Claude Code agents and merged by
+  `swisstip-graph merge` ([knowledge-graph.md](knowledge-graph.md)).
 
 Phases 1 to 3 (the pipeline with its fake provider and `--dry-run`, the
 provider adapters with budgets and checkpoints, and packaging with the

@@ -25,8 +25,8 @@ from swisstip.core.contracts import (CONNECTOR_TOOL_CONTRACTS, SCHEMA_VERSION, T
                                      ConceptResolution, ConceptSummary,
                                      ContextField, CoverageGap, CoverageRoot, CoverageTopic, DecisionRule, ErrorBody,
                                      ErrorCode, Evidence, ExecutedScope, Fact, FreshnessPolicy, GetCoverageRequest,
-                                     GetEvidenceRequest, GetEvidenceResult, LookupEvent, LookupOffer, LookupProvenance,
-                                     LookupRequest, LookupResult, LookupSource, MatchSignals, MissingContext, Period,
+                                     GetEvidenceRequest, GetEvidenceResult, GetKnowledgeGraphRequest, LookupEvent, LookupOffer,
+                                     LookupProvenance, LookupRequest, LookupResult, LookupSource, MatchSignals, MissingContext, Period,
                                      PublishedElsewhere, QueryLanguage, RequiredUserFact,
                                      ResolveRequest, ResolveResult, SearchHit, SearchRequest, SearchResult, Status,
                                      ToolError, TopicSummary, ValidationIssue, page_citations, shared_basis, shared_review,
@@ -161,6 +161,21 @@ QUERY_LANGUAGE_NOTE = ("{one_search}Write the search query in {languages}: lexic
                        "user's language.")
 QUERY_LANGUAGE_ONE_SEARCH = ("Search ONCE per question, in {languages}, never in more than one of them: a second "
                              "search in another language rarely finds other concepts. ")
+# With a knowledge graph the call pattern gains a first turn: orientation (which level decides, who carries the rules
+# out, the office at the user's place, the laws and their source), then search and resolve in the next turn.
+INSTRUCTIONS_GRAPH = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. Scope: "
+                      "{scope} Start every new subject with get_knowledge_graph, with the question and, when known, the "
+                      "user's canton or municipality as jurisdiction: it says which level of the state sets the rules, who "
+                      "carries them out and decides, the office at the user's place, the laws and the authoritative source, "
+                      "whether the answer depends on the canton or municipality, and what to search for. In the next turn "
+                      "search with its next_search, then resolve the relevant concept_ids with the user's jurisdiction, "
+                      "today's date and the context the question implies; a follow-up on the same subject needs no new "
+                      "graph call. The graph is orientation, not citable evidence: answer only from resolve's facts. Call "
+                      "get_coverage only when unsure whether the question is in scope, and get_evidence only for a "
+                      "verbatim quote. {languages} Follow guidance_for_caller in every result.")
+GRAPH_FIRST = "For a new subject call get_knowledge_graph first and search in the next turn. "
+GRAPH_JURISDICTION_NOTE = ("Optional: give it when the question or the conversation says where the user lives, and omit "
+                           "it otherwise; the result then says whether the answer depends on the place and what to ask.")
 INSTRUCTIONS = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. Scope: "
                 "{scope} A question normally takes two calls: search with the question and, when known, the user's "
                 "canton or municipality as jurisdiction, then resolve the relevant "
@@ -417,21 +432,34 @@ class ReleaseService:
         else:
             self.query_language_note, retry = "", ""
         self.search_notes = {"strong": SEARCH_MATCH_NOTE, "weak": SEARCH_WEAK_NOTE + retry, "none": SEARCH_EMPTY_NOTE + retry}
-        self.instructions = " ".join(INSTRUCTIONS.format(scope=manifest.scope_statement.strip(),
-                                                         languages=self.query_language_note).split())
+        # The orientation graph, when the release carries one; the tool is offered only then.
+        from .graph import GraphIndex
+        graph = release.knowledge_graph
+        self.graph_index = GraphIndex(graph, release.topics) if graph is not None else None
+        self.graph_evidence = {e.evidence_id: e for e in graph.evidence} if graph is not None else {}
+        self.graph_institutions = {i.institution_id: i for i in graph.institutions} if graph is not None else {}
+        template = INSTRUCTIONS_GRAPH if graph is not None else INSTRUCTIONS
+        self.instructions = " ".join(template.format(scope=manifest.scope_statement.strip(),
+                                                     languages=self.query_language_note).split())
         if self.context_note:
             self.instructions += "\n" + self.context_note
 
     def tools(self) -> list[str]:
-        """The tools this server lists: the four of the release, and lookup while a dataset is registered."""
-        names = list(TOOL_CONTRACTS)
+        """The tools this server lists: the four of the release, get_knowledge_graph first when the release carries a
+        graph, and lookup while a dataset is registered."""
+        names = [name for name in TOOL_CONTRACTS if name != "get_knowledge_graph" or self.graph_index is not None]
         if self.connectors is not None and self.connectors.datasets:
             names.extend(CONNECTOR_TOOL_CONTRACTS)
         return names
 
     def tool_description(self, name: str) -> str:
-        """The contract's description, with this release's query languages on search."""
+        """The contract's description, with this release's query languages on search and, when the release carries a
+        knowledge graph, the graph-first call pattern on every other tool."""
         description = TOOL_DESCRIPTIONS[name]
+        if self.graph_index is not None and name != "get_knowledge_graph":
+            description = GRAPH_FIRST + description.replace(
+                "A question normally needs two calls in total: search, then resolve.",
+                "A question normally needs three calls: get_knowledge_graph, then search and resolve in the next turn.")
         if name == "search" and self.query_language_note:
             description += " This server: " + self.query_language_note
         return description
@@ -444,11 +472,13 @@ class ReleaseService:
         if name == "resolve" and self.context_note:
             context = schema["properties"]["context"]
             context["description"] = " ".join(context["description"].split()) + "\n" + self.context_note
-        if name in ("search", "resolve"):
+        if name in ("search", "resolve", "get_knowledge_graph"):
             jurisdiction = schema["properties"]["jurisdiction"]
             jurisdiction["description"] = " ".join(jurisdiction["description"].split()) + " " + self.jurisdiction_note()
             if name == "search":
                 jurisdiction["description"] += " " + SEARCH_JURISDICTION_NOTE
+            if name == "get_knowledge_graph":
+                jurisdiction["description"] += " " + GRAPH_JURISDICTION_NOTE
         return schema
 
     def jurisdiction_note(self) -> str:
@@ -491,7 +521,8 @@ class ReleaseService:
         return self.policy.floor + (1 - self.policy.floor) * self.concept_authority[concept_id]
 
     def page_fields(self, item) -> dict:
-        institution = self.institutions.get(item.institution_id) if item.institution_id else None
+        institution = (self.institutions.get(item.institution_id) or self.graph_institutions.get(item.institution_id)
+                       if item.institution_id else None)
         return dict(level=institution.level if institution else None, jurisdiction=institution.jurisdiction if institution else None)
 
     def citations(self, evidence_ids: list[str]) -> list[Citation]:
@@ -956,8 +987,9 @@ class ReleaseService:
         # round trip for a typed error is more expensive than answering.
         selected: list[str] = []
         unknown = []
+        evidence = {**self.evidence, **self.graph_evidence}
         for item in request.evidence_ids:
-            if item in self.evidence:
+            if item in evidence:
                 ids = [item]
             elif item in self.facts:
                 ids = self.facts[item].evidence_ids
@@ -972,7 +1004,7 @@ class ReleaseService:
             evidence=[Evidence(evidence_id=e.evidence_id, source_title=e.source_title, publisher=e.publisher, url=e.url,
                                language=e.language, accessed_on=e.accessed_on, original_excerpt=e.original_excerpt,
                                basis=e.basis.label if e.basis else None, **self.page_fields(e))
-                      for e in (self.evidence[item] for item in selected[:5])],
+                      for e in (evidence[item] for item in selected[:5])],
             limitations=self.result_limitations)
 
     def lookup(self, request: LookupRequest):
@@ -1015,11 +1047,25 @@ class ReleaseService:
             truncated=answer.truncated, provenance=provenance,
             gaps=[CoverageGap(dimension=g.dimension, message=g.message, published_values=g.published_values) for g in answer.gaps],
             guidance_for_caller=guidance, limitations=[*self.result_limitations, *summary.limitations])
+    def get_knowledge_graph(self, request: GetKnowledgeGraphRequest):
+        place = request.jurisdiction
+        scope = None
+        if place.country or place.canton or place.city:
+            try:
+                scope = self.place_index.resolve(place.country, place.canton, place.city)
+            except PlaceError as exc:
+                return argument_error(exc.path, exc.message)
+        else:
+            scope = self.place_index.resolve() if self.place_index.default_country else None
+        return self.graph_index.orient(request, scope, self.release_id, date.today(),
+                                       self.executed_scope(scope) if scope is not None else None)
 
     def dispatch(self, name: str, arguments: dict | None):
         """Validate the arguments against the request model and run the tool."""
         handlers = {"get_coverage": self.get_coverage, "search": self.search, "resolve": self.resolve,
                     "get_evidence": self.get_evidence, "lookup": self.lookup}
+        if self.graph_index is not None:
+            handlers["get_knowledge_graph"] = self.get_knowledge_graph
         if name not in self.tools():
             return argument_error("name", f"Unknown tool {name!r}.")
         try:

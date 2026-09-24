@@ -1,6 +1,6 @@
 # Swiss TIP admin console
 
-**Last update:** 20 September 2026
+**Last update:** 24 September 2026
 
 A local web interface over the files of a pack: the knowledge expert reads
 pages, selects excerpts, writes concepts and facts and confirms every served
@@ -81,6 +81,17 @@ no approval or attestation operation.
 Every identifier is a link: a `document_id` opens the reading view, a
 `fact_id` the fact form, a `concept_id` the concept form, a `source_id` the
 source form.
+
+## Knowledge graph
+
+Every graph under `graphs/` of the packs directory gets a card on the home
+screen and its own screens (`/graphs/<graph>`): overview with Derive, Compile
+and Refresh, Explore (an interactive node-link view, Cytoscape.js vendored in
+`static/`), Items, the item page (edit, excerpts, review, add an edge) and the
+review queue with bulk actions. Writes go through `write_graph`, which
+compiles the graph into memory before it saves. The sandbox has a
+`get_knowledge_graph` panel. Design: section 4.10 of
+[admin-console.md](../../docs/architecture/admin-console.md).
 
 ## What a write goes through
 

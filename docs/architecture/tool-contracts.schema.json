@@ -1,6 +1,726 @@
 {
-  "schema_version": "swiss-tip/v4",
+  "schema_version": "swiss-tip/v5",
   "tools": {
+    "get_knowledge_graph": {
+      "description": "Call this FIRST for every new subject, before search: a small map of how Switzerland handles it. With the question and, when known, the user's canton or municipality as jurisdiction, it returns the matched domains and, as nodes and cited one-sentence edges, which level of the state sets the rules (federal, cantonal, municipal), who carries them out and decides, the office the user deals with at their place with its names in the local languages, the laws with their SR numbers, the authoritative source, and the pitfalls a generic answer falls into. place_dependence says whether the answer depends on the canton or municipality and, when the request did not say, the question to ask (derive the place from what the user said first; the place of work is not the place of residence). next_search gives the query and place for search, which you call in the next turn, then resolve. covered_topics empty means this release publishes no facts on the subject: say so, and name the authoritative source only as where to look. The graph is orientation, not citable evidence: answer only from resolve's facts. Without question and node_ids it returns the root page: the levels, the principles and the domains.",
+      "input": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The user's question, as asked or with its key terms; omit it together with node_ids for the root page (levels of the state, principles and the domains the graph knows).",
+            "title": "Question"
+          },
+          "node_ids": {
+            "description": "Nodes to expand instead of or besides the question, exactly as a previous result named them.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Node Ids",
+            "type": "array"
+          },
+          "reviewed_only": {
+            "default": false,
+            "description": "Return only nodes and edges a named person confirmed against their excerpts.",
+            "title": "Reviewed Only",
+            "type": "boolean"
+          },
+          "jurisdiction": {
+            "additionalProperties": false,
+            "description": "Where the user lives, in parts, at the most specific level known. Every part takes a name, in English or in\nthe local language, or a code; the server turns it into the code the facts carry and echoes what it understood\nin executed_scope. The field names of schema v3 (country_code, canton_code, municipality_id) are still accepted.",
+            "properties": {
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Country name or ISO 3166-1 code, for example Switzerland, Schweiz or CH. Omit it for the country this server covers; another country resolves OUT_OF_COVERAGE.",
+                "title": "Country"
+              },
+              "canton": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Canton name, abbreviation or ISO 3166-2 code, for example Zurich, Z\u00fcrich, ZH or CH-ZH. Not needed when the city is given, unless several cantons have a city of that name.",
+                "title": "Canton"
+              },
+              "city": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The municipality (political commune) the user lives in, not a district, a quarter or a postcode: its name, for example Wallisellen or Zurich, or its code, the canton code plus the BFS number (CH-ZH-261; the number alone only next to the canton).",
+                "title": "City"
+              }
+            },
+            "title": "Jurisdiction",
+            "type": "object"
+          }
+        },
+        "title": "GetKnowledgeGraphRequest",
+        "type": "object"
+      },
+      "output": {
+        "type": "object",
+        "$defs": {
+          "DomainSummary": {
+            "additionalProperties": false,
+            "properties": {
+              "node_id": {
+                "title": "Node Id",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "covered": {
+                "description": "The release publishes facts for this domain (a topic bridges to it).",
+                "title": "Covered",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "node_id",
+              "label",
+              "covered"
+            ],
+            "title": "DomainSummary",
+            "type": "object"
+          },
+          "ErrorBody": {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              "issues": {
+                "items": {
+                  "$ref": "#/$defs/ValidationIssue"
+                },
+                "title": "Issues",
+                "type": "array"
+              }
+            },
+            "required": [
+              "code",
+              "issues"
+            ],
+            "title": "ErrorBody",
+            "type": "object"
+          },
+          "ErrorCode": {
+            "enum": [
+              "INVALID_ARGUMENT",
+              "RELEASE_UNAVAILABLE",
+              "OPERATIONAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          },
+          "ExecutedScope": {
+            "additionalProperties": false,
+            "description": "The jurisdiction a resolve ran for, as the server understood the request: the codes the facts are matched\nagainst and the register's official names for them.",
+            "properties": {
+              "country_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "ISO 3166-1 code; absent for a country named in words that is not served.",
+                "title": "Country Code"
+              },
+              "canton_code": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "ISO 3166-2 canton code, for example CH-ZH.",
+                "title": "Canton Code"
+              },
+              "municipality_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Canton code plus BFS municipality number, for example CH-ZH-261.",
+                "title": "Municipality Id"
+              },
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Official name of the country, or the caller's words for one not served.",
+                "title": "Country"
+              },
+              "canton": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Official name of the canton.",
+                "title": "Canton"
+              },
+              "city": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Official name of the municipality.",
+                "title": "City"
+              },
+              "not_recognised": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Parts of the request the place register does not hold, by field, as the caller sent them. The request ran for the broader place above; correct the part (the municipality's official name, not a district) and resolve again if the narrower place matters. Omitted when every part was recognised.",
+                "title": "Not Recognised",
+                "type": "object"
+              }
+            },
+            "title": "ExecutedScope",
+            "type": "object"
+          },
+          "GraphEdgeOut": {
+            "additionalProperties": false,
+            "properties": {
+              "from_id": {
+                "title": "From Id",
+                "type": "string"
+              },
+              "relation": {
+                "description": "rules_set_by, executed_by, decided_by, approved_by, first_contact, legal_basis, authoritative_source, published_by, varies_by, pitfall, see_also, instance (the institution that plays a role for a place), part_of or governed_by.",
+                "title": "Relation",
+                "type": "string"
+              },
+              "to_id": {
+                "title": "To Id",
+                "type": "string"
+              },
+              "statement": {
+                "description": "The claim in one sentence.",
+                "title": "Statement",
+                "type": "string"
+              },
+              "place": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Where the claim holds: that place and the places inside it.",
+                "title": "Place"
+              },
+              "source_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Source Url"
+              },
+              "review_status": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "human-reviewed",
+                      "assistant-authored-unreviewed",
+                      "automatically-derived-unreviewed",
+                      "model-candidate-automated-review"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Omitted when it is the result's review_status.",
+                "title": "Review Status"
+              }
+            },
+            "required": [
+              "from_id",
+              "relation",
+              "to_id",
+              "statement"
+            ],
+            "title": "GraphEdgeOut",
+            "type": "object"
+          },
+          "GraphNodeOut": {
+            "additionalProperties": false,
+            "properties": {
+              "node_id": {
+                "title": "Node Id",
+                "type": "string"
+              },
+              "kind": {
+                "description": "level, principle, domain, role, institution, law, source, place or pitfall.",
+                "title": "Kind",
+                "type": "string"
+              },
+              "label": {
+                "title": "Label",
+                "type": "string"
+              },
+              "names": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The name in the languages of the sources, by ISO 639 code, verbatim from a cited excerpt: the words to search with and to recognise the office by.",
+                "title": "Names",
+                "type": "object"
+              },
+              "summary": {
+                "title": "Summary",
+                "type": "string"
+              },
+              "level": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Tier of the state: federal, cantonal or municipal.",
+                "title": "Level"
+              },
+              "place": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Jurisdiction code of a place, or of the place an institution speaks for.",
+                "title": "Place"
+              },
+              "source_url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The official page the summary rests on.",
+                "title": "Source Url"
+              },
+              "review_status": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "human-reviewed",
+                      "assistant-authored-unreviewed",
+                      "automatically-derived-unreviewed",
+                      "model-candidate-automated-review"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Omitted when it is the result's review_status.",
+                "title": "Review Status"
+              }
+            },
+            "required": [
+              "node_id",
+              "kind",
+              "label",
+              "summary"
+            ],
+            "title": "GraphNodeOut",
+            "type": "object"
+          },
+          "Jurisdiction": {
+            "additionalProperties": false,
+            "description": "Where the user lives, in parts, at the most specific level known. Every part takes a name, in English or in\nthe local language, or a code; the server turns it into the code the facts carry and echoes what it understood\nin executed_scope. The field names of schema v3 (country_code, canton_code, municipality_id) are still accepted.",
+            "properties": {
+              "country": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Country name or ISO 3166-1 code, for example Switzerland, Schweiz or CH. Omit it for the country this server covers; another country resolves OUT_OF_COVERAGE.",
+                "title": "Country"
+              },
+              "canton": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Canton name, abbreviation or ISO 3166-2 code, for example Zurich, Z\u00fcrich, ZH or CH-ZH. Not needed when the city is given, unless several cantons have a city of that name.",
+                "title": "Canton"
+              },
+              "city": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The municipality (political commune) the user lives in, not a district, a quarter or a postcode: its name, for example Wallisellen or Zurich, or its code, the canton code plus the BFS number (CH-ZH-261; the number alone only next to the canton).",
+                "title": "City"
+              }
+            },
+            "title": "Jurisdiction",
+            "type": "object"
+          },
+          "KnowledgeGraphResult": {
+            "additionalProperties": false,
+            "properties": {
+              "release_id": {
+                "title": "Release Id",
+                "type": "string"
+              },
+              "graph_id": {
+                "title": "Graph Id",
+                "type": "string"
+              },
+              "executed_scope": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/ExecutedScope"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The place the orientation is for; CH (federal) when the request named none."
+              },
+              "match_strength": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "strong",
+                      "weak",
+                      "none"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Whether the question's words reached a domain of the graph: strong, weak (incidental words only) or none.",
+                "title": "Match Strength"
+              },
+              "domains": {
+                "description": "Root page only: every domain the graph knows, and whether the release publishes facts for it.",
+                "items": {
+                  "$ref": "#/$defs/DomainSummary"
+                },
+                "title": "Domains",
+                "type": "array"
+              },
+              "nodes": {
+                "items": {
+                  "$ref": "#/$defs/GraphNodeOut"
+                },
+                "title": "Nodes",
+                "type": "array"
+              },
+              "edges": {
+                "items": {
+                  "$ref": "#/$defs/GraphEdgeOut"
+                },
+                "title": "Edges",
+                "type": "array"
+              },
+              "covered_topics": {
+                "description": "Topics of the release that publish facts for the matched domains; empty: this release publishes none.",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Covered Topics",
+                "type": "array"
+              },
+              "place_dependence": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/PlaceDependence"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "next_search": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/NextSearch"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "review_status": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "human-reviewed",
+                      "assistant-authored-unreviewed",
+                      "automatically-derived-unreviewed",
+                      "model-candidate-automated-review"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "Review status of every node and edge that states none of its own.",
+                "title": "Review Status"
+              },
+              "guidance_for_caller": {
+                "title": "Guidance For Caller",
+                "type": "string"
+              },
+              "limitations": {
+                "items": {
+                  "type": "string"
+                },
+                "title": "Limitations",
+                "type": "array"
+              }
+            },
+            "required": [
+              "release_id",
+              "graph_id",
+              "nodes",
+              "edges",
+              "guidance_for_caller",
+              "limitations"
+            ],
+            "title": "KnowledgeGraphResult",
+            "type": "object"
+          },
+          "NextSearch": {
+            "additionalProperties": false,
+            "properties": {
+              "query": {
+                "description": "The query for search, in a query language of the server.",
+                "title": "Query",
+                "type": "string"
+              },
+              "terms": {
+                "description": "Official terms of the matched domains and roles, to add when the question does not use them.",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Terms",
+                "type": "array"
+              },
+              "jurisdiction": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Jurisdiction"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The place to send with search and resolve; omitted when the request named none."
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "title": "NextSearch",
+            "type": "object"
+          },
+          "PlaceDependence": {
+            "additionalProperties": false,
+            "description": "Whether the answer depends on where the user lives, and whether the request said so precisely enough.",
+            "properties": {
+              "depends_on": {
+                "description": "The most specific level that carries out or decides the matched domains: municipality, canton or none.",
+                "enum": [
+                  "none",
+                  "canton",
+                  "municipality"
+                ],
+                "title": "Depends On",
+                "type": "string"
+              },
+              "known": {
+                "description": "The request's jurisdiction is at least that specific.",
+                "title": "Known",
+                "type": "boolean"
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Reason"
+              },
+              "ask": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "The question to put to the user when the place cannot be derived from what they said; omitted when known.",
+                "title": "Ask"
+              }
+            },
+            "required": [
+              "depends_on",
+              "known"
+            ],
+            "title": "PlaceDependence",
+            "type": "object"
+          },
+          "ToolError": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "$ref": "#/$defs/ErrorBody"
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "title": "ToolError",
+            "type": "object"
+          },
+          "ValidationIssue": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "title": "Path",
+                "type": "string"
+              },
+              "message": {
+                "title": "Message",
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "message"
+            ],
+            "title": "ValidationIssue",
+            "type": "object"
+          }
+        },
+        "anyOf": [
+          {
+            "$ref": "#/$defs/KnowledgeGraphResult"
+          },
+          {
+            "$ref": "#/$defs/ToolError"
+          }
+        ]
+      }
+    },
     "get_coverage": {
       "description": "Discover what this server covers. A question normally needs two calls in total: search, then resolve. Call get_coverage with no arguments only when you are unsure whether the question is in scope at all: the root page (about 5 KB) returns the active release_id, a scope_statement, an out_of_scope list, the covered jurisdictions and languages, the query languages for search, the freshness window and the topics. If the question matches out_of_scope or lies outside the scope_statement (another topic, another country), follow out_of_scope_response and make no further calls. With parent_id set to a topic_id it lists that topic's concepts with their jurisdictions and required context fields; search is the shorter way to the same concept_ids.",
       "input": {

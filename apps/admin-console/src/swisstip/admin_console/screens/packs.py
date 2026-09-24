@@ -50,7 +50,10 @@ def overview(request: Request):
     for name in console.pack_names():
         pack = console.pack(name)
         cards.append(dict(card=pack_card(pack), job=request.app.state.jobs.active(name)))
-    return render(request, "packs/index.html", cards=cards, active="packs", today=date.today())
+    graphs = request.app.state.graphs
+    graph_cards = [dict(card=graphs.graph(name).card(), job=request.app.state.jobs.active(f"graph-{name}"))
+                   for name in graphs.names()]
+    return render(request, "packs/index.html", cards=cards, graph_cards=graph_cards, active="packs", today=date.today())
 
 
 @read_router.get("/packs/{pack}/audit")

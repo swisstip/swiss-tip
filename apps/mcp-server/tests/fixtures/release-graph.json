@@ -1,0 +1,1129 @@
+{
+  "manifest": {
+    "schema_version": "swiss-tip-release/v1",
+    "release_id": "test-v1",
+    "pack": "test",
+    "title": "Test",
+    "created_at": "2026-09-12T12:00:00",
+    "scope_statement": "Residence permits and registration.",
+    "out_of_scope": [
+      "Fees"
+    ],
+    "out_of_scope_response": "Say so.",
+    "jurisdictions": [
+      "CH",
+      "CH-BE",
+      "CH-ZH",
+      "CH-ZH-261"
+    ],
+    "languages": [
+      "de",
+      "en"
+    ],
+    "freshness": {
+      "snapshot_date": "2026-09-11",
+      "max_age_days": 60,
+      "stale_from": "2026-11-10"
+    },
+    "provenance_kinds": {
+      "curated-statement": 7
+    },
+    "review_statuses": {
+      "assistant-authored-unreviewed": 7
+    },
+    "limitations": [
+      "Unreviewed."
+    ],
+    "content_sha256": "2d2a9bd5b841e17c6aef5786fb89c8f837f4015a2ae6dd6d5dc239cc3f7a6f1d"
+  },
+  "documents": [
+    {
+      "document_id": "doc-a",
+      "source_url": "https://example.gov/doc-a",
+      "document_url": "https://example.gov/doc-a",
+      "version_uri": null,
+      "title": "Page",
+      "publisher": "SEM",
+      "language": "de",
+      "accessed_on": "2026-09-11",
+      "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+      "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
+      "document_id": "doc-b",
+      "source_url": "https://example.gov/doc-b",
+      "document_url": "https://example.gov/doc-b",
+      "version_uri": null,
+      "title": "Page",
+      "publisher": "SEM",
+      "language": "de",
+      "accessed_on": "2026-09-11",
+      "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+      "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
+      "document_id": "doc-c",
+      "source_url": "https://example.gov/doc-c",
+      "document_url": "https://example.gov/doc-c",
+      "version_uri": null,
+      "title": "Page",
+      "publisher": "SEM",
+      "language": "de",
+      "accessed_on": "2026-09-11",
+      "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+      "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    {
+      "document_id": "doc-d",
+      "source_url": "https://example.gov/doc-d",
+      "document_url": "https://example.gov/doc-d",
+      "version_uri": null,
+      "title": "Page",
+      "publisher": "SEM",
+      "language": "de",
+      "accessed_on": "2026-09-11",
+      "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+      "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "topics": [
+    {
+      "topic_id": "residence",
+      "title": "Residence",
+      "description": "Permits.",
+      "graph_nodes": [
+        "domain.registration",
+        "domain.residence"
+      ]
+    },
+    {
+      "topic_id": "contacts",
+      "title": "Contacts",
+      "description": "Offices."
+    }
+  ],
+  "concepts": [
+    {
+      "concept_id": "deadline",
+      "topic_id": "residence",
+      "label": "Municipal registration deadline after arrival",
+      "description": "When EU/EFTA nationals register.",
+      "aliases": [
+        "Anmeldefrist",
+        "14 days"
+      ],
+      "questions": [
+        "By when must I register my stay?"
+      ],
+      "jurisdictions": [
+        "CH"
+      ],
+      "required_context": [
+        "population"
+      ],
+      "context_schema": {
+        "population": {
+          "type": "string",
+          "enum": [
+            "eu_efta",
+            "third_country"
+          ],
+          "description": "Citizenship group."
+        }
+      },
+      "fact_ids": [
+        "deadline-1",
+        "deadline-2"
+      ],
+      "required_user_facts": [
+        {
+          "name": "arrival_date",
+          "status": "NOT_PROVIDED_BY_SERVICE",
+          "instruction": "Ask for it."
+        }
+      ],
+      "decision_rule": {
+        "description": "Earlier of two limits.",
+        "steps": [
+          "Compute both.",
+          "Name the earlier."
+        ]
+      },
+      "notes": []
+    },
+    {
+      "concept_id": "zh-registration",
+      "topic_id": "residence",
+      "label": "Zurich registration for EU/EFTA nationals",
+      "description": "Cantonal procedure.",
+      "aliases": [],
+      "questions": [],
+      "jurisdictions": [
+        "CH-ZH"
+      ],
+      "required_context": [],
+      "context_schema": {},
+      "fact_ids": [
+        "zh-1"
+      ],
+      "required_user_facts": [],
+      "decision_rule": null,
+      "notes": []
+    },
+    {
+      "concept_id": "city-arrival",
+      "topic_id": "residence",
+      "label": "City of Zurich: registering arrival from abroad",
+      "description": "Municipal procedure.",
+      "aliases": [],
+      "questions": [],
+      "jurisdictions": [
+        "CH-ZH-261"
+      ],
+      "required_context": [],
+      "context_schema": {},
+      "fact_ids": [
+        "city-1"
+      ],
+      "required_user_facts": [],
+      "decision_rule": null,
+      "notes": []
+    },
+    {
+      "concept_id": "contact",
+      "topic_id": "contacts",
+      "label": "Cantonal migration-office contact",
+      "description": "One fact per canton.",
+      "aliases": [],
+      "questions": [],
+      "jurisdictions": [
+        "CH-BE",
+        "CH-ZH"
+      ],
+      "required_context": [],
+      "context_schema": {},
+      "fact_ids": [
+        "contact-zh",
+        "contact-be"
+      ],
+      "required_user_facts": [],
+      "decision_rule": null,
+      "notes": []
+    },
+    {
+      "concept_id": "uk-work",
+      "topic_id": "residence",
+      "label": "UK nationals: new employment",
+      "description": "Since 2021.",
+      "aliases": [],
+      "questions": [],
+      "jurisdictions": [
+        "CH"
+      ],
+      "required_context": [],
+      "context_schema": {},
+      "fact_ids": [
+        "uk-1"
+      ],
+      "required_user_facts": [],
+      "decision_rule": null,
+      "notes": []
+    }
+  ],
+  "facts": [
+    {
+      "fact_id": "deadline-1",
+      "concept_id": "deadline",
+      "statement": "Register within 14 days of arrival and before starting work.",
+      "language": "en",
+      "jurisdiction": "CH",
+      "condition": {
+        "population": "eu_efta"
+      },
+      "valid_from": null,
+      "valid_through": null,
+      "evidence_ids": [
+        "e-a"
+      ],
+      "provenance": {
+        "kind": "curated-statement",
+        "review_status": "assistant-authored-unreviewed",
+        "author": "test",
+        "source": null,
+        "reviewed_on": null,
+        "reviewed_by": null,
+        "notes": []
+      }
+    },
+    {
+      "fact_id": "deadline-2",
+      "concept_id": "deadline",
+      "statement": "Third-country nationals need a permit before entry.",
+      "language": "en",
+      "jurisdiction": "CH",
+      "condition": {
+        "population": "third_country"
+      },
+      "valid_from": null,
+      "valid_through": null,
+      "evidence_ids": [
+        "e-a"
+      ],
+      "provenance": {
+        "kind": "curated-statement",
+        "review_status": "assistant-authored-unreviewed",
+        "author": "test",
+        "source": null,
+        "reviewed_on": null,
+        "reviewed_by": null,
+        "notes": []
+      }
+    },
+    {
+      "fact_id": "zh-1",
+      "concept_id": "zh-registration",
+      "statement": "Register in person with the municipality within 14 days.",
+      "language": "en",
+      "jurisdiction": "CH-ZH",
+      "condition": null,
+      "valid_from": null,
+      "valid_through": null,
+      "evidence_ids": [
+        "e-b"
+      ],
+      "provenance": {
+        "kind": "curated-statement",
+        "review_status": "assistant-authored-unreviewed",
+        "author": "test",
+        "source": null,
+        "reviewed_on": null,
+        "reviewed_by": null,
+        "notes": []
+      }
+    },
+    {
+      "fact_id": "city-1",
+      "concept_id": "city-arrival",
+      "statement": "Book an appointment at the Personenmeldeamt.",
+      "language": "en",
+      "jurisdiction": "CH-ZH-261",
+      "condition": null,
+      "valid_from": null,
+      "valid_through": null,
+      "evidence_ids": [
+        "e-c"
+      ],
+      "provenance": {
+        "kind": "curated-statement",
+        "review_status": "assistant-authored-unreviewed",
+        "author": "test",
+        "source": null,
+        "reviewed_on": null,
+        "reviewed_by": null,
+        "notes": []
+      }
+    },
+    {
+      "fact_id": "contact-zh",
+      "concept_id": "contact",
+      "statement": "Migrationsamt Zurich.",
+      "language": "en",
+      "jurisdiction": "CH-ZH",
+      "condition": null,
+      "valid_from": null,
+      "valid_through": null,
+      "evidence_ids": [
+        "e-b"
+      ],
+      "provenance": {
+        "kind": "curated-statement",
+        "review_status": "assistant-authored-unreviewed",
+        "author": "test",
+        "source": null,
+        "reviewed_on": null,
+        "reviewed_by": null,
+        "notes": []
+      }
+    },
+    {
+      "fact_id": "contact-be",
+      "concept_id": "contact",
+      "statement": "Migrationsdienst Bern.",
+      "language": "en",
+      "jurisdiction": "CH-BE",
+      "condition": null,
+      "valid_from": null,
+      "valid_through": null,
+      "evidence_ids": [
+        "e-b"
+      ],
+      "provenance": {
+        "kind": "curated-statement",
+        "review_status": "assistant-authored-unreviewed",
+        "author": "test",
+        "source": null,
+        "reviewed_on": null,
+        "reviewed_by": null,
+        "notes": []
+      }
+    },
+    {
+      "fact_id": "uk-1",
+      "concept_id": "uk-work",
+      "statement": "UK nationals need a work permit.",
+      "language": "en",
+      "jurisdiction": "CH",
+      "condition": null,
+      "valid_from": "2021-01-01",
+      "valid_through": null,
+      "evidence_ids": [
+        "e-d"
+      ],
+      "provenance": {
+        "kind": "curated-statement",
+        "review_status": "assistant-authored-unreviewed",
+        "author": "test",
+        "source": null,
+        "reviewed_on": null,
+        "reviewed_by": null,
+        "notes": []
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "e-a",
+      "document_id": "doc-a",
+      "source_title": "Page",
+      "publisher": "SEM",
+      "url": "https://example.gov/doc-a",
+      "language": "de",
+      "accessed_on": "2026-09-11",
+      "start_offset": 0,
+      "end_offset": 61,
+      "original_excerpt": "Innert 14 Tagen nach Ankunft und vor Stellenantritt anmelden.",
+      "excerpt_sha256": "2cebef43c4281c76af3c7c44219bee1d0e082673d2f7225dbbe28d76243e28a0",
+      "block_ids": [
+        "doc-a:b00001"
+      ],
+      "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+      "evidence_id": "e-b",
+      "document_id": "doc-b",
+      "source_title": "Page",
+      "publisher": "SEM",
+      "url": "https://example.gov/doc-b",
+      "language": "de",
+      "accessed_on": "2026-09-11",
+      "start_offset": 0,
+      "end_offset": 42,
+      "original_excerpt": "Persoenlich bei der Wohngemeinde anmelden.",
+      "excerpt_sha256": "0ed118cca408124a0da9bbbdd0562a5a3a285024090c11fd5a6c352adc377d99",
+      "block_ids": [
+        "doc-b:b00001"
+      ],
+      "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+      "evidence_id": "e-c",
+      "document_id": "doc-c",
+      "source_title": "Page",
+      "publisher": "SEM",
+      "url": "https://example.gov/doc-c",
+      "language": "de",
+      "accessed_on": "2026-09-11",
+      "start_offset": 0,
+      "end_offset": 41,
+      "original_excerpt": "Termin beim Personenmeldeamt vereinbaren.",
+      "excerpt_sha256": "15f6a9775318e48e7362ba978bfccdb182a689e8b5386b08d19839acccb6af8f",
+      "block_ids": [
+        "doc-c:b00001"
+      ],
+      "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    },
+    {
+      "evidence_id": "e-d",
+      "document_id": "doc-d",
+      "source_title": "Page",
+      "publisher": "SEM",
+      "url": "https://example.gov/doc-d",
+      "language": "en",
+      "accessed_on": "2026-09-11",
+      "start_offset": 0,
+      "end_offset": 43,
+      "original_excerpt": "UK nationals need a work permit since 2021.",
+      "excerpt_sha256": "d77f63d8b8cee19b9b05901675b85ee3d4f327c0af0bd84f047a161a108f645b",
+      "block_ids": [
+        "doc-d:b00001"
+      ],
+      "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+    }
+  ],
+  "place_register": {
+    "title": "Test register",
+    "publisher": "Federal Statistical Office",
+    "url": "https://example.gov/register",
+    "accessed_on": "2026-09-11",
+    "raw_sha256": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+    "generic_words": [
+      "Canton of",
+      "Kanton",
+      "City of",
+      "Stadt",
+      "Gemeinde"
+    ],
+    "places": [
+      {
+        "code": "CH",
+        "name": "Switzerland",
+        "aliases": [
+          "Schweiz",
+          "Suisse"
+        ]
+      },
+      {
+        "code": "CH-ZH",
+        "name": "Zürich",
+        "aliases": [
+          "Zurich"
+        ]
+      },
+      {
+        "code": "CH-BE",
+        "name": "Bern / Berne"
+      },
+      {
+        "code": "CH-SG",
+        "name": "St. Gallen"
+      },
+      {
+        "code": "CH-ZH-261",
+        "name": "Zürich",
+        "aliases": [
+          "Zurich",
+          "Zurigo"
+        ]
+      },
+      {
+        "code": "CH-ZH-69",
+        "name": "Wallisellen"
+      },
+      {
+        "code": "CH-ZH-230",
+        "name": "Winterthur"
+      },
+      {
+        "code": "CH-ZH-83",
+        "name": "Buchs (ZH)"
+      },
+      {
+        "code": "CH-SG-3271",
+        "name": "Buchs (SG)"
+      },
+      {
+        "code": "CH-BE-351",
+        "name": "Bern"
+      },
+      {
+        "code": "CH-BE-371",
+        "name": "Biel/Bienne"
+      }
+    ]
+  },
+  "knowledge_graph": {
+    "schema_version": "swiss-tip-graph/v1",
+    "graph_id": "ch",
+    "title": "Switzerland",
+    "created_at": "2026-09-24T12:00:00",
+    "freshness": {
+      "snapshot_date": "2026-09-20",
+      "max_age_days": 90,
+      "stale_from": "2026-12-19"
+    },
+    "serve": "all",
+    "review_statuses": {
+      "assistant-authored-unreviewed": 27
+    },
+    "nodes": [
+      {
+        "node_id": "level.federal",
+        "kind": "level",
+        "label": "Confederation",
+        "summary": "Sets the rules on residence.",
+        "level": "federal",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "level.cantonal",
+        "kind": "level",
+        "label": "Cantons",
+        "summary": "Carry out federal law.",
+        "level": "cantonal",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "principle.executive-federalism",
+        "kind": "principle",
+        "label": "Executive federalism",
+        "summary": "The cantons implement federal law (BV Art. 46).",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "domain.registration",
+        "kind": "domain",
+        "label": "Registration on arrival",
+        "names": {
+          "de": "Anmeldung"
+        },
+        "summary": "Reporting arrival to the commune of residence.",
+        "keywords": [
+          "register",
+          "registration",
+          "anmelden",
+          "arrival"
+        ],
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "domain.residence",
+        "kind": "domain",
+        "label": "Residence permits",
+        "names": {
+          "de": "Aufenthaltsbewilligungen"
+        },
+        "summary": "Permits to live in Switzerland.",
+        "keywords": [
+          "permit",
+          "residence permit",
+          "Bewilligung"
+        ],
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "domain.customs",
+        "kind": "domain",
+        "label": "Customs",
+        "summary": "Bringing goods into Switzerland.",
+        "keywords": [
+          "customs",
+          "Zoll",
+          "import"
+        ],
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "role.residents-office",
+        "kind": "role",
+        "label": "Residents' office",
+        "names": {
+          "de": "Einwohnerkontrolle"
+        },
+        "summary": "The commune's office for arrivals.",
+        "level": "municipal",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "role.migration-office",
+        "kind": "role",
+        "label": "Cantonal migration office",
+        "names": {
+          "de": "Migrationsämter"
+        },
+        "summary": "Issues residence permits.",
+        "level": "cantonal",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "institution.zh-261-personenmeldeamt",
+        "kind": "institution",
+        "label": "Personenmeldeamt Zürich",
+        "summary": "The City of Zurich's population office.",
+        "level": "municipal",
+        "place": "CH-ZH-261",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "institution.zh-migrationsamt",
+        "kind": "institution",
+        "label": "Migrationsamt ZH",
+        "summary": "The Canton of Zurich's migration office.",
+        "level": "cantonal",
+        "place": "CH-ZH",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "institution.bazg",
+        "kind": "institution",
+        "label": "Federal Office for Customs",
+        "summary": "Customs.",
+        "level": "federal",
+        "place": "CH",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "law.aig",
+        "kind": "law",
+        "label": "AIG (SR 142.20)",
+        "summary": "Federal act on foreign nationals.",
+        "level": "federal",
+        "sr_number": "SR 142.20",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "pitfall.workplace-vs-residence",
+        "kind": "pitfall",
+        "label": "Workplace is not residence",
+        "summary": "Registration follows the commune of residence, not the workplace.",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "place.ch",
+        "kind": "place",
+        "label": "Switzerland",
+        "summary": "The Confederation.",
+        "level": "federal",
+        "place": "CH",
+        "evidence_ids": [],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "place.ch-zh",
+        "kind": "place",
+        "label": "Canton of Zürich (CH-ZH)",
+        "summary": "A canton.",
+        "level": "cantonal",
+        "place": "CH-ZH",
+        "evidence_ids": [],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "node_id": "place.ch-zh-261",
+        "kind": "place",
+        "label": "Zürich (CH-ZH-261)",
+        "summary": "A municipality.",
+        "level": "municipal",
+        "place": "CH-ZH-261",
+        "evidence_ids": [],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      }
+    ],
+    "edges": [
+      {
+        "edge_id": "level.cantonal.governed_by.principle.executive-federalism",
+        "from_id": "level.cantonal",
+        "relation": "governed_by",
+        "to_id": "principle.executive-federalism",
+        "statement": "Cantons carry out federal law.",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "domain.registration.first_contact.role.residents-office",
+        "from_id": "domain.registration",
+        "relation": "first_contact",
+        "to_id": "role.residents-office",
+        "statement": "You register with the residents' office of your commune.",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "domain.registration.pitfall.pitfall.workplace-vs-residence",
+        "from_id": "domain.registration",
+        "relation": "pitfall",
+        "to_id": "pitfall.workplace-vs-residence",
+        "statement": "Register where you live, not where you work.",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "domain.residence.rules_set_by.level.federal",
+        "from_id": "domain.residence",
+        "relation": "rules_set_by",
+        "to_id": "level.federal",
+        "statement": "The Confederation sets the rules.",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "domain.residence.executed_by.role.migration-office",
+        "from_id": "domain.residence",
+        "relation": "executed_by",
+        "to_id": "role.migration-office",
+        "statement": "The cantonal migration offices issue permits.",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "domain.residence.legal_basis.law.aig",
+        "from_id": "domain.residence",
+        "relation": "legal_basis",
+        "to_id": "law.aig",
+        "statement": "Residence rests on the AIG.",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "domain.customs.executed_by.institution.bazg",
+        "from_id": "domain.customs",
+        "relation": "executed_by",
+        "to_id": "institution.bazg",
+        "statement": "The federal customs office handles imports.",
+        "place": "CH",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "role.residents-office.instance.institution.zh-261-personenmeldeamt",
+        "from_id": "role.residents-office",
+        "relation": "instance",
+        "to_id": "institution.zh-261-personenmeldeamt",
+        "statement": "In Zurich: the Personenmeldeamt.",
+        "place": "CH-ZH-261",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "role.migration-office.instance.institution.zh-migrationsamt",
+        "from_id": "role.migration-office",
+        "relation": "instance",
+        "to_id": "institution.zh-migrationsamt",
+        "statement": "In the Canton of Zurich: the Migrationsamt.",
+        "place": "CH-ZH",
+        "evidence_ids": [
+          "graph-e1"
+        ],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "place.ch-zh.part_of.place.ch",
+        "from_id": "place.ch-zh",
+        "relation": "part_of",
+        "to_id": "place.ch",
+        "statement": "Zurich is a canton.",
+        "evidence_ids": [],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      },
+      {
+        "edge_id": "place.ch-zh-261.part_of.place.ch-zh",
+        "from_id": "place.ch-zh-261",
+        "relation": "part_of",
+        "to_id": "place.ch-zh",
+        "statement": "The city lies in the canton.",
+        "evidence_ids": [],
+        "provenance": {
+          "kind": "curated-statement",
+          "review_status": "assistant-authored-unreviewed",
+          "author": "agent",
+          "source": null,
+          "reviewed_on": null,
+          "reviewed_by": null,
+          "notes": []
+        }
+      }
+    ],
+    "institutions": [],
+    "documents": [
+      {
+        "document_id": "graph-doc-1",
+        "source_url": "https://www.ch.ch/federalism",
+        "document_url": "https://www.ch.ch/federalism",
+        "version_uri": null,
+        "title": "Federalism",
+        "publisher": "ch.ch",
+        "language": "de",
+        "accessed_on": "2026-09-20",
+        "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+        "content_sha256": "dc9c763a8a7b1b9a236df0337ffeb4647e79008f52b7197b4304de73014afe77"
+      }
+    ],
+    "evidence": [
+      {
+        "evidence_id": "graph-e1",
+        "document_id": "graph-doc-1",
+        "source_title": "Federalism",
+        "publisher": "ch.ch",
+        "url": "https://www.ch.ch/federalism",
+        "language": "de",
+        "accessed_on": "2026-09-20",
+        "start_offset": 0,
+        "end_offset": 214,
+        "original_excerpt": "Die kantonalen Migrationsämter erteilen die Aufenthaltsbewilligungen. Die Anmeldung erfolgt bei der Einwohnerkontrolle der Wohngemeinde. In der Stadt Zürich beim Personenmeldeamt. Waren werden beim Zoll angemeldet.",
+        "excerpt_sha256": "dc9c763a8a7b1b9a236df0337ffeb4647e79008f52b7197b4304de73014afe77",
+        "block_ids": [
+          "graph-doc-1:b00001"
+        ],
+        "content_sha256": "dc9c763a8a7b1b9a236df0337ffeb4647e79008f52b7197b4304de73014afe77",
+        "raw_sha256": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+      }
+    ],
+    "content_sha256": "ba4b5f227c6b4224cbd91b545c9496d939cd5e4b11ac21333f5afd3757e2e2aa"
+  }
+}

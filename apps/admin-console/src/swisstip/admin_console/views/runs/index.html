@@ -71,6 +71,9 @@
         timeout {{ limits.request_timeout_seconds }}s{% if not loop.last %}; {% endif %}{% endfor %}
       {% if not budget.profiles %}no crawl profile in the catalogue{% endif %}</p>
     <label><input type="checkbox" name="download" value="1"> make the requests</label>
+    <label><input type="checkbox" name="override_robots" value="1"> override robots.txt for this run (only for hosts
+      you are authorised to access; the run report records the override; default:
+      {{ 'obey' if robots_default else 'override (SWISSTIP_OBEY_ROBOTS)' }})</label>
     <label for="confirm_pack">Type the pack name to confirm</label>
     <input type="text" id="confirm_pack" name="confirm_pack" placeholder="{{ pack.pack }}">
     <p class="small muted">Confirmation is asked on every start; there is no "always allow".</p>

@@ -18,8 +18,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from swisstip.core.basis import DEFAULT_RANKING_POLICY, NORM_KINDS, level_of_jurisdiction, make_basis, strongest_basis
-from swisstip.core.release import (Basis, Concept, EvidenceRecord, FactRecord, Freshness, Institution, Manifest, PlaceRegister,
-                                   Release, SourceDocument, Topic, content_hash, sha256_text)
+from swisstip.core.release import (Basis, Concept, EvidenceRecord, FactRecord, Freshness, Institution, KnowledgeGraph, Manifest,
+                                   PlaceRegister, Release, SourceDocument, Topic, content_hash, sha256_text)
 from swisstip.core.validation import validate_release
 from swisstip.extraction.anchors import make_anchor, relocate
 
@@ -265,15 +265,20 @@ def accessed_on(record: dict):
 
 def build_release(curation: Curation, text_dir: Path, release_id: str, *, created_at: datetime | None = None,
                   update_citations: bool = False, place_register: PlaceRegister | None = None,
-                  acceptance_suite_sha256: str | None = None) -> tuple[Release, dict]:
+                  acceptance_suite_sha256: str | None = None,
+                  knowledge_graph: KnowledgeGraph | None = None) -> tuple[Release, dict]:
     """`place_register` is the register the curation names, loaded by the caller, who knows where the curation file
-    lies (`swisstip.build.places.place_register_for`); without one the release accepts jurisdiction codes only."""
+    lies (`swisstip.build.places.place_register_for`); without one the release accepts jurisdiction codes only.
+    `knowledge_graph` is the compiled graph the curation names (`swisstip.build.graph_embed.graph_for`), embedded
+    as it is; the release validator checks it against the place register and the topics' `graph_nodes`."""
     dataset = TextDataset(text_dir)
     documents: dict[str, SourceDocument] = {}
     institutions: dict[str, Institution] = {}
     document_report: dict[str, dict] = {}
     policy = curation.ranking_policy or DEFAULT_RANKING_POLICY
-    topics = [Topic(**t.model_dump()) for t in curation.topics]
+    # A topic's graph_nodes bridge it to the embedded graph; without one there is nothing to bridge to yet (a graph is
+    # derived from the pack's release before it is compiled and embedded), so they are left out.
+    topics = [Topic(**t.model_dump(exclude=set() if knowledge_graph else {"graph_nodes"})) for t in curation.topics]
     concepts, facts, evidence = [], [], []
     report_facts, dropped, outcomes = [], [], Counter()
     term_issues, question_issues = [], []
@@ -393,7 +398,7 @@ def build_release(curation: Curation, text_dir: Path, release_id: str, *, create
     release = Release(manifest=manifest, documents=sorted(documents.values(), key=lambda d: d.document_id),
                       topics=topics, concepts=concepts, facts=facts, evidence=evidence,
                       institutions=sorted(institutions.values(), key=lambda i: i.institution_id),
-                      place_register=place_register)
+                      place_register=place_register, knowledge_graph=knowledge_graph)
     release.manifest.content_sha256 = content_hash(release)
     issues = validate_release(release, text_dir)
     if issues:
@@ -415,5 +420,10 @@ def build_release(curation: Curation, text_dir: Path, release_id: str, *, create
                       url=place_register.url, accessed_on=place_register.accessed_on.isoformat(),
                       raw_sha256=place_register.raw_sha256, places=len(place_register.places),
                       aliases=sum(len(place.aliases) for place in place_register.places)),
+                  knowledge_graph=None if knowledge_graph is None else dict(
+                      graph_id=knowledge_graph.graph_id, content_sha256=knowledge_graph.content_sha256,
+                      nodes=len(knowledge_graph.nodes), edges=len(knowledge_graph.edges),
+                      review_statuses=knowledge_graph.review_statuses,
+                      bridged_topics={t.topic_id: t.graph_nodes for t in topics if t.graph_nodes}),
                   validation_issues=issues)
     return release, report

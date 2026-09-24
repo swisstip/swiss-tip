@@ -1,6 +1,6 @@
 # Institutions, basis and provenance weights
 
-**Last update:** 21 September 2026
+**Last update:** 24 September 2026
 
 **Status:** implemented in `swisstip.core.basis`, the release models and
 validator, the build (which derives the article of a law citation from the
@@ -428,6 +428,14 @@ on guidance or the SEM directory only and every statement is reviewed, and
 it is safe: no acceptance case and no pinned search step changes. Its value
 lies in the ch.ch reclassification and the per-citation overrides on KB1, and
 in the unreviewed material of KB2.
+
+## 6a. The knowledge graph's citations
+
+A graph's own sources are attributed and given their basis by the same
+functions and rules (`institutions`, `page_basis` in `graph.yaml`); an excerpt
+the graph takes from a pack keeps the pack's institution and basis. The graph
+serves no weights: its selection matches words, and `get_knowledge_graph`
+names the source URL of every edge.
 
 ## 7. Deliberately not done
 

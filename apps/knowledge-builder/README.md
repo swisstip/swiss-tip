@@ -1,6 +1,6 @@
 # swisstip-knowledge-builder
 
-**Last update:** 22 September 2026
+**Last update:** 24 September 2026
 
 The build pipeline of a pack in one command: from `releases/<pack>/sources.json`
 through the run directory, the text dataset and the curation file to a
@@ -133,3 +133,13 @@ without one as a candidate. The per-package commands
 (`swisstip-download`, `swisstip-gaps`, `swisstip-extract`,
 `swisstip-build-release`, `swisstip-validate-release`) remain available to
 run or debug a single stage.
+
+## Knowledge graph
+
+`swisstip-build <graph> --graph --packs-dir ../swiss-tip-mvp` builds
+`graphs/<graph>/` with the stages acquire, gaps, extract, validate-text,
+derive (a preview; `--apply-derive` writes it), compile and check. The pack
+build re-embeds a recompiled graph, since the graph file is one of its inputs.
+`--no-obey-robots` (or `SWISSTIP_OBEY_ROBOTS=0`) overrides robots.txt in the
+acquire stage of a pack or a graph, for hosts the operator is authorised to
+access; the run report records it.

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 
 from swisstip.build.curation import Anchor
-from swisstip.builder.pipeline import STAGES, next_release_id
+from swisstip.builder.pipeline import STAGES, next_release_id, obey_robots_default
 from swisstip.extraction.anchors import make_anchor
 
 from ..app import get_pack, render, require_editor
@@ -65,7 +65,7 @@ def index(request: Request, pack: PackData = Depends(get_pack)):
                   job=request.app.state.jobs.active(pack.pack), budget=download_budget(pack),
                   next_release=next_release_id(release.manifest.release_id if release else None, pack.pack,
                                                date.today()),
-                  catalogue_changed=pack.catalogue_changed())
+                  catalogue_changed=pack.catalogue_changed(), robots_default=obey_robots_default())
 
 
 @read_router.get("/packs/{pack}/runs/jobs/{job_id}")
@@ -88,13 +88,13 @@ def start_run(request: Request, pack: PackData = Depends(get_pack), actor: str =
               start: str = Form("acquire"), until: str = Form("health"), workers: int = Form(1),
               scope: str = Form("attributed"), thorough: str = Form(""), update_curation: str = Form(""),
               release_id: str = Form(""), download: str = Form(""), retry_failed: str = Form(""),
-              confirm_pack: str = Form("")):
+              confirm_pack: str = Form(""), override_robots: str = Form("")):
     if download and confirm_pack.strip() != pack.pack:
         return RedirectResponse(f"/packs/{pack.pack}/runs?error=type+the+pack+name+to+confirm+a+download",
                                 status_code=303)
     options = dict(start=start, until=until, workers=workers, scope=scope, thorough=bool(thorough),
                    update_curation=bool(update_curation), release_id=release_id.strip(), download=bool(download),
-                   retry_failed=bool(retry_failed))
+                   retry_failed=bool(retry_failed), obey_robots=False if override_robots else None)
     try:
         job = request.app.state.jobs.start(pack, "pipeline", actor, options, pipeline_job(pack, options))
     except RuntimeError as exc:

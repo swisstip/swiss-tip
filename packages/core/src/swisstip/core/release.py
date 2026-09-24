@@ -32,7 +32,7 @@ from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from . import RELEASE_SCHEMA_VERSION
+from . import GRAPH_SCHEMA_VERSION, RELEASE_SCHEMA_VERSION
 
 ProvenanceKind = Literal["curated-statement", "source-section", "model-candidate"]
 ReviewStatus = Literal["human-reviewed", "assistant-authored-unreviewed", "automatically-derived-unreviewed",
@@ -146,6 +146,8 @@ class Topic(Strict):
     topic_id: str
     title: str
     description: str
+    graph_nodes: list[str] = Field(default_factory=list, exclude_if=lambda value: not value, description=(
+        "Domain nodes of the release's knowledge graph this topic publishes facts for."))
 
 
 class RequiredUserFact(Strict):
@@ -262,6 +264,69 @@ class Manifest(Strict):
         return self
 
 
+GraphNodeKind = Literal["level", "principle", "domain", "role", "institution", "law", "source", "place", "pitfall"]
+GraphRelation = Literal["rules_set_by", "executed_by", "decided_by", "approved_by", "first_contact", "legal_basis",
+                        "authoritative_source", "published_by", "varies_by", "pitfall", "see_also", "instance", "part_of",
+                        "governed_by"]
+
+
+class GraphNode(Strict):
+    """A thing a caller needs to know about before searching: a level of the state, a principle, a policy domain, an
+    office role, an institution, a law, a source, a place or a pitfall. swisstip.core.graph holds the rules."""
+
+    node_id: str = Field(description="`<kind>.<slug>`, stable once created.")
+    kind: GraphNodeKind
+    label: str
+    names: dict[str, str] = Field(default_factory=dict, exclude_if=lambda value: not value, description=(
+        "The node's name in the languages its sources use, by ISO 639 code; each occurs verbatim in a cited excerpt."))
+    summary: str = Field(description="One or two sentences on what the node is and does, resting on its evidence.")
+    keywords: list[str] = Field(default_factory=list, exclude_if=lambda value: not value, description=(
+        "Search terms in any language the graph's selection matches a question against."))
+    level: InstitutionLevel | None = Field(default=None, exclude_if=absent, description="The tier of the state the node belongs to.")
+    place: str | None = Field(default=None, exclude_if=absent, description=(
+        "Jurisdiction code of a place, or of the place an institution speaks for."))
+    hosts: list[str] = Field(default_factory=list, exclude_if=lambda value: not value, description=(
+        "Web hosts of an institution or a source; a pack links its own institutions to the node through them."))
+    sr_number: str | None = Field(default=None, exclude_if=absent, description="Number in the classified compilation of a law.")
+    evidence_ids: list[str] = Field(default_factory=list, description="The graph evidence the summary rests on.")
+    provenance: Provenance
+
+
+class GraphEdge(Strict):
+    """One claim that links two nodes, in one sentence, with the excerpts it rests on."""
+
+    edge_id: str
+    from_id: str = Field(description="The node the claim is about.")
+    relation: GraphRelation
+    to_id: str
+    statement: str = Field(description="The claim in one sentence, as a caller may pass it on.")
+    place: str | None = Field(default=None, exclude_if=absent, description=(
+        "Where the claim holds; served by containment like a fact: for that place and the places inside it."))
+    evidence_ids: list[str] = Field(default_factory=list)
+    provenance: Provenance
+
+
+class KnowledgeGraph(Strict):
+    """The orientation graph a release carries: compiled from a graph's curation, validated and hashed on its own
+    (`graphs/<graph>/graph.json`), then embedded by the pack build. Its documents, evidence and institutions have
+    the shapes of the release's own, in a namespace of their own (evidence identifiers start with `graph-`)."""
+
+    schema_version: Literal["swiss-tip-graph/v1"] = GRAPH_SCHEMA_VERSION
+    graph_id: str
+    title: str
+    created_at: datetime
+    freshness: Freshness
+    serve: Literal["all", "reviewed"] = Field(default="all", description=(
+        "`reviewed`: the compile left out every node and edge no person confirmed."))
+    review_statuses: dict[str, int] = Field(description="Nodes and edges per review status.")
+    nodes: list[GraphNode] = Field(min_length=1)
+    edges: list[GraphEdge] = Field(default_factory=list)
+    institutions: list[Institution] = Field(default_factory=list)
+    documents: list[SourceDocument] = Field(default_factory=list)
+    evidence: list[EvidenceRecord] = Field(default_factory=list)
+    content_sha256: str = Field(description="SHA-256 over nodes, edges, institutions, documents and evidence.")
+
+
 class Release(Strict):
     manifest: Manifest
     documents: list[SourceDocument]
@@ -273,6 +338,8 @@ class Release(Strict):
                                             description="The institutions the documents name; absent in older releases.")
     place_register: PlaceRegister | None = Field(default=None, exclude_if=absent, description=(
         "The places a caller can name instead of a jurisdiction code; absent in older releases, which accept codes only."))
+    knowledge_graph: KnowledgeGraph | None = Field(default=None, exclude_if=absent, description=(
+        "The orientation graph served by get_knowledge_graph; absent in older releases, which serve four tools."))
 
 
 def sha256_text(text: str) -> str:
@@ -291,6 +358,9 @@ def content_hash(release: Release) -> str:
     # The place register decides which code a named place becomes, and so which facts a request reaches.
     if release.place_register is not None:
         body["place_register"] = release.place_register.model_dump(mode="json")
+    # The graph tells a caller which office and which law to look for; it is content like the facts.
+    if release.knowledge_graph is not None:
+        body["knowledge_graph"] = release.knowledge_graph.model_dump(mode="json")
     return sha256_text(json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")))
 
 

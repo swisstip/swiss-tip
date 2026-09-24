@@ -1,6 +1,6 @@
 # swisstip-mcp-server
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
 The Swiss TIP MCP server: the four tools of
 [docs/architecture/tool-contracts.md](../../docs/architecture/tool-contracts.md)
@@ -46,6 +46,14 @@ The packs of the MVP are published in
 | `--semantic-min-score SCORE` | Minimum semantic cosine similarity; experimental default 0.5 |
 | `--semantic-candidates N` | Semantic candidates before fusion with lexical ranks; default 10 |
 | `--connector URL` | A dataset connector to register (repeatable; default `SWISSTIP_CONNECTORS`, comma-separated): its manifest is read once at startup, every dataset that stands behind a concept of the served release is bound to it, `resolve` then offers the dataset in `lookups` and the fifth tool `lookup` is listed. An unreachable connector is logged, probed again on every `/health` request, and never delays the release's own tools; the health payload lists every connector with its status and the datasets registered and rejected. See [docs/architecture/dataset-connectors.md](../../docs/architecture/dataset-connectors.md) |
+
+## Knowledge graph
+
+A release that carries a knowledge graph gets a fifth tool,
+`get_knowledge_graph`, listed first; the connect-time instructions and every
+other tool's description tell the caller to start each new subject with it and
+search and resolve in the next turn. `/health` names the graph, its hash and
+its review counts. A release without a graph serves the four tools as before.
 
 ## Run from PyPI with uv
 

@@ -1,6 +1,6 @@
 # Knowledge release and curation file
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
 **Status:** implemented in `packages/core` (release
 models, basis labels and validator) and `packages/build` (curation file and
@@ -30,7 +30,7 @@ server runs the same validator once at startup and fails closed.
 
 ## 2. Release file
 
-One JSON object with eight parts. Identifiers are `[A-Za-z0-9][A-Za-z0-9._-]*`.
+One JSON object with nine parts. Identifiers are `[A-Za-z0-9][A-Za-z0-9._-]*`.
 The release is self-contained: every excerpt is stored in the bundle with
 the hashes of the excerpt and of the page text it was cut from, so the
 server and a citation check need no fetched page. The text records of
@@ -46,6 +46,7 @@ the release.
 | `concepts` | `concept_id`, `topic_id`, `label`, `description`, `aliases`, `questions`, `jurisdictions` (sorted jurisdictions of its facts), `required_context`, `context_schema` (field name to `type`, `enum`, `description`), `fact_ids`, optional `required_user_facts` and `decision_rule`, `notes`, and `not_served` (left out when empty, so older releases keep their content hash) |
 | `facts` | `fact_id`, `concept_id`, `statement`, `language`, `jurisdiction`, optional `condition` (field to value), `valid_from`, `valid_through`, `evidence_ids`, `provenance` (with the fact's `basis`, see below) |
 | `evidence` | `evidence_id`, `document_id`, `source_title`, `publisher`, `institution_id`, `url`, `language`, `accessed_on`, `start_offset`, `end_offset` (code points in the record's `content_text`), `original_excerpt`, `excerpt_sha256`, `block_ids`, `content_sha256`, `raw_sha256`, `basis` |
+| `knowledge_graph` | Optional: the compiled orientation graph the curation names (`knowledge_graph: ../../graphs/<graph>/graph.json`), embedded as the graph build wrote it (`swiss-tip-graph/v1`: nodes, edges, and its own institutions, documents and evidence, whose identifiers start with `graph-`), with a content hash of its own; see [knowledge-graph.md](knowledge-graph.md). It enters the release's content hash when present, and the topics then carry `graph_nodes`, the domain nodes they publish facts for |
 | `place_register` | The places a caller can name instead of a jurisdiction code: `title`, `publisher`, `url`, `accessed_on` and `raw_sha256` of the official register it was read from, `generic_words`, and `places`, each with `code`, `name` (the official name) and optional `aliases`; see below |
 
 A fact has one jurisdiction; a concept may therefore span several (the

@@ -1,6 +1,6 @@
 # swisstip-core
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
 The knowledge release format of Swiss TIP: Pydantic models for the release
 file a pack publishes (`swiss-tip-release/v1`) and the validator the build
@@ -37,3 +37,13 @@ lookup). The caller-facing `lookup` tool and its gap dimensions are in
 `swisstip.core.contracts`, carried by the schema bundle next to the four
 tools. Design and status:
 [docs/architecture/dataset-connectors.md](../../docs/architecture/dataset-connectors.md).
+
+## Knowledge graph
+
+`swisstip.core.release` holds the graph's models (`GraphNode`, `GraphEdge`,
+`KnowledgeGraph`) and the release's optional `knowledge_graph` part;
+`swisstip.core.graph` holds the relation vocabulary with its endpoint kinds, the
+graph's content hash and `validate_graph`, which the compiler and the server
+both run and which the release validator applies to an embedded graph. The
+tool contract `get_knowledge_graph` is in `swisstip.core.contracts`
+(`swiss-tip/v5`). Design: [knowledge-graph.md](../../docs/architecture/knowledge-graph.md).

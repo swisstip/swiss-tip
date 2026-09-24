@@ -11,10 +11,12 @@ from swisstip.core.contracts import (CONNECTOR_TOOL_CONTRACTS, TOOL_CONTRACTS, T
 
 class LookupContractTests(unittest.TestCase):
     def test_lookup_is_in_the_bundle_but_not_in_the_served_tool_table(self):
-        self.assertEqual(list(TOOL_CONTRACTS), ["get_coverage", "search", "resolve", "get_evidence"])
+        # get_knowledge_graph leads the table; the server lists it only for a release that carries a graph.
+        self.assertEqual(list(TOOL_CONTRACTS), ["get_knowledge_graph", "get_coverage", "search", "resolve", "get_evidence"])
         self.assertEqual(list(CONNECTOR_TOOL_CONTRACTS), ["lookup"])
         bundle = schema_bundle()
-        self.assertEqual(list(bundle["tools"]), ["get_coverage", "search", "resolve", "get_evidence", "lookup"])
+        self.assertEqual(list(bundle["tools"]),
+                         ["get_knowledge_graph", "get_coverage", "search", "resolve", "get_evidence", "lookup"])
         self.assertEqual(bundle["tools"]["lookup"]["description"], TOOL_DESCRIPTIONS["lookup"])
         self.assertEqual(bundle["tools"]["lookup"]["input"]["properties"]["limit"]["default"], 3)
 

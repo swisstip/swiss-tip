@@ -40,7 +40,7 @@ def target_is_ready(target: dict) -> bool:
 
 
 def build_plan(catalogue: Path, markdown: Path | None, *, scan_set: str | None, source_ids: list[str] | None,
-               workers: int) -> dict:
+               workers: int, respect_robots: bool = True) -> dict:
     data = load_source_catalog(catalogue)
     entries = select_sources(data, scan_set=scan_set, source_ids=source_ids)
     targets = catalogue_targets(catalogue, entries, markdown)
@@ -63,7 +63,8 @@ def build_plan(catalogue: Path, markdown: Path | None, *, scan_set: str | None, 
                           "selected_source_count": len(entries)},
             "targets": targets,
             "scope": "Exact catalogue URL inventory, depth zero; no recursive crawling",
-            "workers": workers, "robots_policy": "required; fail closed",
+            "workers": workers,
+            "robots_policy": "required; fail closed" if respect_robots else "overridden by operator (--no-obey-robots)",
             "max_response_bytes": MAX_RESPONSE_BYTES}
 
 
@@ -81,6 +82,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="also download registry seeds whose scan_status is not 'ready'")
     parser.add_argument("--workers", type=int, choices=range(1, 5), default=4, help="host groups in parallel")
     parser.add_argument("--transport", choices=("urllib", "curl"), default="urllib")
+    parser.add_argument("--obey-robots", action=argparse.BooleanOptionalAction, default=True,
+                        help="respect robots.txt and its crawl delays, failing closed when the policy cannot be read "
+                             "(default); --no-obey-robots overrides it for a host you are authorised to access, and "
+                             "records robots_status 'overridden' in the run")
     plugins = parser.add_mutually_exclusive_group()
     plugins.add_argument("--source-plugin", action="append", help="enabled source plugin; repeatable; default: fedlex")
     plugins.add_argument("--no-source-plugins", action="store_true", help="only snapshot listed URLs")
@@ -98,7 +103,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         try:
             plan = build_plan(args.catalogue, args.markdown, scan_set=args.scan_set, source_ids=args.source,
-                              workers=args.workers)
+                              workers=args.workers, respect_robots=args.obey_robots)
         except (ValueError, KeyError, TypeError, OSError) as exc:
             parser.error(str(exc))
         write_json(plan_path, plan)
@@ -141,10 +146,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 time.sleep(max(2, result.get("report", {}).get("effective_delay_seconds", 2)))
             if plan.get("network_budget"):
                 reservation_id, limits = reserve_network_attempt(args.output, plan, target)
-                result = snapshot(target, args.output, transport=args.transport, limits=limits)
+                result = snapshot(target, args.output, transport=args.transport, limits=limits,
+                                  respect_robots=args.obey_robots)
                 complete_network_attempt(args.output, plan, reservation_id, result)
             else:
-                result = snapshot(target, args.output, transport=args.transport)
+                result = snapshot(target, args.output, transport=args.transport, respect_robots=args.obey_robots)
             with PRINT_LOCK:
                 print(f"{result['status']}: {target['url']}", flush=True)
 
@@ -163,7 +169,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         from .plugin_downloads import run_source_plugins
 
         plugin_reports = run_source_plugins(args.output, registry, transport=args.transport,
-                                            retry_failed=args.retry_failed)
+                                            retry_failed=args.retry_failed, respect_robots=args.obey_robots)
         result = summary(args.output, plan)
     print(json.dumps({key: result[key] for key in ("target_count", "counts", "saved_bytes")}), flush=True)
     return int(result["counts"].get("saved", 0) != result["target_count"] or any(

@@ -30,9 +30,13 @@ exact excerpt of an official page, with the publisher, the URL, the access
 date and the hashes of the excerpt and of the page it was cut from. Four MCP
 tools let a calling assistant discover what is covered, find the concepts
 that fit a question, resolve them for a stated place, date and situation,
-and read the original excerpts. The server never composes an answer, and
-when a question falls outside what it publishes it says so by name instead
-of guessing.
+and read the original excerpts. A fifth tool, called first for every new
+subject, gives the orientation of a knowledge graph of Switzerland: which
+level of the state sets the rules, who carries them out and decides, the
+office at the user's place, the laws and the authoritative source, and
+whether the answer depends on the canton or the municipality. The server
+never composes an answer, and when a question falls outside what it
+publishes it says so by name instead of guessing.
 
 The product is two things that ship together: the **server** that answers
 from a release, and the **pipeline** that turns official pages into a
@@ -71,9 +75,9 @@ leaves the assistant free to phrase, translate and shorten.
    context is reported as a typed, named gap rather than guessed.
 3. **Honest limits.** Out-of-coverage and stale results carry a status the
    caller can act on. One correct "not covered" beats a plausible guess.
-4. **Few, small calls.** A typical question is answered in two tool calls
-   with responses of a few kilobytes; discovery pages stay small enough to
-   be read whole.
+4. **Few, small calls.** A typical question is answered in three tool calls
+   (orientation, then search and resolve) with responses of a few
+   kilobytes; discovery pages stay small enough to be read whole.
 5. **Reproducible and offline.** A release is a single hashed file. Default
    serving needs no model, no credentials and no network; semantic search is
    an optional local addition. Refreshing sources is a separate, explicit
@@ -119,6 +123,7 @@ A release is one versioned JSON bundle, self-contained and hashed:
 | `facts` | Short statements with a jurisdiction, optional situation condition and validity window, the evidence they rest on, and provenance |
 | `evidence` | The excerpts: text, offsets in the source record, block identifiers, hashes, publisher, language, access date, and basis |
 | `place_register` | The country, its cantons and its municipalities with official names and accepted aliases, so a caller can name a place instead of a code |
+| `knowledge_graph` | Optional: the compiled orientation graph (levels, principles, domains, roles, institutions, laws, sources, places, pitfalls, and cited one-sentence edges between them), built and reviewed beside the packs and embedded by the pack build |
 
 A fact carries one jurisdiction; a concept may span several. Facts are
 served by containment: a federal fact answers for every canton and
@@ -167,13 +172,14 @@ the publisher's level never does.
 
 ### 4.3 The tools
 
-Four read-only tools, annotated as such, strict about unknown fields, and
+Five read-only tools, annotated as such, strict about unknown fields, and
 returning every result both as structured content and as the same JSON in
 text. Every result names the release it was answered from and ends with the
 limitations the caller should pass on.
 
 | Tool | Purpose |
 | --- | --- |
+| `get_knowledge_graph` | Orientation before retrieval, listed first when the release carries a graph. For the question and the user's place: the matched domains, who sets the rules and who carries them out and decides, the office at the user's place with its official names, the laws and their source, the pitfalls, whether the answer depends on the canton or municipality and what to ask, what to search for next, and which topics publish facts for it. Every edge is a cited claim with its review status; the graph is orientation, not evidence |
 | `get_coverage` | Walk the catalogue. The root page returns the scope statement, the out-of-scope list and what to say outside it, the jurisdictions, the evidence languages, the languages to write queries in, the freshness policy and the topics - small enough that one call can settle whether a question is in scope. A topic page lists its concepts |
 | `search` | Free text to concepts. Returns a short ranked list with each hit's context schema, a verdict on how well the question reached the release, and guidance on what to do next |
 | `resolve` | Up to five concepts in one call, for one place, one date and one context. Returns the applicable facts, one citation per cited page, a status per concept and named gaps, plus any user facts and decision rule the concept publishes |
@@ -271,9 +277,12 @@ not an error, so one bad identifier does not fail a call of five.
 
 ### 4.4 Call pattern and efficiency
 
-The intended sequence for a question in scope is two calls: `search` with
-the question and the user's place, then `resolve` with the selected
-concepts, the place, the date and the derived context. `get_coverage` is for
+For a new subject the caller first reads the orientation: `get_knowledge_graph`
+with the question and the user's place. In the next turn the intended
+sequence is two calls: `search` with the question (or the graph's
+`next_search`) and the user's place, then `resolve` with the selected
+concepts, the place, the date and the derived context. A follow-up on the same
+subject reuses the orientation. `get_coverage` is for
 the case where the assistant is unsure the question is in scope at all, and
 `get_evidence` only when the user wants a verbatim quote; the tool
 descriptions say so. Requirements that keep this true:
@@ -284,7 +293,10 @@ descriptions say so. Requirements that keep this true:
 - one `resolve` carries up to five concepts, so one question needs one
   resolution call rather than one per level of government;
 - every hit carries what the following `resolve` needs;
-- every result tells the caller when to stop.
+- every result tells the caller when to stop;
+- the orientation stays within 8 KB and says, when no place was given,
+  whether the answer depends on the canton or the municipality and what to
+  ask, instead of picking a place.
 
 ## 5. The knowledge pipeline
 
@@ -316,6 +328,15 @@ Three routes write curation, all producing the same file: a person or an
 assistant reading the reading views, a model proposing candidates that are
 packaged as reviewable candidate facts, and the review console. Whichever
 route wrote a statement is recorded as its provenance.
+
+The knowledge graph goes through the same stages beside the packs, in
+`graphs/<graph>/` of the packs repository: its own catalogue (the
+constitution, federalism overviews), acquire and extract, Derive from packs
+(places, institutions, laws, sources and their links, deterministic and cited
+from the packs' own excerpts), cited nodes and edges written by reader agents
+and merged deterministically, orientation checks, compile and validate, review
+in the admin console, and embedding by the pack build. It is refreshed like a
+pack, from the admin console.
 
 ## 6. Quality gates
 
@@ -398,9 +419,10 @@ were produced on, and feed gate G5.
 - **Hosting.** A single infrastructure template stands the server up behind
   HTTPS for evaluation or internal use.
 - **Client setup.** The server prints ready-made client configurations and
-  sends its caller rules - scope statement, query languages, the two-call
-  pattern, the context vocabulary - as MCP instructions at connect time, for
-  clients that pass them to the model.
+  sends its caller rules - scope statement, query languages, the call
+  pattern (orientation first, then search and resolve), the context
+  vocabulary - as MCP instructions at connect time, for clients that pass
+  them to the model.
 - **Refresh.** Sources are re-fetched deliberately, not continuously: a new
   snapshot is a new run, a new build and a new release identifier, through
   the same acceptance and readiness gates. The freshness policy makes an
@@ -415,10 +437,10 @@ were produced on, and feed gate G5.
 | `mcp-server` | The MCP application: tool registration, transports, health, logging, readiness enforcement |
 | `ingestion` | Catalogue planning, the bounded and polite crawler, the place-register importer |
 | `extraction` | Pages to labelled text blocks with offsets, hashes and reading views |
-| `build` | Curation file to validated release: citation resolution and relocation, source-term verification, suite loading |
+| `build` | Curation file to validated release: citation resolution and relocation, source-term verification, suite loading; the knowledge graph's compiler, Derive from packs, merge and embed |
 | `concepts` | Model-proposed concept candidates with structural validation, review and basis classification |
 | `knowledge-builder` | One command that runs the pipeline stages, skips unchanged ones and writes the stage reports |
-| `admin-console` | The curator's and reviewer's local application: packs, sources, runs, reading views, curation workbench, review queue, release and readiness, tool sandbox |
+| `admin-console` | The curator's and reviewer's local application: packs, sources, runs, reading views, curation workbench, review queue, release and readiness, tool sandbox, and the knowledge graph (explorer, edit, review, Derive, compile, refresh) |
 
 The serving side imports nothing from the build side. Code and knowledge
 live in separate repositories: the code carries no assumption about any
@@ -453,6 +475,11 @@ review, and every release states in absolute numbers how much of it has been
 reviewed.
 
 ## 12. Extensibility
+
+The knowledge graph extends the same way: a new domain, a canton's offices or
+a new source is data, added by the `build-knowledge-graph` skill or in the
+admin console, reviewed and compiled; a new kind of relation is a code
+change. Its design is [knowledge-graph.md](../architecture/knowledge-graph.md).
 
 The format and the tools carry what a new pack needs without code changes:
 new topics, further cantons and municipalities, additional evidence

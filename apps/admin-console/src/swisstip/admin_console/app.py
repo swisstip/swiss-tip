@@ -164,7 +164,8 @@ def get_pack(request: Request, pack: str) -> PackData:
 def create_app(root: Path, *, read_only: bool = False, actor: str = "operator",
                run_dirs: dict[str, Path] | None = None, server_log: Path | None = None,
                auth_file: Path | None = None) -> FastAPI:
-    from .screens import documents, operations, packs, release, review, runs, sandbox, sources, workbench, workflow
+    from .graph_data import GraphConsole
+    from .screens import documents, graph, operations, packs, release, review, runs, sandbox, sources, workbench, workflow
 
     console = Console(root, read_only=read_only, actor=actor, run_dirs=run_dirs, server_log=server_log)
     users = read_users(auth_file) if auth_file else {}
@@ -174,12 +175,15 @@ def create_app(root: Path, *, read_only: bool = False, actor: str = "operator",
     app.state.console = console
     app.state.jobs = JobRunner()
     app.state.users = users
+    app.state.graphs = GraphConsole(root)
     if not users:
         app.add_middleware(TrustedHostMiddleware,
                            allowed_hosts=["localhost", "127.0.0.1", "[::1]", "testserver"])
     app.mount("/static", StaticFiles(directory=str(PACKAGE / "static")), name="static")
     for name in console.pack_names():
         app.state.jobs.mark_interrupted(console.pack(name))
+    for name in app.state.graphs.names():
+        app.state.jobs.mark_interrupted(app.state.graphs.graph(name))
 
     @app.exception_handler(WriteRefused)
     async def refused(request: Request, exc: WriteRefused):
@@ -201,7 +205,7 @@ def create_app(root: Path, *, read_only: bool = False, actor: str = "operator",
         return dict(status="ok", name=CONSOLE_NAME, version=CONSOLE_VERSION, root=str(console.root),
                     mode="read-only" if read_only else "edit", packs=console.pack_names())
 
-    for module in (packs, workflow, sources, runs, documents, workbench, review, release, sandbox, operations):
+    for module in (packs, workflow, sources, runs, documents, workbench, review, release, sandbox, operations, graph):
         app.include_router(module.read_router)
         if not read_only and hasattr(module, "write_router"):
             app.include_router(module.write_router)

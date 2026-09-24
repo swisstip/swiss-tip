@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Graph review - Swiss TIP admin console{% endblock %}
+{% block content %}
+{% include "graph/_nav.html" %}
+<h1>Review queue</h1>
+<p class="small muted">{{ total }} unreviewed nodes and edges{% if total > cards|length %}, first {{ cards|length }} shown{% endif %}.
+  Open an item to read its excerpts and confirm, flag or reject it; the keys y, f, n and j work there.</p>
+<form method="get" class="small">
+  <label>status <select name="status"><option value="">any unreviewed</option>
+    {% for s in ['assistant-authored-unreviewed', 'automatically-derived-unreviewed', 'model-candidate-automated-review'] %}
+    <option {{ 'selected' if status == s }}>{{ s }}</option>{% endfor %}</select></label>
+  <label>kind <input name="kind" value="{{ kind }}" placeholder="domain, edge:executed_by"></label> <button>Filter</button>
+</form>
+<form method="post" action="/graphs/{{ graph.graph }}/review/bulk" id="bulk-form">
+  <input type="hidden" name="sha256" value="{{ sha256 }}">
+  <input type="hidden" name="filter_status" value="{{ status }}">
+  <input type="hidden" name="filter_kind" value="{{ kind }}">
+  {% if not read_only and cards %}
+  <p class="small">
+    <button type="button" id="select-all">Select all shown ({{ cards | length }})</button>
+    <button type="button" id="select-none">Select none</button>
+    <span id="selected-count" class="muted">0 selected</span>
+    {% if total > cards | length %}
+    <label style="display:inline"><input type="checkbox" name="all_matching" value="1" id="all-matching">
+      apply to every one of the {{ total }} items matching the filter, not only those shown</label>{% endif %}
+  </p>{% endif %}
+  <div class="scroll"><table><thead><tr><th><input type="checkbox" id="select-header" aria-label="select all shown"></th><th>item</th><th>kind</th><th>summary or statement</th><th>author</th></tr></thead><tbody>
+  {% for card in cards %}<tr><td><input type="checkbox" name="ids" value="{{ card.id }}" aria-label="select {{ card.id }}"></td>
+    <td class="mono small"><a href="/graphs/{{ graph.graph }}/items/{{ card.id }}">{{ card.label }}</a></td>
+    <td>{{ card.kind }}</td><td>{{ card.text }}</td><td class="small">{{ card.author }}</td></tr>
+  {% else %}<tr><td colspan="5" class="muted">nothing left to review</td></tr>{% endfor %}
+  </tbody></table></div>
+  {% if not read_only and cards %}
+  <p><label>note <input name="note"></label>
+    <button name="action" value="confirm">Confirm selected</button>
+    <button name="action" value="flag">Flag selected</button>
+    <button name="action" value="reject">Reject selected</button>
+    <span class="small muted">a bulk confirmation is noted as such on every item</span></p>{% endif %}
+</form>
+<script>
+(function () {
+  const boxes = () => [...document.querySelectorAll('#bulk-form input[name="ids"]')];
+  const count = document.getElementById("selected-count"), header = document.getElementById("select-header");
+  function update() {
+    const ticked = boxes().filter(b => b.checked).length, all = document.getElementById("all-matching");
+    if (count) count.textContent = all && all.checked ? "every matching item selected" : `${ticked} selected`;
+    if (header) { header.checked = ticked > 0 && ticked === boxes().length; header.indeterminate = ticked > 0 && ticked < boxes().length; }
+  }
+  function set(state) { boxes().forEach(b => { b.checked = state; }); update(); }
+  const all = document.getElementById("select-all"), none = document.getElementById("select-none");
+  if (all) all.onclick = () => set(true);
+  if (none) none.onclick = () => { set(false); const m = document.getElementById("all-matching"); if (m) { m.checked = false; update(); } };
+  if (header) header.onchange = () => set(header.checked);
+  document.getElementById("bulk-form").addEventListener("change", update);
+  update();
+})();
+</script>
+{% endblock %}

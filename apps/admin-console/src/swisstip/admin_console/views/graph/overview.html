@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Graph {{ graph.graph }} - Swiss TIP admin console{% endblock %}
+{% block content %}
+{% include "graph/_nav.html" %}
+<h1>Knowledge graph {{ graph.graph }}</h1>
+{% if card.curation_error %}<p class="alert">graph.yaml does not validate: {{ card.curation_error }}</p>{% endif %}
+<div class="cards">
+  <section class="card">
+    <h2 style="margin-top:0">Curation (graph.yaml)</h2>
+    <p>{{ card.nodes }} nodes, {{ card.edges }} edges, {{ card.reviewed }} human-reviewed</p>
+    {{ m.stacked(card.review, card.nodes + card.edges) }}
+    <p><a href="/graphs/{{ graph.graph }}/explore">Explore the graph</a> -
+       <a href="/graphs/{{ graph.graph }}/review">Review queue</a> -
+       <a href="/graphs/{{ graph.graph }}/items">All items</a></p>
+  </section>
+  <section class="card">
+    <h2 style="margin-top:0">Compiled (graph.json)</h2>
+    {% if card.compiled %}
+      <p>{{ card.compiled.nodes }} nodes, {{ card.compiled.edges }} edges, compiled {{ card.compiled.created_at }}
+        {% if not card.compiled_is_current %}<span class="badge warn">graph.yaml changed since</span>{% endif %}</p>
+      <p class="small">snapshot {{ card.compiled.snapshot_date }}, stale from {{ card.compiled.stale_from }},
+        <span class="mono">{{ card.compiled.content_sha256[:16] }}</span></p>
+      <p class="small">dropped at the last compile: {{ card.dropped }}</p>
+      {% if card.checks %}<p class="small">orientation checks: {{ card.checks.passed }} of {{ card.checks.cases }} passed
+        {% if card.checks.failed %}<span class="badge bad">failed: {{ card.checks.failed | join(', ') }}</span>{% endif %}</p>{% endif %}
+    {% else %}<p class="muted">not compiled yet</p>{% endif %}
+  </section>
+</div>
+
+{% if not read_only %}
+<section class="card">
+  <h2 style="margin-top:0">Actions</h2>
+  {% if job %}<p class="badge warn">job {{ job.kind }} running: <a href="/graphs/{{ graph.graph }}/jobs/{{ job.job_id }}">log</a></p>{% endif %}
+  <form method="post" action="/graphs/{{ graph.graph }}/derive" style="display:inline">
+    <button type="submit">Preview Derive from packs</button>
+  </form>
+  <form method="post" action="/graphs/{{ graph.graph }}/compile" style="display:inline">
+    <button type="submit" {{ 'disabled' if job }}>Compile and check</button>
+  </form>
+  <details style="margin-top:10px">
+    <summary><strong>Refresh</strong> - download the graph's sources again, relocate citations, compile and check</summary>
+    <form method="post" action="/graphs/{{ graph.graph }}/refresh">
+      <label><input type="checkbox" name="override_robots" value="1"> override robots.txt for this run (only for hosts
+        you are authorised to access; recorded in the run report; default:
+        {{ 'obey' if robots_default else 'override (SWISSTIP_OBEY_ROBOTS)' }})</label><br>
+      <label for="confirm_graph">Type the graph name to confirm</label>
+      <input type="text" id="confirm_graph" name="confirm_graph" placeholder="{{ graph.graph }}">
+      <button type="submit" {{ 'disabled' if job }}>Refresh</button>
+    </form>
+  </details>
+</section>
+{% endif %}
+
+{% if derive %}
+<section class="card">
+  <h2 style="margin-top:0">Derive preview</h2>
+  <p>{{ derive.added | length }} to add, {{ derive.updated | length }} to update,
+     {{ derive.kept | length }} kept because a person or agent owns them, {{ derive.stale | length }} no longer derived.</p>
+  {% for note in derive.notes %}<p class="small alert">{{ note }}</p>{% endfor %}
+  <details><summary>items to add or update</summary>
+    <pre>{{ (derive.added + derive.updated) | join('\n') }}</pre></details>
+  {% if not read_only and (derive.added or derive.updated) %}
+  <form method="post" action="/graphs/{{ graph.graph }}/derive"><input type="hidden" name="apply" value="1">
+    <button type="submit">Apply</button></form>{% endif %}
+</section>
+{% endif %}
+
+<h2>Jobs</h2>
+<table><thead><tr><th>started</th><th>kind</th><th>actor</th><th>status</th><th>log</th></tr></thead><tbody>
+{% for entry in jobs %}<tr><td class="mono">{{ entry.started_at[:19] }}</td><td>{{ entry.kind }}</td><td>{{ entry.actor }}</td>
+  <td>{{ entry.status }}{% if entry.error %}: {{ entry.error }}{% endif %}</td>
+  <td><a href="/graphs/{{ graph.graph }}/jobs/{{ entry.job_id }}">log</a></td></tr>
+{% else %}<tr><td colspan="5" class="muted">no job yet</td></tr>{% endfor %}
+</tbody></table>
+
+<h2>Audit</h2>
+<table><thead><tr><th>at</th><th>actor</th><th>reason</th></tr></thead><tbody>
+{% for entry in audit %}<tr><td class="mono">{{ entry.at[:19] }}</td><td>{{ entry.actor }}</td><td>{{ entry.reason }}</td></tr>
+{% else %}<tr><td colspan="3" class="muted">no write yet</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

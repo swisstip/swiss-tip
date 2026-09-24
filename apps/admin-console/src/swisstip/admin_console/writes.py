@@ -20,10 +20,12 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from swisstip.build.curation import Curation, load_curation, save_curation
+from swisstip.build.graph_embed import graph_for
 from swisstip.build.places import PlaceFileError, place_register_for
 from swisstip.build.release_build import BuildError, build_release
 from swisstip.builder.pipeline import next_release_id
 from swisstip.builder.autopilot.store import PackWriteLock
+from swisstip.core.graph import GraphInvalid
 from swisstip.ingestion.catalog import save_source_catalog, validate_source_catalog
 
 from .checks import ChecksFile, save_checks
@@ -121,8 +123,9 @@ def dry_build(pack: PackData, curation: Curation, *, allow_drop: bool = False) -
     try:
         # With the place register the curation names: a fact for a jurisdiction the register does not list fails here.
         _, report = build_release(curation, pack.text_dir, release_id,
-                                  place_register=place_register_for(curation, pack.curation_path))
-    except (BuildError, PlaceFileError) as exc:
+                                  place_register=place_register_for(curation, pack.curation_path),
+                                  knowledge_graph=graph_for(curation, pack.curation_path))
+    except (BuildError, PlaceFileError, GraphInvalid) as exc:
         raise WriteRefused(f"the build would fail: {exc}") from exc
     if report["dropped"] and not allow_drop:
         names = ", ".join(entry.get("fact_id") or entry.get("concept_id", "?") for entry in report["dropped"][:5])

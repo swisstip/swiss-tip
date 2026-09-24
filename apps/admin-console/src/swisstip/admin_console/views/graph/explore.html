@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}Explore graph {{ graph.graph }} - Swiss TIP admin console{% endblock %}
+{% block content %}
+{% include "graph/_nav.html" %}
+<h1>Explore</h1>
+<form id="search-form" class="filters small" onsubmit="return false" role="search">
+  <label for="f-search">search <input type="search" id="f-search" size="40"
+    placeholder="label, name or id - e.g. Einwohnerkontrolle, migration, law.aig" autocomplete="off"></label>
+  <span id="f-matches" class="muted"></span>
+</form>
+<form id="filters" class="filters small" onsubmit="return false">
+  <label>view <select id="f-mode">
+    <option value="map">domain map (domains, roles, levels, pitfalls)</option>
+    <option value="focus">around one node</option>
+    <option value="all">whole graph (slow, dense)</option></select></label>
+  <label>node <input id="f-focus" list="f-nodes" size="34" placeholder="domain.registration"
+                     value="{{ request.query_params.get('focus', '') }}"></label>
+  <datalist id="f-nodes"></datalist>
+  <label>place <input id="f-place" size="10" placeholder="CH-ZH"
+                      title="Keep only the offices and links that hold for this place (and the places above it)"></label>
+  <label>status <select id="f-status"><option value="">any</option><option>human-reviewed</option>
+    <option>assistant-authored-unreviewed</option><option>automatically-derived-unreviewed</option></select></label>
+  <label><input type="checkbox" id="f-derived" checked> hide pack-derived links</label>
+  <button type="button" id="f-apply">Show</button>
+  <button type="button" id="f-fit">Fit</button>
+</form>
+<p class="small muted" id="f-info"></p>
+<div class="split wide" style="grid-template-columns: minmax(0, 1fr) 380px">
+  <div id="cy" style="height: 74vh; background: var(--paper); border: 1px solid var(--line)" role="img"
+       aria-label="Node-link diagram of the knowledge graph; the Items screen lists the same data as a table"></div>
+  <aside class="card" id="detail" aria-live="polite" style="max-height: 74vh; overflow: auto">
+    <p class="muted">Click a domain on the map to see what surrounds it; click again on any node to open its
+      details here.</p>
+    <h3>Legend</h3>
+    <p class="small">Colour: <span style="color:#b3261e">&#9632; federal</span>, <span style="color:#1f6e73">&#9632; cantonal</span>,
+      <span style="color:#a8661a">&#9632; municipal</span>, <span style="color:#44505e">&#9632; no level</span>.<br>
+      Shape: rounded box domain, ellipse role, box institution, tag law, hexagon source, diamond place, star level,
+      octagon principle, triangle pitfall.<br>
+      Outline: dashed unreviewed, solid reviewed. Edge labels show on hover; hovering a node fades the rest.<br>
+      The map leaves out related-domain links and pitfalls; they show around a node, as do the offices for a
+      place (set <em>place</em>, for example CH-ZH-261, to keep one office per role).</p>
+  </aside>
+</div>
+<p class="small muted">The <a href="/graphs/{{ graph.graph }}/items">Items</a> screen lists the same data as a table.</p>
+<script src="/static/cytoscape.min.js"></script>
+<script>
+(function () {
+  const base = "/graphs/{{ graph.graph }}";
+  const colour = {federal: "#b3261e", cantonal: "#1f6e73", municipal: "#a8661a"};
+  const shape = {domain: "round-rectangle", role: "ellipse", institution: "rectangle", law: "tag", source: "hexagon",
+                 place: "diamond", level: "star", principle: "octagon", pitfall: "triangle"};
+  const size = {domain: 34, role: 26, level: 30, pitfall: 22};
+  const MAP_KINDS = new Set(["domain", "role", "level"]);
+  // The map shows who does what; related domains and pitfalls show around a node.
+  const MAP_HIDDEN = new Set(["see_also", "pitfall"]);
+  // Links through these nodes are shown but not followed: the federal level or a law touches everything.
+  const EXPANDS = new Set(["domain", "role", "pitfall"]);
+  const DERIVED = new Set(["published_by", "legal_basis", "part_of", "authoritative_source"]);
+  let data = {nodes: [], edges: []}, byId = {}, cy, lastFocus = null;
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  const short = s => s.length > 34 ? s.slice(0, 32) + "..." : s;
+  const value = id => document.getElementById(id).value.trim();
+
+  function placeOk(place, wanted) {
+    return !wanted || !place || place.startsWith(wanted) || wanted.startsWith(place);
+  }
+  function edgesInScope() {
+    const wanted = value("f-place"), status = value("f-status"), hide = document.getElementById("f-derived").checked;
+    return data.edges.filter(e => !(hide && DERIVED.has(e.relation)) && placeOk(e.place, wanted)
+      && (!status || e.status === status));
+  }
+  function visible(mode, focus) {
+    const edges = edgesInScope(), wanted = value("f-place"), status = value("f-status");
+    let ids;
+    if (mode === "map") {
+      ids = new Set(data.nodes.filter(n => MAP_KINDS.has(n.kind)).map(n => n.id));
+    } else if (mode === "focus" && byId[focus]) {
+      ids = new Set([focus]);
+      let frontier = [focus];
+      for (let depth = 0; depth < 2 && frontier.length; depth++) {
+        const next = [];
+        for (const id of frontier) {
+          if (depth > 0 && !EXPANDS.has(byId[id].kind)) continue;
+          for (const e of edges) {
+            const other = e.source === id ? e.target : e.target === id ? e.source : null;
+            if (other && !ids.has(other)) { ids.add(other); next.push(other); }
+          }
+        }
+        // The second ring only follows roles to the offices that play them.
+        frontier = next.filter(id => byId[id].kind === "role");
+      }
+    } else {
+      ids = new Set(data.nodes.map(n => n.id));
+    }
+    const nodes = data.nodes.filter(n => ids.has(n.id) && placeOk(n.place, wanted)
+      && (!status || n.status === status || n.id === focus));
+    const kept = new Set(nodes.map(n => n.id));
+    let shownEdges = edges.filter(e => kept.has(e.source) && kept.has(e.target));
+    if (mode === "map") shownEdges = shownEdges.filter(e => !MAP_HIDDEN.has(e.relation));
+    // One line per pair of nodes, labelled with every relation between them.
+    const pairs = new Map();
+    for (const e of shownEdges) {
+      const key = e.source + "|" + e.target;
+      if (pairs.has(key)) { const p = pairs.get(key); if (!p.relations.includes(e.relation)) p.relations.push(e.relation); }
+      else pairs.set(key, {...e, relations: [e.relation]});
+    }
+    return {nodes, edges: [...pairs.values()]};
+  }
+  function draw(mode, focus) {
+    mode = mode || value("f-mode");
+    focus = focus || value("f-focus");
+    const shown = visible(mode, focus);
+    document.getElementById("f-info").textContent =
+      `${shown.nodes.length} nodes, ${shown.edges.length} edges` + (mode === "focus" && focus ? ` around ${focus}` : "")
+      + (mode === "all" ? " - the whole graph is dense; use the place and status filters or a focus" : "");
+    const elements = [
+      ...shown.nodes.map(n => ({data: {id: n.id, label: short(n.label), kind: n.kind, level: n.level || "", status: n.status,
+                                       focus: n.id === focus ? 1 : 0}})),
+      ...shown.edges.map(e => ({data: {id: e.id, source: e.source, target: e.target, label: e.relations.join(", "), status: e.status}}))];
+    if (cy) cy.destroy();
+    const root = mode === "focus" && byId[focus];
+    cy = cytoscape({
+      container: document.getElementById("cy"), elements, wheelSensitivity: 0.25, minZoom: 0.2, maxZoom: 3,
+      layout: root ? {name: "concentric", animate: false, minNodeSpacing: 28, spacingFactor: 1.1,
+                      concentric: node => node.data("focus") ? 3 : (node.data("kind") === "role" || node.data("kind") === "domain" ? 2 : 1),
+                      levelWidth: () => 1}
+                   : {name: "cose", animate: false, nodeRepulsion: () => 60000, idealEdgeLength: () => 120,
+                      nodeOverlap: 40, componentSpacing: 120, gravity: 0.4, numIter: 2000, randomize: false},
+      style: [
+        {selector: "node", style: {
+          "label": "data(label)", "font-size": 11, "text-wrap": "wrap", "text-max-width": 120, "color": "#14181d",
+          "text-valign": "bottom", "text-margin-y": 4, "text-background-color": "#ffffff", "text-background-opacity": 0.85,
+          "text-background-padding": 2, "min-zoomed-font-size": 7,
+          "background-color": ele => colour[ele.data("level")] || "#44505e", "shape": ele => shape[ele.data("kind")] || "ellipse",
+          "width": ele => size[ele.data("kind")] || 18, "height": ele => size[ele.data("kind")] || 18,
+          "border-width": 2, "border-color": "#14181d",
+          "border-style": ele => ele.data("status") === "human-reviewed" ? "solid" : "dashed"}},
+        {selector: "node[focus = 1]", style: {"width": 44, "height": 44, "border-width": 4, "font-weight": 700}},
+        {selector: "edge", style: {
+          "curve-style": "bezier", "target-arrow-shape": "triangle", "arrow-scale": 0.8, "width": 1.2,
+          "line-color": "#b7bec6", "target-arrow-color": "#b7bec6", "label": "",
+          "line-style": ele => ele.data("status") === "human-reviewed" ? "solid" : "dashed"}},
+        {selector: "edge.hover, edge:selected", style: {
+          "label": "data(label)", "font-size": 10, "color": "#17457a", "text-background-color": "#ffffff",
+          "text-background-opacity": 0.9, "line-color": "#17457a", "target-arrow-color": "#17457a", "width": 2.5}},
+        {selector: "node.faded, edge.faded", style: {"opacity": 0.15}},
+        {selector: "node.dim", style: {"opacity": 0.35}},
+        {selector: "edge.dim", style: {"opacity": 0.2}},
+        {selector: "node.match", style: {"opacity": 1, "overlay-color": "#f2c200", "overlay-opacity": 0.35,
+          "overlay-padding": 6, "border-color": "#b38f00", "border-width": 3, "font-weight": 700, "z-index": 10}},
+        {selector: "node:selected", style: {"border-width": 4, "border-color": "#17457a"}}]});
+    cy.on("mouseover", "edge", ev => ev.target.addClass("hover"));
+    cy.on("mouseout", "edge", ev => ev.target.removeClass("hover"));
+    cy.on("mouseover", "node", ev => {
+      const around = ev.target.closedNeighborhood();
+      cy.elements().not(around).addClass("faded");
+      around.edges().addClass("hover");
+    });
+    cy.on("mouseout", "node", () => cy.elements().removeClass("faded hover"));
+    highlight();
+    cy.on("tap", "node", ev => {
+      const id = ev.target.id();
+      show(id, true);
+      if (value("f-mode") === "map" && byId[id].kind === "domain") {
+        document.getElementById("f-mode").value = "focus";
+        document.getElementById("f-focus").value = id;
+        draw("focus", id);
+      }
+    });
+    cy.on("tap", "edge", ev => show(ev.target.id(), false));
+  }
+  function show(id, isNode) {
+    const panel = document.getElementById("detail");
+    if (isNode) {
+      const n = byId[id];
+      const around = data.edges.filter(e => e.source === id || e.target === id);
+      panel.innerHTML = `<h2 style="margin-top:0">${esc(n.label)}</h2><p class="mono small">${esc(n.id)}</p>
+        <p>${esc(n.kind)}${n.level ? ", " + esc(n.level) : ""}${n.place ? ", " + esc(n.place) : ""}</p>
+        <p>${esc(n.summary)}</p>
+        ${Object.keys(n.names || {}).length ? `<p class="small">${Object.entries(n.names).map(([l, v]) => `<span class="mono">${esc(l)}</span> ${esc(v)}`).join(" - ")}</p>` : ""}
+        ${n.topics.length ? `<p class="small">pack topics: ${n.topics.map(esc).join(", ")}</p>` : ""}
+        <p class="small">status <strong>${esc(n.status)}</strong>, author ${esc(n.author)}</p>
+        <p><a href="${base}/items/${encodeURIComponent(n.id)}">Open (edit, excerpts, review)</a> -
+           <a href="#" id="refocus">show around this node</a> - <a href="#" id="tomap">back to the map</a></p>
+        <h3>${around.length} edges</h3><ul class="small">${around.slice(0, 60).map(e =>
+          `<li><a href="${base}/items/${encodeURIComponent(e.id)}">${esc(e.relation)}</a> ${esc(e.source === id ? e.target : e.source)}${e.place ? " (" + esc(e.place) + ")" : ""}: ${esc(e.statement)}</li>`).join("")}</ul>`;
+      document.getElementById("refocus").onclick = ev => {
+        ev.preventDefault(); document.getElementById("f-mode").value = "focus"; document.getElementById("f-focus").value = id; draw("focus", id); };
+      document.getElementById("tomap").onclick = ev => { ev.preventDefault(); document.getElementById("f-mode").value = "map"; draw("map"); };
+    } else {
+      const e = data.edges.find(x => x.id === id);
+      panel.innerHTML = `<h2 style="margin-top:0">${esc(e.relation)}</h2><p class="mono small">${esc(e.source)} -&gt; ${esc(e.target)}</p>
+        <p>${esc(e.statement)}</p>${e.place ? `<p class="small">holds for ${esc(e.place)} and the places inside it</p>` : ""}
+        <p class="small">status <strong>${esc(e.status)}</strong>, author ${esc(e.author)}</p>
+        <p><a href="${base}/items/${encodeURIComponent(e.id)}">Open (edit, excerpts, review)</a></p>`;
+    }
+  }
+  function matches(query) {
+    const q = query.toLowerCase();
+    return q ? data.nodes.filter(n => (n.id + " " + n.label + " " + Object.values(n.names || {}).join(" ")
+                                       + " " + (n.summary || "")).toLowerCase().includes(q)) : [];
+  }
+  function highlight() {
+    if (!cy) return;
+    const query = value("f-search"), found = matches(query);
+    cy.elements().removeClass("match dim");
+    const info = document.getElementById("f-matches");
+    if (!query) { info.textContent = ""; return; }
+    const hits = cy.nodes().filter(node => found.some(n => n.id === node.id()));
+    if (hits.length) { cy.elements().not(hits).addClass("dim"); hits.addClass("match"); }
+    const elsewhere = found.length - hits.length;
+    info.textContent = `${hits.length} in this view` + (elsewhere > 0 ? `, ${elsewhere} more in the graph (Enter shows the first)` : "")
+      + (found.length === 0 ? " - no node matches" : "");
+  }
+  function jump() {
+    const found = matches(value("f-search"));
+    if (!found.length) return;
+    const hit = cy && cy.nodes().filter(node => found.some(n => n.id === node.id()));
+    if (hit && hit.length) {
+      cy.animate({fit: {eles: hit, padding: 80}}, {duration: 300});
+      show(hit[0].id(), true);
+    } else {
+      document.getElementById("f-mode").value = "focus";
+      document.getElementById("f-focus").value = found[0].id;
+      draw("focus", found[0].id);
+      show(found[0].id, true);
+    }
+  }
+  const search = document.getElementById("f-search");
+  search.addEventListener("input", highlight);
+  search.addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); jump(); } });
+  fetch(base + "/explore.json").then(r => r.json()).then(json => {
+    data = json;
+    byId = Object.fromEntries(data.nodes.map(n => [n.id, n]));
+    document.getElementById("f-nodes").innerHTML = data.nodes.map(n => `<option value="${esc(n.id)}">${esc(n.label)}</option>`).join("");
+    const focus = value("f-focus");
+    if (focus && byId[focus]) { document.getElementById("f-mode").value = "focus"; draw("focus", focus); show(focus, true); }
+    else draw("map");
+  });
+  document.getElementById("f-apply").onclick = () => draw();
+  document.getElementById("f-fit").onclick = () => cy && cy.fit(undefined, 30);
+  document.getElementById("filters").addEventListener("keydown", ev => { if (ev.key === "Enter") draw(); });
+})();
+</script>
+{% endblock %}

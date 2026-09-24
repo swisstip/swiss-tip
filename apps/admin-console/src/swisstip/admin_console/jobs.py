@@ -190,7 +190,7 @@ def pipeline_job(pack: PackData, options: dict):
                             thorough=bool(options.get("thorough")),
                             update_curation=bool(options.get("update_curation")),
                             source_plugins=not bool(options.get("no_source_plugins")),
-                            lock_pack=False, log=log)
+                            obey_robots=options.get("obey_robots"), lock_pack=False, log=log)
         report = pipeline.run_stages(options.get("start") or STAGES[0], options.get("until") or STAGES[-1])
         archive_run(pack, report)
         archive_release(pack)

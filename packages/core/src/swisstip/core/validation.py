@@ -15,6 +15,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from .basis import DEFAULT_RANKING_POLICY, NORM_KINDS, basis_label, level_of_jurisdiction, strongest_basis
+from .graph import check_embedded_graph
 from .release import Release, content_hash, load_release, sha256_text
 
 JURISDICTION = re.compile(r"^CH(?:-[A-Z]{2}(?:-\d{1,4})?)?$")
@@ -128,6 +129,7 @@ def validate_release(release: Release, text_dir: Path | None = None, run_dir: Pa
         issues.append("manifest provenance or review counts differ from the facts")
     issues.extend(check_institutions_and_basis(release, documents, evidence))
     issues.extend(check_place_register(release))
+    issues.extend(check_embedded_graph(release))
     if text_dir is not None:
         issues.extend(check_against_text(release, Path(text_dir), Path(run_dir) if run_dir else None))
     return issues

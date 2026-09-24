@@ -18,10 +18,11 @@ from .plugins import PluginRegistry, SourceRequest, validate_documents
 class MetadataFetcher:
     """At most four cached, hash-checked JSON metadata requests per source."""
 
-    def __init__(self, output: Path, plugin, transport: str = "urllib") -> None:
+    def __init__(self, output: Path, plugin, transport: str = "urllib", respect_robots: bool = True) -> None:
         self.output = output
         self.plugin = plugin
         self.transport = transport
+        self.respect_robots = respect_robots
         self.records = []
         self.calls = 0
 
@@ -48,7 +49,7 @@ class MetadataFetcher:
             limits = CrawlLimits(max_depth=0, max_pages=1, max_requests=6,
                                  max_total_bytes=3_000_000, max_response_bytes=2_000_000,
                                  max_duration_seconds=60, request_timeout_seconds=20, delay_seconds=2)
-            report = SafeCrawler(source, limits, allow_query_strings=True,
+            report = SafeCrawler(source, limits, allow_query_strings=True, respect_robots=self.respect_robots,
                                  opener=CurlOpener() if self.transport == "curl" else None,
                                  document_content_types=("application/json", "application/sparql-results+json"),
                                  on_document=lambda page, body: bodies.append((page, body))).crawl()
@@ -80,7 +81,7 @@ def adopt_legacy_plan(plan: dict, identity: dict, catalogue_sha256: str) -> dict
 
 
 def run_source_plugins(corpus: Path, registry: PluginRegistry, *, transport: str = "urllib",
-                       retry_failed: bool = False) -> list[dict]:
+                       retry_failed: bool = False, respect_robots: bool = True) -> list[dict]:
     original = read_json(corpus / "plan.json")
     as_of = date.fromisoformat(original["created_at"][:10])
     summaries = []
@@ -124,7 +125,7 @@ def run_source_plugins(corpus: Path, registry: PluginRegistry, *, transport: str
             if prior_error and not retry_failed:
                 continue
             plan["resolution_errors"] = [e for e in plan["resolution_errors"] if e["source_url"] != item["url"]]
-            fetcher = MetadataFetcher(output, plugin, transport)
+            fetcher = MetadataFetcher(output, plugin, transport, respect_robots=respect_robots)
             try:
                 documents = plugin.resolve(SourceRequest(item["url"], as_of), fetcher)
                 validate_documents(plugin, documents)
@@ -153,7 +154,7 @@ def run_source_plugins(corpus: Path, registry: PluginRegistry, *, transport: str
                     continue
                 if previous["status"] != "saved" and not retry_failed:
                     continue
-            result = snapshot(target, output, tuple(plugin.document_hosts), transport)
+            result = snapshot(target, output, tuple(plugin.document_hosts), transport, respect_robots=respect_robots)
             print(f"{plugin.plugin_id} {result['status']}: {target['url']}", flush=True)
             time.sleep(max(2, result.get("report", {}).get("effective_delay_seconds", 2)))
         summaries.append(summary(output, plan, title=f"{plugin.plugin_id} documents: {corpus.name}"))

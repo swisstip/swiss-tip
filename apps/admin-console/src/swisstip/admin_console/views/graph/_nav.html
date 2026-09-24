@@ -1,0 +1,8 @@
+<nav class="tabs" aria-label="Screens of this graph">
+  <a href="/">Packs</a>
+  {% for slug, label in [('', 'Overview'), ('/explore', 'Explore'), ('/items', 'Items'), ('/review', 'Review')] %}
+    <a href="/graphs/{{ graph.graph }}{{ slug }}" class="{{ 'current' if active == (slug[1:] or 'overview') }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+<p class="small muted" style="margin: 8px 20px 0">knowledge graph <strong>{{ graph.graph }}</strong> -
+  <span class="mono">graphs/{{ graph.graph }}/graph.yaml</span></p>

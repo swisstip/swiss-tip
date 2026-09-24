@@ -1,21 +1,23 @@
 # Tool contracts
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
-**Schema version:** `swiss-tip/v4`<br>
+**Schema version:** `swiss-tip/v5`<br>
 **Source of truth:** [`packages/core/src/swisstip/core/contracts.py`](../../packages/core/src/swisstip/core/contracts.py)
 (Pydantic models, served by the mock and by the real server;
 `scripts/test/mock-mcp/contracts.py` re-exports them); the exported JSON
 Schema bundle is [`tool-contracts.schema.json`](tool-contracts.schema.json)<br>
-**Status:** the contract is `swiss-tip/v4`; packages 0.2.5, the latest on
-PyPI, serve it in full. The committed bundle is the frozen contract of the
+**Status:** the contract is `swiss-tip/v5`: v4 plus the additive tool
+`get_knowledge_graph` (section 11), which the server lists first for a release
+that carries a knowledge graph; packages 0.2.5, the latest on PyPI, serve v4. The committed bundle is the frozen contract of the
 first hour of the event (24 September): the reproduced models must export an
 identical bundle (specification, section 5.2), and during the event only
 additive changes are allowed, decided by the lead. Until the event starts
 the lead may still change it, additively or not.
 
-This document defines what a caller sends to and receives from the four MCP
-tools. The mock server serves exactly these shapes; the real server must too.
+This document defines what a caller sends to and receives from the MCP
+tools: `get_knowledge_graph` (section 11, only for a release with a knowledge
+graph), `get_coverage`, `search`, `resolve` and `get_evidence`. The mock server serves exactly these shapes; the real server must too.
 The bundle also carries a fifth tool, `lookup`, and four gap dimensions of
 the dataset connectors (section 10); a server lists the tool only while a
 connector is registered.
@@ -923,6 +925,14 @@ fail the whole call.
 
 ## 8. The expected call pattern
 
+With a knowledge graph in the release the sequence gains a first turn: the
+caller calls `get_knowledge_graph` with the question and, when known, the
+user's place (section 11), reads who decides, the office at the user's place,
+the laws and whether the answer depends on the canton or municipality, and in
+the next turn continues with the two calls below, taking the query and the
+place from `next_search`. The server instructions and the description of every
+other tool say so; a follow-up on the same subject needs no new graph call.
+
 For the standing Czech-citizen question the intended sequence is two calls:
 
 1. `search` with the whole question and, since the question names it, the
@@ -993,3 +1003,41 @@ An unknown `dataset_id` and a malformed request are `INVALID_ARGUMENT`
 errors; a connector that does not answer is the `connector_unavailable`
 gap, never an error. The call pattern is `search`, `resolve` (the rule and
 the offer), `lookup` (the dates).
+
+## 11. `get_knowledge_graph`
+
+Listed first, and only for a release that carries a knowledge graph
+(design: [knowledge-graph.md](knowledge-graph.md)). The graph is orientation,
+not evidence: the caller answers from `resolve`'s facts only.
+
+### Request
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `question` | string, at most 500 characters, optional | The user's question or its key terms |
+| `node_ids` | list of up to 5 node IDs, optional | Nodes to expand, as a previous result named them |
+| `jurisdiction` | Jurisdiction, optional | The user's place, as for search and resolve; without it the scope is `CH` |
+| `reviewed_only` | boolean, default false | Only nodes and edges a named person confirmed |
+
+Without `question` and `node_ids` the result is the root page: the levels of
+the state, the principles and every domain with `covered`.
+
+### Result: KnowledgeGraphResult
+
+| Field | Meaning |
+| --- | --- |
+| `release_id`, `graph_id` | The release and the graph answered from |
+| `executed_scope` | The place the orientation is for (`CH` when none was given) |
+| `match_strength` | `strong`, `weak` or `none`: whether the question's words reached a domain |
+| `domains` | Root page only: `node_id`, `label`, `covered` |
+| `nodes` | `node_id`, `kind`, `label`, `names` (by language, verbatim from the sources), `summary`, `level`, `place`, `review_status` when it differs from the result's |
+| `edges` | `from_id`, `relation`, `to_id`, `statement`, `place` (holds there and inside it), `source_url`, `review_status` when it differs |
+| `covered_topics` | Topics of the release that publish facts for the matched domains; empty means the release does not cover the subject |
+| `place_dependence` | `depends_on` (`municipality`, `canton`, `none`), `known`, `reason`, `ask` when the place is not known precisely enough |
+| `next_search` | `query`, `terms` (official terms of the matched domains and roles), `jurisdiction` when one was given |
+| `review_status` | The review status of every item that states none |
+| `guidance_for_caller`, `limitations` | What to do next, and the graph's review counts |
+
+A result stays within 8 KB. `get_evidence` accepts the graph's evidence IDs
+(`graph-...`) like a fact's.
+

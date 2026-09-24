@@ -19,7 +19,7 @@ from swisstip.runtime.service import ReleaseService
 
 from . import CHECKS_SCHEMA_VERSION
 
-TOOLS = ("get_coverage", "search", "resolve", "get_evidence")
+TOOLS = ("get_knowledge_graph", "get_coverage", "search", "resolve", "get_evidence")
 
 # The two standing cases of the specification, as scripts/test/mcp/check_server.py asserts them.
 STANDING_CASES = [
@@ -61,7 +61,7 @@ class Expect(Strict):
 class Check(Strict):
     check_id: str
     title: str = ""
-    tool: Literal["get_coverage", "search", "resolve", "get_evidence"]
+    tool: Literal["get_knowledge_graph", "get_coverage", "search", "resolve", "get_evidence"]
     request: dict = Field(default_factory=dict)
     expect: Expect = Field(default_factory=Expect)
 

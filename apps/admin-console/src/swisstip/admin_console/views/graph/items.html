@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Graph items - Swiss TIP admin console{% endblock %}
+{% block content %}
+{% include "graph/_nav.html" %}
+<h1>Nodes and edges</h1>
+<form method="get" class="small">
+  <label>kind <input name="kind" value="{{ kind }}" placeholder="domain, role, edge:instance"></label>
+  <label>status <select name="status"><option value="">any</option>
+    {% for s in ['assistant-authored-unreviewed', 'automatically-derived-unreviewed', 'model-candidate-automated-review', 'human-reviewed'] %}
+    <option {{ 'selected' if status == s }}>{{ s }}</option>{% endfor %}</select></label>
+  <label>text <input name="q" value="{{ q }}"></label> <button>Filter</button>
+</form>
+<p class="small muted">{{ total }} matching{% if total > rows|length %}, first {{ rows|length }} shown{% endif %}</p>
+<div class="scroll"><table><thead><tr><th>id</th><th>kind</th><th>label or statement</th><th>status</th><th>author</th></tr></thead><tbody>
+{% for row in rows %}<tr><td class="mono"><a href="/graphs/{{ graph.graph }}/items/{{ row.id }}">{{ row.id }}</a></td>
+  <td>{{ row.kind }}</td><td>{{ row.label }}</td><td>{{ row.status }}</td><td class="small">{{ row.author }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

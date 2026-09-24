@@ -1,6 +1,6 @@
 # Knowledge base pipeline
 
-**Last update:** 21 September 2026
+**Last update:** 24 September 2026
 
 How a knowledge base (a pack under `releases/<pack>/`) goes from an idea to
 a published release, and how an existing pack is extended. Each step names
@@ -277,6 +277,24 @@ reports (`release.json`, `build-report.json`, `acceptance-report.json`,
   package version. A new package version also needs this repository's
   `container-images.yml` (selection `all`, with that version) before the
   packs are rebuilt on it.
+
+## The knowledge graph
+
+The orientation graph that `get_knowledge_graph` serves is built beside the
+packs, in `graphs/<graph>/`, with the same stages and its run in
+`.local/graph-<graph>/`; the design and every command are in
+[knowledge-graph.md](knowledge-graph.md), and the agent route in
+[agent-built-knowledge-graph.md](../product/agent-built-knowledge-graph.md).
+In short: `swisstip-build <graph> --graph --packs-dir ../swiss-tip-mvp`
+runs acquire, gaps, extract, validate-text, derive (a preview unless
+`--apply-derive`), compile and check. A pack embeds the compiled graph when its
+curation names it (`knowledge_graph:`), in its build stage, or with
+`swisstip-graph embed releases/<pack>` when its run is not at hand; the pack's
+release then changes and is accepted and attested again.
+
+Source etiquette applies to the graph's pages as to a pack's: the acquire
+stage obeys robots.txt unless the run passes `--no-obey-robots` or the
+operator sets `SWISSTIP_OBEY_ROBOTS=0` (README, "Source etiquette").
 
 ## A new pack, beyond an extension
 

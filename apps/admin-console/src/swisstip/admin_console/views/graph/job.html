@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Graph job - Swiss TIP admin console{% endblock %}
+{% block content %}
+{% include "graph/_nav.html" %}
+<h1>Job {{ state.job_id }} ({{ state.kind }})</h1>
+<p>status <strong>{{ state.status }}</strong>{% if state.error %}: {{ state.error }}{% endif %},
+  started {{ (state.started_at or '')[:19] }} by {{ state.actor }}</p>
+{% if state.status == 'running' %}<p class="small muted">reload the page to follow the log</p>{% endif %}
+{% if state.result %}<pre>{{ state.result | tojson(indent=2) }}</pre>{% endif %}
+<pre>{{ log }}</pre>
+{% endblock %}

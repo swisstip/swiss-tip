@@ -149,6 +149,10 @@ def health(service: ReleaseService, readiness: dict | None = None) -> dict:
                 freshness=dict(snapshot_date=manifest.freshness.snapshot_date.isoformat(),
                                stale_from=manifest.freshness.stale_from.isoformat()),
                 review_statuses=manifest.review_statuses,
+                knowledge_graph=None if service.graph_index is None else dict(
+                    graph_id=service.graph_index.graph.graph_id, content_sha256=service.graph_index.graph.content_sha256,
+                    nodes=len(service.graph_index.graph.nodes), edges=len(service.graph_index.graph.edges),
+                    review_statuses=service.graph_index.graph.review_statuses),
                 institution_levels=manifest.institution_levels, basis_kinds=manifest.basis_kinds,
                 readiness=readiness or dict(status="candidate", reason="readiness not checked"),
                 connectors=service.connectors.health() if service.connectors is not None else [],

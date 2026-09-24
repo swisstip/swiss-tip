@@ -28,7 +28,7 @@ from ..writes import WriteRefused, write_checks
 read_router = APIRouter()
 write_router = APIRouter()
 
-TOOLS = ("get_coverage", "search", "resolve", "get_evidence")
+TOOLS = ("get_knowledge_graph", "get_coverage", "search", "resolve", "get_evidence")
 
 
 def service_for(pack: PackData, release_id: str | None) -> ReleaseService | None:

@@ -1,6 +1,6 @@
 # Acceptance gate
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
 **Status:** sections 2 to 5 and the `accept` and `ready` stages, the
 committed-record test, `--require-ready`, the container and the harness of
@@ -245,6 +245,17 @@ apps/admin-console                 reads and writes the suite, shows readiness (
 
 The serving side imports nothing from the build side; the server reads
 `readiness.json` and nothing else of the gate.
+
+## 7a. Orientation checks of the knowledge graph
+
+A knowledge graph carries its own checks (`graphs/<graph>/checks.yaml`,
+`swiss-tip-graph-checks/v1`): a question and a place, the nodes the result must
+and must not contain, the expected place dependence and match strength. The
+graph pipeline's check stage replays them with the server's selection code on
+every compile and fails on a blocking case; a case that records a gap of the
+graph is non-blocking with a comment. With a graph in the release a typical
+question takes three calls (graph, search, resolve), which the answer-quality
+check's call budget allows for.
 
 ## 8. What remains
 

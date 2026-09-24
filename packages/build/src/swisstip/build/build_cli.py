@@ -18,6 +18,7 @@ from pathlib import Path
 from swisstip.core.release import dump_release
 
 from .curation import load_curation, save_curation
+from .graph_embed import graph_for
 from .places import place_register_for
 from .release_build import BuildError, build_release
 
@@ -34,7 +35,8 @@ def main(argv=None) -> int:
     try:
         curation = load_curation(args.curation)
         release, report = build_release(curation, args.text, args.release_id, update_citations=args.update_curation,
-                                        place_register=place_register_for(curation, args.curation))
+                                        place_register=place_register_for(curation, args.curation),
+                                        knowledge_graph=graph_for(curation, args.curation))
     except (BuildError, OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

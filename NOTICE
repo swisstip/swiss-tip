@@ -16,3 +16,9 @@ The admin console vendors HTMX 2.0.7
 distributed by the htmx authors under the Zero-Clause BSD licence. It is
 included verbatim so the console needs no network access and no JavaScript
 build step.
+
+The admin console also vendors Cytoscape.js 3.30.4
+(apps/admin-console/src/swisstip/admin_console/static/cytoscape.min.js),
+Copyright (c) 2016-2024, The Cytoscape Consortium, distributed under the MIT
+licence whose text heads the file. It renders the knowledge graph explorer
+and is included verbatim for the same reason.

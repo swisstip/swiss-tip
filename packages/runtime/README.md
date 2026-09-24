@@ -1,6 +1,6 @@
 # Swiss TIP runtime
 
-**Last update:** 20 September 2026
+**Last update:** 24 September 2026
 
 The release service implements coverage, concept search, scoped resolution
 and evidence lookup over a validated release. Lexical search is the default
@@ -113,6 +113,18 @@ language and are not official translations) and asks for the whole answer in
 the language of the user's question. Each concept
 resolution also carries the concept's `not_served` list from the release when
 it has one.
+
+## Knowledge graph
+
+`swisstip.runtime.graph` serves `get_knowledge_graph`: it matches the
+question against the graph's domains (rarity-weighted, strongest field per
+word), expands the best three by one hop, resolves each role to the
+institution for the user's place by containment, states the place dependence
+and the next search, and trims the result to 8 KB, least important links
+first. `ReleaseService.tools()` lists the tool first for a release with a
+graph, and the instructions and the other tools' descriptions then put it
+first. `check_graph` replays a graph's orientation checks. Design:
+[knowledge-graph.md](../../docs/architecture/knowledge-graph.md).
 
 ## Acceptance check
 

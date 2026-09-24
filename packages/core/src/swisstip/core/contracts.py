@@ -1,8 +1,8 @@
-"""Contract models for the Swiss TIP (Swisscom Trusted Information Platform) MCP tools (schema version 4).
+"""Contract models for the Swiss TIP (Swisscom Trusted Information Platform) MCP tools (schema version 5).
 
-These Pydantic models define the wire shape of the four tools described in
-section 4.3 of the functional specification: get_coverage, search, resolve and
-get_evidence, plus the typed tool error. The mock server and the real server
+These Pydantic models define the wire shape of the tools described in section
+4.3 of the functional specification: get_knowledge_graph, get_coverage,
+search, resolve and get_evidence, plus the typed tool error. The mock server and the real server
 serve instances of the same models, so callers see one contract.
 
 Print the JSON Schema bundle of every model:
@@ -18,7 +18,7 @@ from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
-SCHEMA_VERSION = "swiss-tip/v4"
+SCHEMA_VERSION = "swiss-tip/v5"
 
 
 class Strict(BaseModel):
@@ -564,6 +564,100 @@ class GetEvidenceResult(Strict):
     limitations: list[str]
 
 
+# --- get_knowledge_graph ----------------------------------------------------
+
+
+class GetKnowledgeGraphRequest(Placed):
+    question: str | None = Field(default=None, max_length=500, description=(
+        "The user's question, as asked or with its key terms; omit it together with node_ids for the root page "
+        "(levels of the state, principles and the domains the graph knows)."))
+    node_ids: list[str] = Field(default_factory=list, max_length=5, description=(
+        "Nodes to expand instead of or besides the question, exactly as a previous result named them."))
+    reviewed_only: bool = Field(default=False, description=(
+        "Return only nodes and edges a named person confirmed against their excerpts."))
+    # No description of its own, as for search: the server's note on the field says what it does.
+    jurisdiction: Jurisdiction = Field(default_factory=Jurisdiction)
+
+
+class GraphNodeOut(Strict):
+    node_id: str
+    kind: str = Field(description="level, principle, domain, role, institution, law, source, place or pitfall.")
+    label: str
+    names: dict[str, str] = Field(default_factory=dict, exclude_if=lambda value: not value, description=(
+        "The name in the languages of the sources, by ISO 639 code, verbatim from a cited excerpt: the words to "
+        "search with and to recognise the office by."))
+    summary: str
+    level: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "Tier of the state: federal, cantonal or municipal."))
+    place: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "Jurisdiction code of a place, or of the place an institution speaks for."))
+    source_url: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "The official page the summary rests on."))
+    review_status: ReviewStatus | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "Omitted when it is the result's review_status."))
+
+
+class GraphEdgeOut(Strict):
+    from_id: str
+    relation: str = Field(description=(
+        "rules_set_by, executed_by, decided_by, approved_by, first_contact, legal_basis, authoritative_source, "
+        "published_by, varies_by, pitfall, see_also, instance (the institution that plays a role for a place), "
+        "part_of or governed_by."))
+    to_id: str
+    statement: str = Field(description="The claim in one sentence.")
+    place: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "Where the claim holds: that place and the places inside it."))
+    source_url: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    review_status: ReviewStatus | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "Omitted when it is the result's review_status."))
+
+
+class PlaceDependence(Strict):
+    """Whether the answer depends on where the user lives, and whether the request said so precisely enough."""
+
+    depends_on: Literal["none", "canton", "municipality"] = Field(description=(
+        "The most specific level that carries out or decides the matched domains: municipality, canton or none."))
+    known: bool = Field(description="The request's jurisdiction is at least that specific.")
+    reason: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    ask: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "The question to put to the user when the place cannot be derived from what they said; omitted when known."))
+
+
+class NextSearch(Strict):
+    query: str = Field(description="The query for search, in a query language of the server.")
+    terms: list[str] = Field(default_factory=list, exclude_if=lambda value: not value, description=(
+        "Official terms of the matched domains and roles, to add when the question does not use them."))
+    jurisdiction: Jurisdiction | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "The place to send with search and resolve; omitted when the request named none."))
+
+
+class DomainSummary(Strict):
+    node_id: str
+    label: str
+    covered: bool = Field(description="The release publishes facts for this domain (a topic bridges to it).")
+
+
+class KnowledgeGraphResult(Strict):
+    release_id: str
+    graph_id: str
+    executed_scope: ExecutedScope | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "The place the orientation is for; CH (federal) when the request named none."))
+    match_strength: Literal["strong", "weak", "none"] | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "Whether the question's words reached a domain of the graph: strong, weak (incidental words only) or none."))
+    domains: list[DomainSummary] = Field(default_factory=list, exclude_if=lambda value: not value, description=(
+        "Root page only: every domain the graph knows, and whether the release publishes facts for it."))
+    nodes: list[GraphNodeOut]
+    edges: list[GraphEdgeOut]
+    covered_topics: list[str] = Field(default_factory=list, description=(
+        "Topics of the release that publish facts for the matched domains; empty: this release publishes none."))
+    place_dependence: PlaceDependence | None = Field(default=None, exclude_if=lambda value: value is None)
+    next_search: NextSearch | None = Field(default=None, exclude_if=lambda value: value is None)
+    review_status: ReviewStatus | None = Field(default=None, exclude_if=lambda value: value is None, description=(
+        "Review status of every node and edge that states none of its own."))
+    guidance_for_caller: str
+    limitations: list[str]
+
+
 # --- errors -----------------------------------------------------------------
 
 
@@ -582,6 +676,19 @@ class ToolError(Strict):
 
 
 TOOL_DESCRIPTIONS = {
+    "get_knowledge_graph": (
+        "Call this FIRST for every new subject, before search: a small map of how Switzerland handles it. With the "
+        "question and, when known, the user's canton or municipality as jurisdiction, it returns the matched domains "
+        "and, as nodes and cited one-sentence edges, which level of the state sets the rules (federal, cantonal, "
+        "municipal), who carries them out and decides, the office the user deals with at their place with its names "
+        "in the local languages, the laws with their SR numbers, the authoritative source, and the pitfalls a generic "
+        "answer falls into. place_dependence says whether the answer depends on the canton or municipality and, when "
+        "the request did not say, the question to ask (derive the place from what the user said first; the place of "
+        "work is not the place of residence). next_search gives the query and place for search, which you call in the "
+        "next turn, then resolve. covered_topics empty means this release publishes no facts on the subject: say so, "
+        "and name the authoritative source only as where to look. The graph is orientation, not citable evidence: "
+        "answer only from resolve's facts. Without question and node_ids it returns the root page: the levels, the "
+        "principles and the domains."),
     "get_coverage": (
         "Discover what this server covers. A question normally needs two calls in total: search, then resolve. "
         "Call get_coverage with no arguments only when you are unsure whether the question is in scope at all: the "
@@ -662,6 +769,7 @@ TOOL_DESCRIPTIONS = {
 }
 
 TOOL_CONTRACTS = {
+    "get_knowledge_graph": (GetKnowledgeGraphRequest, KnowledgeGraphResult),
     "get_coverage": (GetCoverageRequest, CoverageRoot | CoverageTopic),
     "search": (SearchRequest, SearchResult),
     "resolve": (ResolveRequest, ResolveResult),

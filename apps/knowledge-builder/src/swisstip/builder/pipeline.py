@@ -18,6 +18,7 @@ A failed stage stops the pipeline. Every run writes `releases/<pack>/pipeline-re
 
 import hashlib
 import json
+import os
 import re
 from contextlib import nullcontext
 from datetime import UTC, date, datetime, timedelta
@@ -28,10 +29,12 @@ from pydantic import ValidationError
 from swisstip.build.acceptance import load_acceptance
 from swisstip.build.coverage import build_coverage, coverage_counts, load_dispositions, write_report
 from swisstip.build.curation import load_curation, save_curation
+from swisstip.build.graph_embed import graph_file, graph_for
 from swisstip.build.places import PlaceFileError, place_files, place_register_for
 from swisstip.build.release_build import BuildError, build_release
 from swisstip.core.acceptance import AcceptanceAnswers, answer_verdict
 from swisstip.core.readiness import CaseCounts, CoverageCounts, Gate, Readiness, dump_readiness, readiness_path
+from swisstip.core.graph import GraphInvalid
 from swisstip.core.release import dump_release, load_release
 from swisstip.core.validation import validate_release
 from swisstip.extraction.extract_cli import run_extraction
@@ -71,12 +74,22 @@ def default_run_dir(root: Path, pack: str) -> Path:
     return pack_dir if (pack_dir / "plan.json").is_file() else Path(root) / ".local" / pack
 
 
+ROBOTS_VARIABLE = "SWISSTIP_OBEY_ROBOTS"
+
+
+def obey_robots_default() -> bool:
+    """The operator's configured default: obey robots.txt unless SWISSTIP_OBEY_ROBOTS is 0, false, no or off."""
+    return os.environ.get(ROBOTS_VARIABLE, "1").strip().lower() not in ("0", "false", "no", "off")
+
+
 class Pipeline:
+    stage_names = STAGES
+
     def __init__(self, root: Path, pack: str, *, run_dir: Path | None = None, release_id: str | None = None,
                  download: bool = False, retry_failed: bool = False, workers: int = 1, scope: str = "attributed",
                  thorough: bool = False, update_curation: bool = False, attested_by: str | None = None,
                  source_plugins: bool = True, lock_pack: bool = True, require_same_snapshot: bool = False,
-                 log=print):
+                 obey_robots: bool | None = None, log=print):
         if PACK.fullmatch(pack) is None:
             raise ValueError("pack must be a lowercase kebab-case identifier")
         self.root = Path(root).resolve()  # the packs repository: releases/<pack> and .local/<pack> live under it
@@ -97,6 +110,10 @@ class Pipeline:
         self.download, self.retry_failed, self.workers, self.scope = download, retry_failed, workers, scope
         self.thorough, self.update_curation, self.log = thorough, update_curation, log
         self.source_plugins = source_plugins
+        # Source etiquette (README, "Source etiquette"): robots.txt is obeyed unless this run, or the operator's
+        # SWISSTIP_OBEY_ROBOTS=0, overrides it for hosts the operator is authorised to access; the run report and the
+        # download plan record the override.
+        self.obey_robots = obey_robots_default() if obey_robots is None else obey_robots
         self.require_same_snapshot = require_same_snapshot
         self.attested_by = (attested_by or "").strip() or None
         self.lock_pack = lock_pack
@@ -124,6 +141,8 @@ class Pipeline:
             arguments += ["--markdown", str(self.markdown)]
         if not self.source_plugins:
             arguments.append("--no-source-plugins")
+        if not self.obey_robots:
+            arguments.append("--no-obey-robots")
         if self.download:
             arguments.append("--download")
             if self.retry_failed:
@@ -179,12 +198,17 @@ class Pipeline:
         return self._curation
 
     def build_inputs(self, release_id: str) -> str:
-        """The curation, the text index, the release ID and the place files the curation names: a register fetched
-        anew or an edited alias rebuilds the release like an edited fact does."""
+        """The curation, the text index, the release ID, the place files and the compiled knowledge graph the curation
+        names: a register fetched anew, an edited alias or a recompiled graph rebuilds the release like an edited fact
+        does."""
+        curation = self.loaded_curation()
+        graph = graph_file(curation, self.curation)
         try:
-            places = [sha256_file(path).encode() for path in place_files(self.loaded_curation(), self.curation)]
+            places = [sha256_file(path).encode() for path in place_files(curation, self.curation)]
+            if graph is not None:
+                places.append(sha256_file(graph).encode())
         except OSError as exc:
-            raise StageError(f"a place file the curation names cannot be read: {exc}") from exc
+            raise StageError(f"a place or graph file the curation names cannot be read: {exc}") from exc
         acceptance = [sha256_file(self.acceptance).encode()] if self.acceptance.is_file() else []
         return hashlib.sha256(b"".join([sha256_file(self.curation).encode(), sha256_file(self.text / "index.json").encode(),
                         release_id.encode(), *acceptance, *places])).hexdigest()
@@ -208,8 +232,9 @@ class Pipeline:
         try:
             release, report = build_release(curation, self.text, release_id, update_citations=self.update_curation,
                                             place_register=place_register_for(curation, self.curation),
-                                            acceptance_suite_sha256=suite_sha256)
-        except (BuildError, PlaceFileError) as exc:
+                                            acceptance_suite_sha256=suite_sha256,
+                                            knowledge_graph=graph_for(curation, self.curation))
+        except (BuildError, PlaceFileError, GraphInvalid) as exc:
             raise StageError(str(exc)) from exc
         changed_citations = {outcome: count for outcome, count in report["citation_outcomes"].items()
                              if outcome != "same-snapshot" and count}
@@ -414,6 +439,11 @@ class Pipeline:
 
     # --- orchestration -----------------------------------------------------
 
+    def handlers(self) -> dict:
+        return {"acquire": self.acquire, "gaps": self.gaps, "extract": self.extract, "validate-text": self.validate_text,
+                "build": self.build, "validate-release": self.validate_release_stage, "coverage": self.coverage,
+                "health": self.health, "accept": self.accept, "ready": self.ready}
+
     def run_stages(self, start: str = "acquire", until: str = "accept") -> dict:
         lock = (PackWriteLock(self.root, self.pack)
             if self.lock_pack else nullcontext())
@@ -421,15 +451,14 @@ class Pipeline:
             return self._run_stages(start, until)
 
     def _run_stages(self, start: str = "acquire", until: str = "accept") -> dict:
-        if start not in STAGES or until not in STAGES or STAGES.index(start) > STAGES.index(until):
-            raise ValueError(f"stages must be in order from {STAGES}")
-        handlers = {"acquire": self.acquire, "gaps": self.gaps, "extract": self.extract, "validate-text": self.validate_text,
-                    "build": self.build, "validate-release": self.validate_release_stage, "coverage": self.coverage,
-                    "health": self.health, "accept": self.accept, "ready": self.ready}
+        names = self.stage_names
+        if start not in names or until not in names or names.index(start) > names.index(until):
+            raise ValueError(f"stages must be in order from {names}")
+        handlers = self.handlers()
         started = datetime.now(UTC)
         failed = False
         dropped = 0
-        for stage in STAGES[STAGES.index(start):STAGES.index(until) + 1]:
+        for stage in names[names.index(start):names.index(until) + 1]:
             begun = datetime.now(UTC)
             entry = dict(stage=stage, started_at=begun.isoformat())
             try:
@@ -453,7 +482,7 @@ class Pipeline:
                       options=dict(download=self.download, retry_failed=self.retry_failed, workers=self.workers, scope=self.scope,
                                    thorough=self.thorough, update_curation=self.update_curation, release_id=self.release_id,
                                    attested_by=self.attested_by, source_plugins=self.source_plugins,
-                                   stages=f"{start}..{until}"),
+                                   obey_robots=self.obey_robots, stages=f"{start}..{until}"),
                       stages=self.merge_previous(self.stages), exit_code=1 if failed or dropped else 0,
                       facts_dropped=dropped)
         self.pack_dir.mkdir(parents=True, exist_ok=True)
@@ -465,5 +494,6 @@ class Pipeline:
 
         A record of a stage the pipeline no longer has (`ground`, before the acceptance gate) is dropped."""
         current = {s["stage"] for s in stages}
-        kept = [s for s in self.previous.get("stages", []) if s["stage"] in STAGES and s["stage"] not in current]
-        return sorted(kept + stages, key=lambda s: STAGES.index(s["stage"]))
+        names = self.stage_names
+        kept = [s for s in self.previous.get("stages", []) if s["stage"] in names and s["stage"] not in current]
+        return sorted(kept + stages, key=lambda s: names.index(s["stage"]))

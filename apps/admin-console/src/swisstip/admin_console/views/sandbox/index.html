@@ -33,6 +33,19 @@
     </form>
   </section>
 
+  {% if service.graph_index %}
+  <section class="card">
+    <h2 style="margin-top:0">get_knowledge_graph</h2>
+    <form method="post" action="/packs/{{ pack.pack }}/sandbox/get_knowledge_graph"
+          hx-post="/packs/{{ pack.pack }}/sandbox/get_knowledge_graph" hx-target="#result" hx-swap="innerHTML">
+      <input type="hidden" name="release_id" value="{{ release_id }}">
+      <label for="g-args">arguments <span class="hint">leave the jurisdiction out to see the place dependence</span></label>
+      <textarea id="g-args" name="arguments" rows="3">{"question": "", "jurisdiction": {"city": "Zurich"}}</textarea>
+      <button type="submit">Call get_knowledge_graph</button>
+    </form>
+  </section>
+  {% endif %}
+
   <section class="card">
     <h2 style="margin-top:0">search</h2>
     <form method="post" action="/packs/{{ pack.pack }}/sandbox/search"

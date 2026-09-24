@@ -1,6 +1,6 @@
 # swisstip-build
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
 The build side of a pack: read `releases/<pack>/curation.yaml`, resolve every
 cited block range against the pack's text dataset, pin it with hashes,
@@ -38,6 +38,25 @@ build. The packs of one country share the files under `config/places/`.
 Exit code nonzero when a fact was dropped; the release is still written. The
 curation format, the relocation rules and the build report are described in
 [docs/architecture/release-format.md](../../docs/architecture/release-format.md).
+
+## Knowledge graph
+
+`swisstip-graph` compiles and maintains a knowledge graph
+(`graphs/<graph>/graph.yaml` of the packs repository):
+
+```shell
+swisstip-graph derive  graphs/ch/graph.yaml [--apply]          # places, institutions, laws, links from the packs
+swisstip-graph merge   graphs/ch/graph.yaml PROPOSAL.yaml...   # reader agents' proposals, deterministically
+swisstip-graph compile graphs/ch/graph.yaml --text .local/graph-ch/text
+swisstip-graph embed   releases/<pack>                          # the compiled graph into a pack's release
+```
+
+Modules: `graph_curation` (the curation model), `graph_build` (the compiler,
+reusing the release build's citation, institution and basis functions),
+`graph_derive`, `graph_merge`, `graph_embed` (for the pack build) and
+`graph_cli`. A pack's curation names the compiled graph with
+`knowledge_graph:` and bridges its topics with `graph_nodes`; the build embeds
+the graph. Design: [knowledge-graph.md](../../docs/architecture/knowledge-graph.md).
 
 ## Dataset bundles
 

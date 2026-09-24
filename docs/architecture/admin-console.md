@@ -1,6 +1,6 @@
 # Admin console - technical design
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
 **Status:** implemented, except the assistant draft of section 4.5, which
 waits for the concept-extraction provider port of `TODO.md`, and the live
@@ -493,6 +493,39 @@ line does not carry. The additive change is one more key on the line,
 `gap=<field or jurisdiction>` when the status is not `SUPPORTED`, and
 `hits=<n>` on search calls. Request payloads are never logged; a query
 string is logged only when it produced no hit, truncated to 80 characters.
+
+### 4.10 Knowledge graph
+
+Reads: `graphs/<graph>/` (`graph.yaml`, `graph.json`, `checks.yaml`, the
+reports) and the graph's run in `.local/graph-<graph>/`; the pack releases
+for the excerpts a graph cites. Writes: `graph.yaml` only, through
+`write_graph` (load, change, validate through the graph curation model,
+compile into memory with the pipeline's code, save, audit), with the same lock,
+conflict check and audit log as the pack writes; the graph's console state
+lives in `.local/graph-<graph>/console/`.
+
+- **Home:** one card per graph next to the packs: curation and compiled
+  counts, review progress, checks.
+- **Overview** (`/graphs/<graph>`): counts, the last compile and checks, the
+  jobs and the audit; Derive from packs (a preview, then Apply), Compile and
+  check (a job), Refresh (a job that downloads the graph's sources again, with
+  the typed-name confirmation and an explicit robots.txt override checkbox).
+- **Explore:** the graph as a node-link diagram (Cytoscape.js, vendored);
+  filters by kind, level, place and review status, a search box, focus and
+  depth, derived links hidden on request; a detail panel with the summary,
+  names, edges and the pack topics that bridge to a node. Kind and review
+  status are carried by shape and outline as well as colour; the Items screen
+  is the table view.
+- **Items and item page:** every node and edge; edit a node (label, summary,
+  names, keywords, level, place) or an edge (statement, place), read its
+  excerpts, add an edge from a node with its citations. A person's edit takes
+  the item over from Derive and from the agents; an edited statement loses its
+  confirmation.
+- **Review:** the unreviewed items with bulk confirm, flag and reject (a note
+  is required for flag and reject); on the item page the keys y, f, n and j.
+  Confirm records the reviewer; reject removes the item, and a node's edges,
+  and keeps it in `rejected.jsonl`.
+- **Sandbox:** a `get_knowledge_graph` panel for a release with a graph.
 
 ## 5. Cross-cutting behaviour
 

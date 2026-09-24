@@ -18,6 +18,7 @@ dependencies = [
 swisstip-build-release = "swisstip.build.build_cli:main"
 swisstip-coverage = "swisstip.build.coverage_cli:main"
 swisstip-build-dataset = "swisstip.build.dataset_cli:main"
+swisstip-graph = "swisstip.build.graph_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

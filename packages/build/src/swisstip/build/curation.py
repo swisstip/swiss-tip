@@ -106,6 +106,8 @@ class CuratedTopic(Strict):
     topic_id: str
     title: str
     description: str
+    graph_nodes: list[str] = Field(default_factory=list, description=(
+        "Domain nodes of the knowledge graph this topic publishes facts for; Derive and the graph tool follow them."))
 
 
 class Curation(Strict):
@@ -134,6 +136,9 @@ class Curation(Strict):
     place_aliases: str | None = Field(default=None, description=(
         "Hand-written aliases for the place file (the country's entry, other-language names, generic words), relative "
         "to the curation file."))
+    knowledge_graph: str | None = Field(default=None, description=(
+        "Compiled knowledge graph (`graphs/<graph>/graph.json` of the packs repository), relative to the curation "
+        "file; the build embeds it so that the server offers get_knowledge_graph."))
     question_languages: list[Literal["en", "de"]] = Field(default_factory=list, description=(
         "Languages in which every concept needs at least one sample question (the pack's query languages); the build "
         "tells a question's language from its function words and refuses a concept that lacks one. Empty: no check."))

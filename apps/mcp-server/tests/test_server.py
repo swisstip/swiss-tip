@@ -26,6 +26,9 @@ ROOT = Path(__file__).resolve().parents[3]
 # packages/runtime/tests/test_service.py), so that the server's tests depend on no knowledge base. The server has no
 # default release; that the published packs are ready is checked next to the packs.
 FIXTURE = Path(__file__).parent / "fixtures" / "release.json"
+# The same release with a knowledge graph (written from packages/runtime/tests/test_graph.py), so the server offers
+# get_knowledge_graph first.
+GRAPH_FIXTURE = Path(__file__).parent / "fixtures" / "release-graph.json"
 RESOLVE = {"concept_ids": ["deadline"], "jurisdiction": {"canton": "Zurich"}, "as_of": "2026-09-12",
            "context": {"population": "eu_efta"}}
 
@@ -258,6 +261,55 @@ class ServerTests(unittest.TestCase):
                                               headers={"Accept": "application/json, text/event-stream"})).status_code
 
         self.assertEqual(asyncio.run(run()), 421)
+
+
+
+class GraphServerTests(unittest.TestCase):
+    def test_stdio_lists_the_graph_first_and_serves_it(self):
+        async def run():
+            params = StdioServerParameters(command=sys.executable,
+                                           args=["-m", "swisstip.mcp_server.server", "--release", str(GRAPH_FIXTURE)],
+                                           env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"})
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    init = await session.initialize()
+                    listed = (await session.list_tools()).tools
+                    oriented = await session.call_tool("get_knowledge_graph", {
+                        "question": "Czech citizen starting work, when do I register my arrival?", "city": "Zurich"})
+                    unplaced = await session.call_tool("get_knowledge_graph", {"question": "when do I register my arrival?"})
+                    return init, listed, oriented, unplaced
+
+        init, listed, oriented, unplaced = asyncio.run(run())
+        self.assertEqual([t.name for t in listed], ["get_knowledge_graph", "get_coverage", "search", "resolve", "get_evidence"])
+        self.assertIn("Start every new subject with get_knowledge_graph", init.instructions)
+        self.assertTrue(next(t for t in listed if t.name == "search").description.startswith("For a new subject"))
+        self.assertTrue(next(t for t in listed if t.name == "get_knowledge_graph").annotations.readOnlyHint)
+        self.assertFalse(oriented.isError)
+        self.assertEqual(json.loads(oriented.content[0].text), oriented.structuredContent)
+        served = {n["node_id"] for n in oriented.structuredContent["nodes"]}
+        self.assertIn("institution.zh-261-personenmeldeamt", served)
+        self.assertEqual(unplaced.structuredContent["place_dependence"]["depends_on"], "municipality")
+        self.assertFalse(unplaced.structuredContent["place_dependence"]["known"])
+
+    def test_http_lists_five_tools_and_health_names_the_graph(self):
+        service = ReleaseService.from_file(GRAPH_FIXTURE)
+
+        async def run():
+            app = create_http_app(service, host="0.0.0.0")
+            async with app.router.lifespan_context(app):
+                transport = httpx.ASGITransport(app=app)
+                async with httpx.AsyncClient(transport=transport, base_url="http://swiss-tip.test") as client:
+                    probe = await client.get("/health")
+                    async with streamable_http_client("http://swiss-tip.test/mcp", http_client=client) as (read, write, _):
+                        async with ClientSession(read, write) as session:
+                            await session.initialize()
+                            tools = [t.name for t in (await session.list_tools()).tools]
+                    return probe.json(), tools
+
+        report, tools = asyncio.run(run())
+        self.assertEqual(tools[0], "get_knowledge_graph")
+        self.assertEqual(report["knowledge_graph"]["graph_id"], "ch")
+        self.assertEqual(health(ReleaseService.from_file(FIXTURE))["knowledge_graph"], None)
 
 
 if __name__ == "__main__":

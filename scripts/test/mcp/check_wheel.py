@@ -52,8 +52,9 @@ async def run(release: Path, url: str | None) -> None:
         async with ClientSession(read, write) as session:
             init = await session.initialize()
             tools = [tool.name for tool in (await session.list_tools()).tools]
-            check(f"server {init.serverInfo.name} {init.serverInfo.version} lists the four tools",
-                  tools == ["get_coverage", "search", "resolve", "get_evidence"])
+            four = ["get_coverage", "search", "resolve", "get_evidence"]
+            check(f"server {init.serverInfo.name} {init.serverInfo.version} lists the four tools, and the knowledge "
+                  "graph first when the release carries one", tools in (four, ["get_knowledge_graph", *four]))
             root = (await session.call_tool("get_coverage", {})).structuredContent
             check(f"coverage root of {root.get('release_id')} names topics and jurisdictions",
                   bool(root.get("topics")) and bool(root.get("jurisdictions")) and bool(root.get("scope_statement")))

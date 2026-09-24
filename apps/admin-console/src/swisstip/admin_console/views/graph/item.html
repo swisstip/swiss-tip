@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ item.node_id if is_node else item.edge_id }} - Swiss TIP admin console{% endblock %}
+{% block content %}
+{% include "graph/_nav.html" %}
+<h1 class="mono">{{ item.node_id if is_node else item.edge_id }}</h1>
+<p>status <strong>{{ item.provenance.review_status }}</strong>, author {{ item.provenance.author }}
+  {% if item.provenance.reviewed_by %}, reviewed by {{ item.provenance.reviewed_by }} on {{ item.provenance.reviewed_on }}{% endif %}</p>
+{% for note in item.provenance.notes %}<p class="small muted">{{ note }}</p>{% endfor %}
+<div class="split wide">
+<section class="card">
+  <h2 style="margin-top:0">{{ 'Node' if is_node else 'Edge' }}</h2>
+  <form method="post" action="/graphs/{{ graph.graph }}/items/{{ item.node_id if is_node else item.edge_id }}/save">
+    <input type="hidden" name="sha256" value="{{ sha256 }}">
+    {% if is_node %}
+      <p>kind <strong>{{ item.kind }}</strong></p>
+      <label>label<br><input name="label" value="{{ item.label }}" style="width:100%"></label><br>
+      <label>summary<br><textarea name="summary" rows="4" style="width:100%">{{ item.summary }}</textarea></label><br>
+      <label>names (one per line, <code>de=Einwohnerkontrolle</code>; each must occur verbatim in a cited excerpt)<br>
+        <textarea name="names" rows="3" style="width:100%">{% for k, v in item.names.items() %}{{ k }}={{ v }}
+{% endfor %}</textarea></label><br>
+      <label>keywords (one per line)<br><textarea name="keywords" rows="3" style="width:100%">{{ item.keywords | join('\n') }}</textarea></label><br>
+      <label>level <select name="level"><option value=""></option>{% for l in ['federal', 'cantonal', 'municipal'] %}
+        <option {{ 'selected' if item.level == l }}>{{ l }}</option>{% endfor %}</select></label>
+      <label>place <input name="place" value="{{ item.place or '' }}" placeholder="CH-ZH-261"></label>
+    {% else %}
+      <p><a class="mono" href="/graphs/{{ graph.graph }}/items/{{ item.from_id }}">{{ item.from_id }}</a>
+         <strong>-{{ item.relation }}-&gt;</strong>
+         <a class="mono" href="/graphs/{{ graph.graph }}/items/{{ item.to_id }}">{{ item.to_id }}</a></p>
+      <label>statement<br><textarea name="statement" rows="3" style="width:100%">{{ item.statement }}</textarea></label><br>
+      <label>place (served for this place and the places inside it)
+        <input name="place" value="{{ item.place or '' }}" placeholder="CH-ZH"></label>
+    {% endif %}
+    {% if not read_only %}<p><button type="submit">Save</button>
+      <span class="small muted">validated and compiled before it is written</span></p>{% endif %}
+  </form>
+</section>
+<section class="card">
+  <h2 style="margin-top:0">Evidence</h2>
+  {% for e in excerpts %}
+    <div style="border-top:1px solid var(--line); padding-top:6px">
+      <p class="small mono">{{ e.label }}{% if e.basis %} - {{ e.basis }}{% endif %}</p>
+      {% if e.problem %}<p class="alert small">{{ e.problem }}</p>{% endif %}
+      {% if e.excerpt %}<pre style="white-space:pre-wrap">{{ e.excerpt }}</pre>{% endif %}
+      {% if e.url %}<p class="small"><a href="{{ e.url }}" target="_blank" rel="noopener">{{ e.url }}</a></p>{% endif %}
+    </div>
+  {% else %}<p class="muted">no citation (containment of places is grounded by the place register)</p>{% endfor %}
+</section>
+</div>
+
+{% if not read_only %}
+<section class="card">
+  <h2 style="margin-top:0">Review</h2>
+  <form method="post" action="/graphs/{{ graph.graph }}/items/{{ item.node_id if is_node else item.edge_id }}/review">
+    <input type="hidden" name="sha256" value="{{ sha256 }}">
+    <input type="hidden" name="following" value="{{ following or '' }}">
+    <label>note (needed for flag and reject) <input name="note" style="width:50%"></label>
+    <button name="action" value="confirm" accesskey="y">Confirm (y)</button>
+    <button name="action" value="flag" accesskey="f">Flag (f)</button>
+    <button name="action" value="reject" accesskey="n">Reject (n)</button>
+    {% if following %}<a href="/graphs/{{ graph.graph }}/items/{{ following }}" accesskey="j">next unreviewed (j)</a>{% endif %}
+  </form>
+  <p class="small muted">Confirm records you as the reviewer. Reject removes the item{% if is_node %} and its edges{% endif %}
+    and keeps it in the rejection log.</p>
+</section>
+{% endif %}
+
+{% if is_node %}
+<h2>Edges</h2>
+<table><thead><tr><th>from</th><th>relation</th><th>to</th><th>statement</th><th>place</th><th>status</th></tr></thead><tbody>
+{% for e in edges %}<tr><td class="mono small">{{ e.from_id }}</td>
+  <td><a href="/graphs/{{ graph.graph }}/items/{{ e.edge_id }}">{{ e.relation }}</a></td>
+  <td class="mono small">{{ e.to_id }}</td><td>{{ e.statement }}</td><td>{{ e.place or '' }}</td>
+  <td class="small">{{ e.provenance.review_status }}</td></tr>
+{% else %}<tr><td colspan="6" class="muted">no edge</td></tr>{% endfor %}
+</tbody></table>
+{% if not read_only %}
+<details class="card" style="margin-top:12px"><summary><strong>Add an edge from this node</strong></summary>
+<form method="post" action="/graphs/{{ graph.graph }}/edges/new">
+  <input type="hidden" name="sha256" value="{{ sha256 }}"><input type="hidden" name="from_id" value="{{ item.node_id }}">
+  <label>relation <select name="relation">{% for r in relations %}<option>{{ r }}</option>{% endfor %}</select></label>
+  <label>to <input name="to_id" list="node-ids" size="40"></label>
+  <datalist id="node-ids">{% for n in node_ids %}<option value="{{ n }}">{% endfor %}</datalist>
+  <label>place <input name="place" placeholder="optional, CH-ZH"></label><br>
+  <label>statement<br><textarea name="statement" rows="2" style="width:100%"></textarea></label><br>
+  <label>evidence (one per line: <code>mvp-zurich:e-...</code> or <code>text:doc-...:3-4</code>)<br>
+    <textarea name="evidence" rows="2" style="width:100%"></textarea></label><br>
+  <button type="submit">Add edge</button>
+</form></details>
+{% endif %}
+{% endif %}
+{% endblock %}

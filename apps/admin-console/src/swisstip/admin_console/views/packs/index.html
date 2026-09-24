@@ -108,4 +108,29 @@ curation file, the source catalogue and the checks file.</p>
   </form>
 </section>
 {% endif %}
+
+{% if graph_cards %}
+<h1 style="margin-top:24px">Knowledge graphs</h1>
+<p class="small muted">The orientation get_knowledge_graph serves before search; a pack embeds the compiled graph its
+curation names.</p>
+<div class="cards">
+{% for item in graph_cards %}
+  {% set card = item.card %}
+  <section class="card">
+    <h2 style="margin-top:0"><a href="/graphs/{{ card.graph }}">{{ card.graph }}</a>
+      {% if item.job %}<span class="badge warn">job {{ item.job.kind }} running</span>{% endif %}</h2>
+    {% if card.curation_error %}<p class="alert small">graph.yaml does not validate: {{ card.curation_error }}</p>{% endif %}
+    <div class="row"><span class="label">Curation</span>
+      <div style="flex:1; min-width: 260px"><div>{{ card.nodes }} nodes, {{ card.edges }} edges ({{ card.reviewed }} human-reviewed)</div>
+        {{ m.stacked(card.review, card.nodes + card.edges) }}</div></div>
+    <div class="row"><span class="label">Compiled</span>
+      {% if card.compiled %}<span>{{ card.compiled.nodes }} nodes, {{ card.compiled.edges }} edges, {{ card.compiled.created_at }}</span>
+        {% if not card.compiled_is_current %}<span class="badge warn">graph.yaml changed since</span>{% endif %}
+        {% if card.checks %}<span>checks {{ card.checks.passed }}/{{ card.checks.cases }}</span>{% endif %}
+      {% else %}<span class="muted">not compiled</span>{% endif %}</div>
+    <p class="small"><a href="/graphs/{{ card.graph }}/explore">Explore</a> - <a href="/graphs/{{ card.graph }}/review">Review</a></p>
+  </section>
+{% endfor %}
+</div>
+{% endif %}
 {% endblock %}
