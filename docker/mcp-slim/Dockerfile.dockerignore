@@ -1,0 +1,5 @@
+# The context is the repository root; swisstip-mcp comes from PyPI, so the
+# image needs the two licence files and nothing else.
+*
+!LICENSE
+!NOTICE

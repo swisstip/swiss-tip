@@ -140,8 +140,8 @@ class PipelineTests(unittest.TestCase):
     def test_stages_run_in_order_and_skip_when_unchanged(self):
         first = self.pipeline().run_stages()
         self.assertEqual(self.statuses(first), {"acquire": "skipped", "gaps": "ran", "extract": "ran", "validate-text": "ran",
-                                                "build": "skipped", "validate-release": "skipped", "health": "skipped",
-                                                "accept": "skipped"})
+                                                "build": "skipped", "validate-release": "skipped", "coverage": "skipped",
+                                                "health": "skipped", "accept": "skipped"})
         self.assertEqual(first["exit_code"], 0)
         self.assertTrue((self.root / ".local/test/gap-report.md").is_file())
         self.write_curation()
@@ -371,6 +371,34 @@ class PipelineTests(unittest.TestCase):
         entry = self.ready(attested_by="A. Person")
         self.assertEqual(entry["status"], "ran", entry.get("error"))
         self.assertEqual(entry["gates"]["G5"], "passed")
+
+    def test_coverage_stage_writes_its_report_and_the_ready_stage_carries_the_counts(self):
+        report = self.pipeline().run_stages("acquire", "validate-text")
+        self.write_curation()
+        report = self.pipeline().run_stages("build", "coverage")
+        self.assertEqual(self.statuses(report)["coverage"], "ran")
+        coverage = json.loads((self.root / "releases/test/curation-coverage.json").read_text(encoding="utf-8"))
+        self.assertEqual(coverage["policy"], "report")
+        self.assertEqual(coverage["counts"]["candidates"], 1)
+        self.assertEqual(coverage["counts"]["unclassified_sections"], 0)
+        self.assertTrue(coverage["clean"])
+        self.assertTrue((self.root / "releases/test/curation-coverage.md").exists())
+        self.assertEqual(coverage["sources"][0]["source_id"], "sem-faq")
+        # A disposition file for another pack stops the stage; one for this pack is read.
+        dispositions = self.root / "releases/test/curation-coverage.yaml"
+        dispositions.write_text("schema_version: swiss-tip-curation-coverage/v1\npack: other\ndispositions: []\n", encoding="utf-8")
+        report = self.pipeline().run_stages("coverage", "coverage")
+        self.assertEqual(self.statuses(report)["coverage"], "failed")
+        dispositions.write_text("schema_version: swiss-tip-curation-coverage/v1\npack: test\ndispositions: []\n", encoding="utf-8")
+        report = self.pipeline().run_stages("coverage", "coverage")
+        self.assertEqual(self.statuses(report)["coverage"], "ran")
+        (self.root / "releases/test/acceptance.yaml").write_text(ACCEPTANCE.replace("BROKEN", ""), encoding="utf-8")
+        report = self.pipeline(attested_by="Tester").run_stages("accept", "ready")
+        self.assertEqual(self.statuses(report)["ready"], "ran")
+        readiness = json.loads((self.root / "releases/test/readiness.json").read_text(encoding="utf-8"))
+        self.assertEqual(readiness["coverage"]["candidates"], 1)
+        self.assertTrue(readiness["coverage"]["clean"])
+        self.assertEqual(readiness_status(self.root / "releases/test/release.json")["status"], "ready")
 
     def test_a_report_record_of_the_former_ground_stage_is_dropped(self):
         self.pipeline().run_stages(until="validate-text")

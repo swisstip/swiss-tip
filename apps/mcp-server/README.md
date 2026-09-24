@@ -1,6 +1,6 @@
 # swisstip-mcp-server
 
-**Last update:** 20 September 2026
+**Last update:** 21 September 2026
 
 The Swiss TIP MCP server: the four tools of
 [docs/architecture/tool-contracts.md](../../docs/architecture/tool-contracts.md)
@@ -74,7 +74,7 @@ published on the host's loopback address only:
 
 ```shell
 docker run -d --rm --name swiss-tip-embeddings -p 127.0.0.1:11434:11434 -e OLLAMA_HOST=0.0.0.0:11434 \
-  ghcr.io/bobrovsky420/swiss-tip-ollama:qwen3-embedding-0.6b
+  ghcr.io/swisstip/swiss-tip-ollama:qwen3-embedding-0.6b
 uvx swisstip-mcp --release releases/<pack>/release.json --require-ready \
   --semantic-index releases/<pack>/semantic-index.json --transport streamable-http
 ```
@@ -139,20 +139,23 @@ The entry point starts `streamable-http` on `0.0.0.0` and `$PORT` (8000 in
 the image); arguments after the image name are appended, so the last two
 lines serve stdio to a local client and print the health report. The image
 declares a `HEALTHCHECK` on `/health`. The release image published on GitHub
-is built by the manual workflow
-[container-images.yml](../../.github/workflows/container-images.yml) from the
-semantic base image of [docker/](../../docker/README.md): it runs the
-round-trip check against the running container and pushes the tested tags to
-`ghcr.io/<owner>/swiss-tip` (`<release_id>`, `content-<digest>`, `<pack>`,
-`latest`). The same workflow builds a slim release image without Ollama
-(`<release_id>-slim`, `<pack>-slim`) and the embedding sidecar
-`ghcr.io/<owner>/swiss-tip-ollama`, which supplies the model from a second
-container; [compose.yaml](../../compose.yaml) starts the two together. The lexical image of the root Dockerfile is built locally with
+is built by the manual workflow "Container images" of the packs repository
+from the MCP image of [docker/](../../docker/README.md): it runs
+the round-trip check against the running container and pushes the tested
+tags to `ghcr.io/<owner>/swiss-tip` (`<release_id>`, `content-<digest>`,
+`<pack>`). The same workflow builds a slim release image without Ollama
+(`<release_id>-slim`, `<pack>-slim`). The images without a release, among
+them the embedding sidecar `ghcr.io/<owner>/swiss-tip-ollama`, which
+supplies the model from a second container, are built by this repository's
+[container-images.yml](../../.github/workflows/container-images.yml);
+[compose.yaml](../../compose.yaml) starts the slim image and the sidecar
+together. The lexical image of the root Dockerfile is built locally with
 `build_image.py`; its `--push`, from a clean checkout after
 `docker login ghcr.io`, must name another image with `--image`, because the
 default name is the release image's. A new
 package on GitHub Container Registry is private until its visibility is
-changed in the package settings; `ghcr.io/bobrovsky420/swiss-tip` is public.
+changed in the package settings, so each package under `ghcr.io/swisstip`
+is made public after its first push.
 The package page on GitHub shows the image's
 `org.opencontainers.image.description` label (plain text, at most 512
 characters) under the package name. A container package has no README of its
@@ -174,8 +177,8 @@ source"). The image README is `/srv/swiss-tip/README.md` inside the image.
 [run_image_test.py](../../scripts/test/container/run_image_test.py) tests the
 image as a registry serves it, not the checkout's server: it checks whether
 the tag can be pulled without a login, pulls
-`ghcr.io/bobrovsky420/swiss-tip:mvp-zurich-2026-09-18-v10` (`--image` for
-another tag), starts it on a free loopback port and then uses the checkout
+`ghcr.io/swisstip/swiss-tip:mvp-zurich`, the pack's moving tag (`--image` for
+a release's tag), starts it on a free loopback port and then uses the checkout
 only for its clients. It checks the release labels against `/health`, runs
 the checks of `check_server.py --url`, confirms from the container's own
 log that the calls reached it, and connects OpenCode to the endpoint; `--live`

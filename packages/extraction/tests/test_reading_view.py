@@ -25,6 +25,14 @@ class ReadingViewTests(unittest.TestCase):
         self.assertIn("[hidden]: Hidden", view)
         self.assertIn("[footer, footer]: Contact", view)
         self.assertIn("`doc-abc`", view)
+        # The same record with a section the dataset knows to repeat: every block of it is marked, the header lists it,
+        # and every line of the plain view is still there.
+        marked = render(record, [dict(section_id="section-0002", heading_path=["Permit"], first_block=3, last_block=4, pages=7)])
+        self.assertIn("- Repeated on other pages of this site (cite once, from the page that owns it): b00003-b00004 Permit (7 pages)", marked)
+        self.assertIn("  b00003 paragraph [repeated on 7 pages]: Apply now.", marked)
+        self.assertIn("b00004 table [repeated on 7 pages]", marked)
+        self.assertNotIn("b00001 text [nav, navigation, repeated", marked)
+        self.assertEqual(len(marked.splitlines()), len(view.splitlines()) + 1)
 
 
 if __name__ == "__main__":

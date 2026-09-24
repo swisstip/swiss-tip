@@ -1,33 +1,28 @@
 # Institutions, basis and provenance weights
 
-**Last update:** 20 September 2026
+**Last update:** 21 September 2026
 
-**Status:** implemented on 16 September 2026 as designed in sections 3 to 6,
-with one addition: a basis may carry `refers_to`, a norm the excerpt names
-without reproducing it, appended to the label. Section 2 describes the
-state before the change. The implementation lives in `swisstip.core.basis`,
-the release models and validator, the build (which derives the article of a
-law citation from the heading path, section 4.3, and reports a hand-written
-norm whose article differs), the runtime service, the acceptance check, the
-concept-extraction pipeline (a third call per chunk classifies the basis of
-every retained proposal, [concept-extraction.md](concept-extraction.md)
-section 5.7) and the admin console (the pack form edits the registry, the
-page defaults and the ranking policy; the review queue shows the basis of
-every fact and citation and filters by basis kind; the fact form sets a
-citation's basis). Since release `mvp-zurich-2026-09-16-v2` the served release carries the
-registry, the page defaults, the basis of every citation and the ranking
-policy in its curation file; the article check of the build agrees with all
-77 hand-written law norms of that release, so the release was not rebuilt. The reading of every served excerpt behind that data is
-`releases/mvp-zurich/basis-review.md` in swiss-tip-mvp,
-written by an assistant and not reviewed by a person. The release
-`mvp-wallisellen-2026-09-16-v3` carries a registry of six City of Wallisellen
-institutions and the basis of each of its 99 citations, classified by
-assistant subagents with the prompt `basis_classification_v1.md` applied
-verbatim per page
-(`releases/mvp-wallisellen/basis-review.md` in swiss-tip-mvp)
-and confirmed by one person on 16 September 2026. The numbers of
-section 7 were measured on the release of 15 September with a scratch script
-that is not committed and were not rerun on the current release.<br>
+**Status:** implemented in `swisstip.core.basis`, the release models and
+validator, the build (which derives the article of a law citation from the
+heading path, section 3.3, and reports a hand-written norm whose article
+differs), the runtime service, the acceptance check, the concept-extraction
+pipeline (a third call per chunk classifies the basis of every retained
+proposal, [concept-extraction.md](concept-extraction.md) section 4.7) and
+the admin console (the pack form edits the registry, the page defaults and
+the ranking policy; the review queue shows the basis of every fact and
+citation and filters by basis kind; the fact form sets a citation's basis).
+A basis may carry `refers_to`, a norm the excerpt names without reproducing
+it, appended to the label. The served releases carry the registry, the page
+defaults, the basis of every citation and the ranking policy in their
+curation files. The reading of every served excerpt behind that data is
+`releases/<pack>/basis-review.md` in swiss-tip-mvp: for `mvp-zurich`
+written by an assistant and not reviewed by a person; for
+`mvp-wallisellen` (a registry of six City of Wallisellen institutions and
+the basis of each of its 99 citations) classified by assistant subagents
+with the prompt `basis_classification_v1.md` applied verbatim per page and
+confirmed by one person. The numbers of section 6 were measured on an
+earlier release with a scratch script that is not committed and were not
+rerun on the current one.<br>
 **Relation to other documents:** extends the release format
 ([release-format.md](release-format.md)), the tool contracts
 ([tool-contracts.md](tool-contracts.md)) and the lexical ranking of the
@@ -54,41 +49,9 @@ Three things a caller should get, each stated on its own:
    `admin.ch` is not more authoritative than one on `zh.ch`, and a municipal
    page is authoritative for a narrower jurisdiction, not less authoritative.
 
-## 2. What exists today
+## 2. Institutions: who published the page
 
-- The source catalogue (`releases/<pack>/sources.json`) already records per
-  source `canonical_authority`, `authority_level` (federal, cantonal,
-  municipal), `jurisdiction`, `municipality` (name and BFS code) and
-  `source_kind` (`legislation`, `official_directives`, `official_guidance`,
-  `authority_directory`, `topic_portal`). The text record of every saved page
-  carries its catalogue entries in `source_registry`.
-- The build keeps none of it. It resolves one `publisher` string per document
-  from the curation file's `publishers` map, keyed by host, with the
-  catalogue's `canonical_authority` as the fallback (`publisher_for` in
-  `packages/build/src/swisstip/build/release_build.py`), and copies the string
-  onto every evidence record and every citation.
-- Because the map is keyed by host, every page of `www.zh.ch` carries the
-  publisher "Canton of Zurich (Migrationsamt; Kantonales Steueramt;
-  Strassenverkehrsamt; Gesundheitsdirektion; Gemeindeamt, Abteilung
-  Einbürgerungen)", whichever office wrote it, and the two City of Zurich
-  offices share one string. COVERAGE.md names the office per document; the
-  release does not, so the two disagree.
-- Nothing records what an excerpt is. The catalogue's `source_kind` is a
-  property of the page, so a law article quoted on a guidance page reads as
-  guidance, and an ordinance on Fedlex reads the same as an act.
-- Ranking is lexical only: `search` scores a concept by rarity-weighted token
-  overlap on label, aliases, questions, description and statements, and the
-  optional hybrid mode fuses the lexical and the semantic list by reciprocal
-  rank. Nothing about a concept's sources or the provenance of its facts
-  enters the score. `resolve` serves every applicable fact of a concept in
-  curation order and the cited pages in first-cited order.
-- LIMITATIONS.md states that where a ch.ch fact and a fact from the law cover
-  the same subject, the law is the more exact source. The server does not say
-  so, and the catalogue classes the ch.ch pages as `official_guidance`.
-
-## 3. Institutions: who published the page
-
-### 3.1 Registry in the curation file
+### 2.1 Registry in the curation file
 
 A pack-level list replaces the `publishers` map. The expert owns it, the
 console's pack form edits it, the build copies it into the release. The
@@ -147,13 +110,12 @@ institutions:
 | `urls` | host, or host plus path prefix | Attribution rules for the build; the longest matching prefix wins; not copied into the release |
 
 The registry carries no weight: the institution is named and served, never
-ranked (section 5).
+ranked (section 4).
 
-### 3.2 Attribution in the build
+### 2.2 Attribution in the build
 
 For every cited text record the build resolves the institution in this
-order and stops with a `BuildError` when nothing resolves, as it stops today
-on a host without a publisher:
+order and stops with a `BuildError` when nothing resolves:
 
 1. The registry rule with the longest prefix matching the record's
    `source_url` (host first, then host and path).
@@ -166,13 +128,13 @@ on a host without a publisher:
 
 On the current release every one of the 43 cited documents matches at least
 one catalogue entry and three match two entries of the same authority
-(section 7), so the fallback would name every document today.
+(section 6), so the fallback alone would name every document.
 
-`publisher` on documents, evidence and citations keeps its meaning and
-becomes the institution's `name`, so a caller that reads only `publisher`
-sees the specific office instead of the host-wide string.
+`publisher` on documents, evidence and citations is the institution's
+`name`, so a caller that reads only `publisher` sees the specific office
+rather than a host-wide string.
 
-### 3.3 Release format and contract
+### 2.3 Release format and contract
 
 | Where | Change |
 | --- | --- |
@@ -189,9 +151,9 @@ object repeating the name costs twice that. `body` and `native_name` are not
 served in the first step; `native_name` is the candidate for a later additive
 field when a caller answering in German needs the office's own name.
 
-## 4. Basis: what the excerpt is
+## 3. Basis: what the excerpt is
 
-### 4.1 The basis record
+### 3.1 The basis record
 
 Every citation of a fact resolves to a basis with three parts. It describes
 the content of the excerpt, not the page: the level is the level of the body
@@ -213,7 +175,7 @@ that enacted the rule or wrote the text, and the kind is what the text is.
 | `directory` | An authority's list of offices | The SEM list of cantonal migration offices |
 | `summary` | A plain-language restatement by a body that is not the competent authority | The ch.ch pages |
 
-### 4.2 The served label
+### 3.2 The served label
 
 The build composes one string per basis, served as `basis`, so a caller can
 quote it without parsing:
@@ -235,7 +197,7 @@ quotes AIG Article 12 on the Canton of Zurich migration page is served with
 the canton's own answer two paragraphs down is "Cantonal authority guidance"
 with the same citation.
 
-### 4.3 Where the basis is set
+### 3.3 Where the basis is set
 
 The curator sets it per citation in the curation file, and the build fills a
 default for every citation that does not carry one:
@@ -264,7 +226,7 @@ Resolution order per citation:
 2. The `page_basis` rule with the longest matching prefix. For `act`,
    `ordinance` and `treaty` the build appends the article from the excerpt's
    heading path, which the anchors already store: every Fedlex citation
-   carries "Art. N" there (section 7). Two things the reading of the current
+   carries "Art. N" there (section 6). Two things the reading of the current
    release found must be handled first: Fedlex glues footnote numbers to
    article and paragraph numbers, so the AIG heading `Art. 4384` is
    Article 43 with footnote 84, and the Agreement on the Free Movement of
@@ -284,10 +246,9 @@ basis and a derived one must stay distinguishable.
 
 The catalogue is not changed for this: its `source_kind` describes the page,
 stays what it is, and is not read by the build for the basis. A catalogue
-change would need a new run directory, and the ch.ch reclassification should
-not wait for one.
+change would need a new run directory, which the basis does not.
 
-### 4.4 Release format and contract
+### 3.4 Release format and contract
 
 | Where | Change |
 | --- | --- |
@@ -317,9 +278,9 @@ A label costs about 40 bytes per fact when the facts of a concept differ and
 once per concept when they agree, which on the current release is the common
 case (every fact of a concept rests on excerpts of one kind in 56 of 64 concepts).
 
-## 5. Provenance weights
+## 4. Provenance weights
 
-### 5.1 Two factors per fact
+### 4.1 Two factors per fact
 
 Two things make a fact more or less authoritative: what its excerpt is, and
 how its statement came about. Neither is the level of the state or the host
@@ -327,7 +288,7 @@ of the page. A municipal page is authoritative for a narrower jurisdiction,
 not less authoritative, and the containment rule of `resolve` already handles
 that; weighting by level would push the City of Zurich procedure below the
 SEM FAQ for a Zurich question, the opposite of what a caller needs. The
-institution is served (section 3) and never weighted.
+institution is served (section 2) and never weighted.
 
 Basis weight `a` of an excerpt, from the basis `kind`:
 
@@ -354,7 +315,7 @@ weights. A concept's authority `A(concept)` is the highest `w` among its
 facts: a concept that rests on at least one reviewed statement of the law is
 as authoritative as that fact, and a clarifying portal fact added later does
 not penalise it. The mean over facts is the alternative for a pack where most
-facts are unreviewed; section 7 measures both.
+facts are unreviewed; section 6 measures both.
 
 The tables live in the curation file as `ranking_policy` and are copied into
 the manifest, so a release is self-contained and the server reads nothing but
@@ -362,14 +323,14 @@ the release; a pack without the block gets these defaults. No tool serves the
 numbers. The release file is public, so "internal" means outside the wire
 contract, not secret.
 
-### 5.2 Where the weights act
+### 4.2 Where the weights act
 
 - **Lexical search.** `score' = score x (b + (1 - b) x A(concept))` with
-  `b = 0.7`, then the relative-score floor as today. The prior spans 0.7 to
+  `b = 0.7`, then the relative-score floor. The prior spans 0.7 to
   1.0: a reviewed law-backed concept keeps its score, a reviewed summary-only
   concept loses 7.5 percent, an unreviewed automatically derived section
   loses about 15 percent. That reorders near-ties and never overrides a
-  clearly better lexical match; section 7 measures it on the current release.
+  clearly better lexical match; section 6 measures it on the current release.
 - **Hybrid search.** The same factor is applied to each retriever's own score
   before ranks are taken: to the lexical score as above and to the cosine
   similarity of the semantic candidates after the candidate threshold.
@@ -377,11 +338,11 @@ contract, not secret.
   to the fused score: adjacent fused ranks differ by about two percent, so a
   ten percent prior would move a concept by several ranks in one mode and by
   one in the other.
-- **Resolve.** Selection is unchanged: every applicable fact is served,
-  statuses and gaps are computed as today, and facts stay in curation order,
-  because that order is the curator's reading order (rule, exception,
-  procedure) and therefore content. Only the citation order and the guidance
-  sentence of section 4.4 change.
+- **Resolve.** Selection does not weigh: every applicable fact is served,
+  and facts stay in curation order, because that order is the curator's
+  reading order (rule, exception, procedure) and therefore content. The
+  weights act on the citation order and the guidance sentence of section 3.4
+  only.
 - **KB2.** This is where the weights matter. The nationwide pack will hold
   source sections that nobody read next to curated, reviewed facts
   ([TODO.md](../../TODO.md), "KB2"); the search index over statements and
@@ -393,9 +354,9 @@ The `search` description says that the score includes a prior for the basis
 of a concept's facts and the review of its statements; the score stays "not
 comparable across releases".
 
-## 6. Validation
+## 5. Validation
 
-The validator gains, in its order:
+The validator checks, in its order:
 
 - Registry: unique institution IDs; `level` and `jurisdiction` consistent
   (`federal` if and only if `CH`, `cantonal` if and only if a canton code,
@@ -405,33 +366,31 @@ The validator gains, in its order:
   names its document's institution and carries a basis.
 - Basis: `level` and `kind` within their enumerations; `norm` non-empty for
   `act`, `ordinance`, `treaty` and `directive`; the label equal to the
-  composition of section 4.2; a fact's `provenance.basis` equal to the
+  composition of section 3.2; a fact's `provenance.basis` equal to the
   highest-weighted basis of its evidence.
 - Every fact's jurisdiction is contained in the jurisdiction of every
   institution it cites: a cantonal fact may rest on a federal or a cantonal
   page, a federal fact never on a cantonal or municipal page alone. The
-  current release passes with zero violations (section 7).
+  current release passes with zero violations (section 6).
 - A fact published for `CH` has a basis of level `federal`; a cantonal or
   municipal basis cannot ground a federal fact.
 - The manifest's `institution_levels` and `basis_kinds` equal the documents
   and the facts; `ranking_policy` names every kind and status with a weight
   in (0, 1] and a floor in [0, 1].
 
-## 7. Measured effect on the current release
+## 6. Measured effect
 
 Measured on `mvp-zurich-2026-09-15-v3` with a scratch script over the
-released service in lexical mode, without the semantic index. The current
-release is `mvp-zurich-2026-09-16-v1`, which added the Agreement on the Free
-Movement of Persons; the prepared data of the status block covers it, and
-the search measurement below was not rerun on it. The basis of
-every excerpt was the page default of section 4.3 (Fedlex pages as law, the
+released service in lexical mode, without the semantic index; the
+measurement has not been rerun on a later release. The basis of
+every excerpt was the page default of section 3.3 (Fedlex pages as law, the
 Zürcher Steuerbuch as a directive, the SEM office list as a directory, every
 other page as guidance, and in the second variant ch.ch as a summary); no
 per-citation override was simulated, so a law quoted on an authority's page
 counted as guidance. The query fixture is the committed holdout of 42
 questions, 35 of them supported, authored for `mvp-zurich-2026-09-13-v5` and
-run with its identifiers on the current release, so the baseline differs from
-the numbers in the runtime README. The acceptance suite is
+run with its identifiers, so the baseline differs from the numbers in the
+runtime README. The acceptance suite is
 `releases/mvp-zurich/acceptance.yaml`.
 
 Attribution, basis defaults and containment:
@@ -450,7 +409,7 @@ the basis weight varies:
 
 | Setting | Recall at 3 | Recall at 5 | First hit, 34 single-concept cases | Top-3 order changed | Acceptance suite | Pinned search steps |
 | --- | --- | --- | --- | --- | --- | --- |
-| Today, no prior | 0.443 | 0.500 | 9 | 0 of 35 | passes | unchanged |
+| No prior | 0.443 | 0.500 | 9 | 0 of 35 | passes | unchanged |
 | Prior, ch.ch as guidance | 0.443 | 0.500 | 9 | 3 of 35 | passes | unchanged |
 | Prior, ch.ch as summary | 0.443 | 0.514 | 9 | 4 of 35 | passes | unchanged |
 | Prior with `b = 0.5`, ch.ch as summary | 0.443 | 0.514 | 8 | 5 of 35 | passes | unchanged |
@@ -470,53 +429,9 @@ it is safe: no acceptance case and no pinned search step changes. Its value
 lies in the ch.ch reclassification and the per-citation overrides on KB1, and
 in the unreviewed material of KB2.
 
-## 8. Change list, timing and decisions
+## 7. Deliberately not done
 
-### 8.1 Change list
-
-| Where | Change |
-| --- | --- |
-| `packages/core` | `Institution` and `Basis` models; the `institutions` part; `institution_id` on documents and evidence, `basis` on evidence and in fact provenance; `institution_levels`, `basis_kinds` and `ranking_policy` on the manifest; the validator checks of section 6; the contract fields of sections 3.3 and 4.4 with the shared form of `basis` on the concept; the schema bundle regenerated |
-| `packages/build` | `institutions`, `page_basis` and `ranking_policy` in the curation model and `basis` on a citation; institution attribution with the longest-prefix rule and the catalogue fallback; basis resolution in the order of section 4.3 with the article from the heading path; the composed label; `publisher` from the institution; the build report entries; defaults when a block is absent |
-| `packages/runtime` | `w(fact)` and `A(concept)` computed at startup from the manifest's policy; the prior in `lexical_hits` and on the semantic candidates before fusion; the citation order; the guidance sentence; `basis` served on facts, concepts and evidence; the `search` description |
-| `apps/admin-console` | The pack form edits the registry and the page defaults instead of host=name lines; the workbench flags a cited URL that no rule or catalogue entry attributes and lets the reviewer set a citation's basis; the review card shows the basis next to the excerpt; the release screen and the COVERAGE.md generator print institution and level per document and facts per basis kind |
-| `scripts/test/mcp/check_server.py` | Checks that the standing cases' citations carry `level` and `jurisdiction` and that `aig-registration` resolves with the basis "Federal act: AIG, SR 142.20, Art. 12" |
-| Documents | release-format.md, tool-contracts.md and the bundle, the runtime README, admin-console.md, COVERAGE.md (documents per level, facts per basis kind), LIMITATIONS.md (the portal note becomes served guidance; which facts rest on summaries), TODO.md |
-| Tests | core: models and validator cases (inconsistent level, uncited institution, a federal fact on a cantonal page, a federal fact with a cantonal basis, an act without a norm, a label that does not match); build: attribution order, fallback, missing institution, basis resolution order, article from the heading path, publisher name, policy defaults; runtime: prior on lexical and on each retriever, citation order, guidance sentence, shared basis, policy read from the manifest; console: pack form and basis edit; the acceptance suite and the round trip on the rebuilt release; the fixture benchmark rerun with `--allow-release-change` and recorded under `.local/experiments/` |
-
-### 8.2 Timing
-
-The change alters the release format, so a rebuilt release differs from the
-committed one in bytes and digest, and rule 3 of the hackathon plan (a
-rebuild equal to the committed release) needs a re-committed reference. It
-therefore lands either before the freeze of 23 September, together with the
-pending catalogue revision (the dead control-drive link and the SVA page's
-language) as one rebuild and one new release with COVERAGE.md and
-LIMITATIONS.md updated, or after the event. Not during it: the contract
-change would be additive and allowed, the release change would not. The
-per-citation overrides are curation work for the expert: reading the 184
-guidance-page citations for quoted law is part of the review, not of the
-build.
-
-### 8.3 Decisions for the lead
-
-1. The basis vocabulary of section 4.1 and the labels of section 4.2, with
-   `act`, `ordinance` and `treaty` at the same weight: recommended.
-2. ch.ch as `summary` by page default: recommended; it states in the release
-   what LIMITATIONS.md states in prose, and section 7 shows no regression.
-3. `b = 0.7` and the tables of section 5.1 as the defaults, with the maximum
-   as the concept aggregate: recommended.
-4. `basis` served as one composed label, with the structured parts in the
-   release only: recommended; structured fields can be added later as
-   optional additions if a caller or the harness needs them.
-5. Citations ordered by basis weight and facts kept in curation order:
-   recommended.
-6. Before the freeze together with the catalogue revision, or after the
-   event.
-
-### 8.4 Not proposed
-
-- Weights by level of the state or by host (section 5.1).
+- Weights by level of the state or by host (section 4.1).
 - Reading the basis from the catalogue's `source_kind`: it describes the
   page, not the excerpt.
 - Reordering facts within a concept.

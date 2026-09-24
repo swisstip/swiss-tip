@@ -366,8 +366,13 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(languages[0].indexed, "4 search terms copied from the cited pages, on 3 of 5 concepts")
         self.assertEqual(languages[1].indexed, "the concept labels, sample questions and statements")
         self.assertFalse(any("not advertised" in item for item in service.limitations))
-        note = "Write search queries in German (preferred) or English"
+        # One search, in either language, and the rule comes first: callers sent an English question in German as well.
+        note = ("Search ONCE per question, in German or English, never in more than one of them: a second search in "
+                "another language rarely finds other concepts. Write the search query in German or English: lexical "
+                "search matches only these languages. Send a question in one of them as asked, without translating "
+                "it; translate the key terms of a question in any other language into German before searching")
         self.assertIn(note, service.instructions)
+        self.assertNotIn("preferred", service.tool_description("search").split("This server:")[1])
         self.assertIn("Residence permits and registration.", service.instructions)
         self.assertIn(note, service.tool_description("search"))
         self.assertNotIn(note, service.tool_description("resolve"))
@@ -386,7 +391,10 @@ class ServiceTests(unittest.TestCase):
         # the query languages and named in the limitations; English, the statements' language, stays.
         service = ReleaseService(with_aliases({"city-arrival": ["Personenmeldeamt", "Termin"]}))
         self.assertEqual([q.code for q in service.query_languages], ["en"])
-        self.assertIn("Write search queries in English:", service.instructions)
+        # A single query language needs no "one search" reminder: there is no other language to repeat the search in.
+        self.assertIn("Write the search query in English: lexical search matches only this language. Send a question "
+                      "in it as asked, without translating it; translate", service.instructions)
+        self.assertNotIn("Search ONCE", service.tool_description("search").split("This server:")[1])
         self.assertNotIn("German", service.tool_description("search").split("This server:")[1])
         self.assertIn("Search is not advertised in German (2 search terms on 1 of 5 concepts)", service.limitations[-1])
         self.assertIn(service.limitations[-1], service.get_coverage(GetCoverageRequest()).limitations)
@@ -656,6 +664,29 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(service.lexical_hits("What does Testtown offer?"), [])
         self.assertEqual([hit[1] for hit in service.lexical_hits("Testtown Kiosk2")], ["town-2"])
 
+    def test_a_one_character_token_is_kept_unless_it_is_an_elision(self):
+        # The letter is the whole question: without it "What is an L permit?" comes down to "permit".
+        self.assertEqual(tokens("What is an L permit?"), {"l", "permit"})
+        self.assertEqual(tokens("Wie bekomme ich eine B-Bewilligung?"), {"b", "bekomm", "bewill"})
+        self.assertEqual(tokens("What is a D visa?"), {"d", "visa"})
+        self.assertEqual(tokens("Tarif B"), {"b", "tarif"})
+        # A character joined to a word by an apostrophe is grammar, in English and in French.
+        self.assertEqual(tokens("the foreign national's permit"), {"foreig", "nation", "permit"})
+        self.assertEqual(tokens("l’autorisation d'etablissement"), {"autori", "etabli"})
+        # The articles stay stopwords, and so do the one-letter function words the length filter used to hide.
+        self.assertEqual(tokens("I need a permit"), {"permit"})
+        self.assertEqual(tokens("Wo isch s Amt z Winterthur? E-Mail?"), {"isch", "amt", "winter", "mail"})
+
+    def test_a_one_character_token_no_anchor_names_does_not_weaken_the_match(self):
+        # An unnamed letter is grammar, not the question's most distinctive unmatched word ("d Stadt", "z.B.").
+        self.assertEqual(self.service.anchored_match("Anmeldefrist d Stadt"), self.service.anchored_match("Anmeldefrist Stadt"))
+        # A letter an alias names is a word of the question like any other.
+        release = sample_release()
+        release.concepts[0].aliases = [*release.concepts[0].aliases, "Ausweis Q"]
+        release.manifest.content_sha256 = content_hash(release)
+        named = ReleaseService(release)
+        self.assertGreater(named.anchored_match("Ausweis Q")[1], named.anchored_match("Ausweis")[1])
+
     def test_loose_hits_far_below_the_best_are_dropped(self):
         hits = self.service.lexical_hits("Anmeldefrist 14 days register permit")
         self.assertEqual(hits[0][1], "deadline")
@@ -732,6 +763,40 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(error.error.code.value, "INVALID_ARGUMENT")
         self.assertIsInstance(self.service.dispatch("get_evidence", {"evidence_ids": []}), ToolError)
         self.assertIsInstance(self.service.dispatch("unknown_tool", {}), ToolError)
+
+    def test_the_context_vocabulary_reaches_the_caller_before_its_first_call(self):
+        # Knowing the fields and their published values, a caller maps what the user said ("a Czech citizen") to a
+        # value on its first resolve instead of learning the field from a NEEDS_CONTEXT round trip. It is sent in the
+        # instructions and on the resolve schema because a client may drop either.
+        entry = "- population (eu_efta, third_country): Citizenship group."
+        self.assertIn("Context fields of this release", self.service.instructions)
+        self.assertIn(entry, self.service.instructions)
+        context = self.service.tool_input_schema("resolve")["properties"]["context"]
+        self.assertIn("Values for the concept's context_schema fields.", context["description"])
+        self.assertIn(entry, context["description"])
+        # Only resolve takes a context; the search schema is unchanged.
+        self.assertNotIn("Context fields", str(self.service.tool_input_schema("search")))
+
+    def test_a_release_without_context_fields_sends_no_vocabulary(self):
+        release = sample_release()
+        for concept in release.concepts:
+            concept.required_context, concept.context_schema = [], {}
+        service = ReleaseService(release)
+        self.assertEqual(service.context_note, "")
+        self.assertNotIn("Context fields", service.instructions)
+        self.assertFalse(service.instructions.endswith("\n"))
+
+    def test_a_vocabulary_over_the_budget_falls_back_to_the_field_names(self):
+        # The list is a session-once cost, so it is sent in full; a pack with far more fields than a question can
+        # plausibly need sends the names, and each search hit still carries its own concept's values.
+        release = sample_release()
+        release.concepts[0].context_schema |= {f"field_{n:03}": ContextFieldSpec(enum=["yes", "no"],
+                                                                                 description="Long description. " * 5)
+                                               for n in range(60)}
+        service = ReleaseService(release)
+        self.assertIn("This release has 61 context fields, too many to list here", service.context_note)
+        self.assertIn("field_000, field_001", service.context_note)
+        self.assertNotIn("Long description", service.context_note)
 
 
 class JurisdictionNameTests(unittest.TestCase):
@@ -836,6 +901,27 @@ class JurisdictionNameTests(unittest.TestCase):
         self.assertIn("Zürich (CH-ZH-261) lies in Zürich (CH-ZH), not in Bern / Berne (CH-BE)", elsewhere.error.issues[0].message)
         self.assertIsInstance(self.resolve({"canton": "BE", "city": "CH-ZH-261"}), ToolError)
         self.assertIsInstance(self.resolve({"canton": "Zurich", "kanton": "ZH"}), ToolError)
+
+    def test_a_flattened_place_is_folded_into_the_jurisdiction(self):
+        """A small model that sends the place next to the other arguments is served, not sent round again."""
+        wallisellen = self.scope({"city": "Wallisellen"})
+        flat = self.service.dispatch("resolve", {"concept_ids": ["zh-registration"], "city": "Wallisellen"})
+        self.assertEqual(flat.executed_scope.model_dump(exclude_none=True), wallisellen)
+        self.assertEqual(flat.results[0].status, Status.SUPPORTED)
+        # Every name the field accepts is folded, next to a jurisdiction that carries the other parts.
+        mixed = self.service.dispatch("resolve", {"concept_ids": ["zh-registration"], "municipality_id": "CH-ZH-69",
+                                                  "jurisdiction": {"canton": "Zurich"}})
+        self.assertEqual(mixed.executed_scope.model_dump(exclude_none=True), wallisellen)
+        found = self.service.dispatch("search", {"query": "registration", "canton": "Zurich"})
+        self.assertEqual(found.executed_scope.canton_code, "CH-ZH")
+        # The same part given twice is a caller error, and an unknown argument is still rejected.
+        twice = self.service.dispatch("resolve", {"concept_ids": ["zh-registration"], "city": "Bern",
+                                                  "jurisdiction": {"city": "Wallisellen"}})
+        self.assertIsInstance(twice, ToolError)
+        self.assertIn("The city is given twice", twice.error.issues[0].message)
+        self.assertIsInstance(self.service.dispatch("resolve", {"concept_ids": ["zh-registration"], "citty": "Bern"}),
+                              ToolError)
+
 
     def test_the_input_schema_names_the_default_country(self):
         description = self.service.tool_input_schema("resolve")["properties"]["jurisdiction"]["description"]

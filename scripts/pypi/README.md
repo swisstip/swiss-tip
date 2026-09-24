@@ -1,6 +1,6 @@
 # PyPI distributions
 
-**Last update:** 20 September 2026
+**Last update:** 21 September 2026
 
 The repository keeps one `pyproject.toml` per component under `packages/` and
 `apps/`, for editable development installs. PyPI gets three distributions
@@ -24,6 +24,8 @@ Knowledge releases are not published to PyPI.
   whose dependencies, scripts, optional dependencies and package data are
   merged from the components' own files, and builds the sdist and the wheel
   into `dist/`. Dependencies are declared only in the component files.
+- [check_versions.py](check_versions.py): the guard that every component
+  states one version and that the version being built is it.
 - [readme/](readme/): the PyPI project description of each distribution.
 - [../../.github/workflows/pypi-packages.yml](../../.github/workflows/pypi-packages.yml):
   the publishing workflow.
@@ -41,8 +43,23 @@ Knowledge releases are not published to PyPI.
 
 | Trigger | Publishes to |
 | --- | --- |
-| Push of a tag `v<version>`, for example `v0.2.0` | PyPI, as `<version>` |
-| Manual run ("Run workflow") with a version, for example `0.2.0rc1` | TestPyPI |
+| Push of a tag `v<version>`, for example `v0.3.0` | PyPI, as `<version>` |
+| Manual run ("Run workflow") with a version, for example `0.3.0rc1` | TestPyPI |
+| Push to any branch | nothing; it builds and tests as `<version>.dev0` |
+
+A branch push is how the build is verified before a release tag exists: the
+publish jobs run for a tag and for a manual run only. The manual run needs
+this workflow on the default branch, because that is where GitHub looks for
+the "Run workflow" button, so on a repository whose default branch does not
+carry it yet, a branch push is the only trigger that works.
+
+The distributions take their version from the command line of
+`build_distributions.py`, which the workflow fills from the tag, never from
+the component files. `check_versions.py` is the guard: every
+`packages/*/pyproject.toml`, every `apps/*/pyproject.toml` and the server's
+`SERVER_VERSION` must state one and the same version, and the version being
+built must be it, so a tag `v0.3.0` on a checkout that still says `0.2.5`
+fails the run before anything is built.
 
 The build job runs every component's offline tests, builds the three
 distributions, checks their metadata with `twine check --strict`, installs the

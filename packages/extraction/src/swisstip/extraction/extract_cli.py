@@ -23,6 +23,7 @@ from .dataset import (apply_groups, check_output_location, existing_ids, index_e
                       read_json, record_path, reusable, summarize, view_path, write_dataset_files, write_record)
 from .reading_view import render
 from .records import assemble
+from .sections import apply_candidates, repeated_sections
 from .run_reader import (ATTRIBUTED_KINDS, SCOPES, RunError, load_plan, manifest_sha256, read_verified,
                          select_items, snapshot_items)
 
@@ -43,6 +44,29 @@ def extract_one(run: str, item: dict, output: str, catalogue_sha256: str | None,
     record = assemble(item, raw, manifest_sha256(run_path, item), run_path.name, catalogue_sha256)
     write_record(output_path, record, reading_view)
     return dict(entry=index_entry(record, output_path), reused=False)
+
+
+def mark_repetition(output: Path, entries: list[dict], reading_view: bool) -> dict[str, int]:
+    """Set `repeated_sections` on every entry and re-render the reading views of the candidates that carry one.
+
+    Repetition is a fact about the dataset, not about a record, so it lives in the index and the reading view and
+    never in the record. The views of candidates are rendered again on every run, with or without marks, so that a
+    mark disappears when the other pages do; a record that stopped being a candidate keeps its last view until it is
+    extracted again."""
+    candidates = [(entry, read_json(record_path(output, entry["document_id"]))) for entry in entries if entry.get("curation_candidate")]
+    repeated = repeated_sections(candidates)
+    texts = set()
+    for entry in entries:
+        entry["repeated_sections"] = repeated.get(entry["document_id"], [])
+    for entry, record in candidates:
+        marks = repeated.get(entry["document_id"], [])
+        texts.update((entry["document_id"], s["section_id"]) for s in marks)
+        view = view_path(output, entry["document_id"])
+        if reading_view and record.get("eligible_for_processing"):
+            view.parent.mkdir(parents=True, exist_ok=True)
+            view.write_text(render(record, marks), encoding="utf-8", newline="\n")
+            entry["reading_file"] = f"reading/{entry['document_id']}.md"
+    return dict(records_with_repeated_sections=len(repeated), repeated_sections=len(texts))
 
 
 def run_extraction(run: Path, output: Path | None = None, *, scope: str = "attributed", kinds=None, sources=None,
@@ -86,13 +110,16 @@ def run_extraction(run: Path, output: Path | None = None, *, scope: str = "attri
     for entry in entries:
         entry["superseded"] = entry["document_id"] not in live_ids
     rewritten = apply_groups(output, [e for e in entries if not e["superseded"]])
+    candidate_counts = apply_candidates(entries)
+    repetition_counts = mark_repetition(output, entries, reading_view)
     errors = [dict(document_id=e["document_id"], source_url=e["source_url"], warnings=e["warnings"])
               for e in entries if e["status"] == "extraction_failed"]
     failed = sum(1 for e in touched.values() if e["status"] == "extraction_failed")
     selection = dict(scope=scope, kinds=kinds, sources=sources, document_ids=document_ids, selected=len(unique),
                      snapshots_in_run=len(items), duplicates_skipped=len(selected) - len(unique))
     counts = dict(extracted_now=len(unique) - reused, reused=reused, failed_in_selection=failed,
-                  superseded=sum(e["superseded"] for e in entries), pruned=len(removed), group_fields_rewritten=rewritten)
+                  superseded=sum(e["superseded"] for e in entries), pruned=len(removed), group_fields_rewritten=rewritten,
+                  **candidate_counts, **repetition_counts)
     summary = summarize(entries, run, output, plan, selection, counts, unavailable, errors)
     write_dataset_files(output, entries, summary, unavailable, errors)
     return (1 if failed else 0), summary

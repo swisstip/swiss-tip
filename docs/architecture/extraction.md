@@ -1,14 +1,11 @@
 # Extraction package - technical design
 
-**Last update:** 20 September 2026
+**Last update:** 22 September 2026
 
 **Status:** implemented in `packages/extraction` (`swisstip.extraction`,
 with offline tests); the text datasets of both packs
 are built in the run directories, `releases/mvp-zurich/` (committed) and
-`.local/swiss-residence/` (section 10)<br>
-**Reproduces:** the source-text extraction of the SwissTIP predecessor
-(`scripts/corpora/extract_intermediate.py`, `extract_expanded.py`,
-`office_text.py` and the validation part of `finalize_expanded.py`)<br>
+`.local/swiss-residence/` (section 9)<br>
 **Consumers:** the knowledge expert (reads the text, selects excerpts) and the
 release build script (resolves curated block ranges to exact excerpts, offsets
 and hashes). The serving side never imports it.
@@ -50,7 +47,7 @@ previous stage's directory, verifies it by hash before doing anything, and
 writes its own directory; none is triggered by another and none is invoked
 by the server.
 
-Principles carried over from the predecessor and from section 3.2 of the
+Principles, from section 3.2 of the
 [functional specification](../product/functional-specification.md):
 
 - **Lossless and labelled, not filtered.** Navigation, footers, hidden text
@@ -64,38 +61,10 @@ Principles carried over from the predecessor and from section 3.2 of the
   `extraction_failed`, not skipped.
 - **Offline.** No request, no model. Tests need no network.
 
-## 2. What is reproduced, what changed, what is left out
+## 2. Inputs
 
-| Predecessor element | Decision |
-| --- | --- |
-| `swisstip.source-intermediate/v1` record format, block schema, locators, `text_integrity`, page kinds, eligibility rules, representation groups, Fedlex PDF to HTML counterparts | Reproduced with the same names. New fields are additive (section 4.2). Over the 387 responses of the MVP run the new walker produces the same block texts and hashes as the predecessor, response for response |
-| lxml-based HTML block walker with DOM paths, heading paths, list context, footnote and hidden-text labels, table rows with spans | Reproduced |
-| PDF text per page through PDFium, AcroForm fields through pypdf, blank pages reported | Reproduced as in the final predecessor version; pages are further split into paragraphs (section 5.4) |
-| DOCX, XLSX, legacy DOC (piece table) and RTF text | Reproduced behind the optional `office` dependency group |
-| Images | Format and `image_requires_ocr` recorded, no pixels read |
-| Reuse of an existing record when raw hash and extractor version match | Reproduced; a run is resumable and cheap to repeat after a new download attempt |
-| Four manual shards with `index-part-N.json` and `documents-part-N.jsonl` | Replaced by `--workers N` (process pool) and one index; no shard files |
-| `documents.jsonl` duplicating `documents/*.json` | Dropped; one compact JSON file per record |
-| Hardcoded `.local` paths and imports from the audit script | Replaced by `--run` and `--output` arguments and the run's own `plan.json` |
-| Document ID from the attempt path | Changed: the ID hashes the source URL and the raw bytes, so an unchanged page keeps its ID across attempts (section 5.6) |
-| Whole-dataset hash pin in the release builder | Changed: pins are per document, and `anchors.py` relocates a curated range after a refresh (section 7) |
-| Encoding: strict UTF-8, then meta charset, then Windows-1252 | Changed: BOM, strict UTF-8, HTTP charset, meta charset, fallback (section 5.3) |
-| `main_headings` = every `h1` | Changed: `h1` elements of the content, not of the banner or footer (section 5.5) |
-| Language code from any `/xx` prefix in the URL | Changed: whole path segments and file-name suffixes only (section 5.6) |
-| Duplicates only by identical raw bytes | Extended: `identical_text_records` links records with the same normalized text (section 5.7) |
-| Region labels from semantic tags only | Extended: `furniture` labels from roles and known class tokens of SEM and Zurich pages (section 5.4) |
-| Discovered-page selection | New: records carry the target's `attribution`; the default selection extracts everything except `out-of-scope` |
-| Reading view for the expert | New: `reading/<document_id>.md` with block numbers in the margin |
-| `finalize_expanded.py` hash and span validation | Reproduced as `swisstip-extract-validate`, which also re-verifies the raw snapshots against the run |
-| Lingua-based assertion export, topic regexes | Left out. A later semantic stage, not text extraction |
-| OCR job preparation and the Windows OCR script | Left out. Textless PDF pages and images are reported, not recognised |
-| Nationwide language audit, coverage ledgers | Left out. Discovery and attribution live in the ingestion package |
-| Release builders | Left out. The release build is a separate work package; section 7 defines what it consumes |
-
-## 3. Inputs
-
-The extractor reads one run directory written by `swisstip-download` (and
-by the legacy import). It never writes under `pages/` or
+The extractor reads one run directory written by `swisstip-download` (or by
+the adoption path of `legacy.py`). It never writes under `pages/` or
 `*-documents/`.
 
 | Input | Used for |
@@ -107,12 +76,12 @@ by the legacy import). It never writes under `pages/` or
 
 Only `latest.json` is extracted. Earlier attempts are acquisition history; if
 a later attempt saved new bytes, its record has a new `document_id` and the
-old record is marked superseded (section 5.8). A target without an intact
+old record is marked superseded (section 4.8). A target without an intact
 snapshot is listed in `unavailable.json`, not as a record.
 
-## 4. Outputs
+## 3. Outputs
 
-### 4.1 Layout
+### 3.1 Layout
 
 Default output: `<run>/text/`, overridable with `--output`. Keeping the text
 next to its run binds it to the same `plan.json` and makes a rerun after a
@@ -122,17 +91,17 @@ directory, and the extractor refuses an output path inside `pages/` or a
 
 ```text
 text/
-  documents/<document_id>.json   one record per saved response (section 4.2)
-  reading/<document_id>.md       reading view of every eligible record (section 4.4)
+  documents/<document_id>.json   one record per saved response (section 3.2)
+  reading/<document_id>.md       reading view of every eligible record (section 3.4)
   index.json, index.md           one entry per record; the Markdown is grouped by attribution kind
   unavailable.json               targets without an intact snapshot
   errors.json                    records with status extraction_failed
   summary.json                   counts, extractor and dependency versions, catalogue hash
-  validation.json                written by swisstip-extract-validate (section 6)
-  legacy-text-import.json        present when records were adopted from the predecessor (section 10)
+  validation.json                written by swisstip-extract-validate (section 5)
+  legacy-text-import.json        present when records were adopted instead of extracted
 ```
 
-### 4.2 Record
+### 3.2 Record
 
 `schema_version` stays `swisstip.source-intermediate/v1`; the fields marked
 "new" are additions, nothing is renamed or dropped.
@@ -140,28 +109,37 @@ text/
 | Field | Content |
 | --- | --- |
 | `document_id` | `doc-` + first 20 hex digits of SHA-256 over the source URL and the raw hash |
-| `corpus_id`, `catalogue_sha256` (new) | Run directory name; the catalogue hash of `plan.json` |
+| `corpus_id`, `catalogue_sha256` | Run directory name; the catalogue hash of `plan.json` |
 | `source_url`, `document_url`, `requested_url` | Catalogue or discovered URL (`source_page_url` when a plugin resolved it), the final URL after redirects, the URL requested |
 | `version_uri` | Consolidated version for Fedlex documents, else null |
-| `attribution` (new) | `kind` (`catalogue`, `in-scope`, `language-variant`, `out-of-scope`, `plugin-document`, `unplanned`) and `source_ids`; plugin documents add `plugin_id` and `resolved_from` |
+| `attribution` | `kind` (`catalogue`, `in-scope`, `language-variant`, `out-of-scope`, `plugin-document`, `unplanned`) and `source_ids`; plugin documents add `plugin_id` and `resolved_from` |
 | `source_registry`, `catalogue_references`, `discovery_provenance` | Copied from the manifest |
-| `acquisition` | `path`, `attempt` (new), `manifest_path`, `manifest_sha256`, `raw_sha256`, `bytes`, `retrieved_at`, `declared_content_type`, `review_flags`, `http_status`, `imported_from` (new, the acquisition import note when present) |
+| `acquisition` | `path`, `attempt`, `manifest_path`, `manifest_sha256`, `raw_sha256`, `bytes`, `retrieved_at`, `declared_content_type`, `review_flags`, `http_status`, `imported_from` (the acquisition import note when present) |
 | `representation` | `html`, `pdf`, `text`, `docx`, `xlsx`, `doc`, `rtf`, `image`, `unknown` |
 | `page_kind` | `ordinary_page`, `application_shell`, `maintenance_page`, `error_page`, `pdf_document`, `text_document`, `office_document`, `rtf_document`, `image_document` |
 | `status` | `extracted`, `excluded_source_response`, `no_extractable_text`, `extraction_failed` |
 | `eligible_for_processing`, `exclusion_reasons` | True only for `extracted` records that are not excluded; reasons name the page kind or review flag |
-| `title`, `html_title`, `main_headings` | Rules in section 5.5 |
+| `title`, `html_title`, `main_headings` | Rules in section 4.5 |
 | `language_declared`, `language_hint` | `<html lang>` as declared; hint from the manifest, the registry entry or the URL. No statistical detection |
-| `decoding`, `charset_declared` (new), `warnings` | Encoding used, the HTTP and meta charsets seen, warning codes |
-| `blocks` | Ordered blocks (section 4.3) |
+| `decoding`, `charset_declared`, `warnings` | Encoding used, the HTTP and meta charsets seen, warning codes |
+| `blocks` | Ordered blocks (section 3.3) |
 | `content_text`, `content_sha256` | Blocks joined by two newlines; SHA-256 of that string in UTF-8 |
 | `text_integrity` | HTML only: whether the whitespace-stripped DOM text equals the whitespace-stripped block sequence, with both hashes |
 | `pdf_page_count`, `pages_without_text`, `form_fields` | PDF only |
-| `representation_group`, `html_counterparts`, `preferred_representation`, `identical_raw_snapshots`, `identical_text_records` (new) | Grouping rules in section 5.7 |
-| `extractor_version`, `extracted_at` (new) | Package version; a change invalidates reuse |
-| `imported_text` (new) | Present on adopted records: old dataset, old document ID, old extractor version, record file, import time |
+| `representation_group`, `html_counterparts`, `preferred_representation`, `identical_raw_snapshots`, `identical_text_records` | Grouping rules in section 4.7 |
+| `extractor_version`, `extracted_at` | Package version; a change invalidates reuse |
+| `imported_text` | Present on adopted records: old dataset, old document ID, old extractor version, record file, import time |
 
-### 4.3 Block
+The index entry of a record repeats the identifying fields and adds what a
+curator needs to know without opening the record: `curation_candidate` and
+`candidate_exclusion` (section 3.5), `sections`, `content_sections`,
+`content_characters` and `repeated_sections`, the content sections whose text
+also stands on another candidate page of the same host, each with its block
+range and the number of pages. The summary counts `curation_candidates`, the
+exclusions by reason, `records_with_repeated_sections` and
+`repeated_sections`.
+
+### 3.3 Block
 
 | Field | Content |
 | --- | --- |
@@ -177,7 +155,54 @@ text/
 | `rows`, `caption`, `nested_table_count` | Tables only; cells carry `text`, `header`, `rowspan`, `colspan`, `dom_path`, and `source: data-entities` for rows recovered from the table's embedded data |
 | `inline_data` | Tables with embedded data rows only: `source` (`data-entities`), `rows` (count) and `text` (the recovered rows, also appended to the block `text`) |
 
-### 4.4 Reading view
+### 3.5 Sections and curation candidates
+
+`swisstip.extraction.sections` derives two things from the immutable blocks,
+without changing an offset or interpreting a word.
+
+A *section* is a run of consecutive blocks under the same heading path. It is
+*content* when it keeps at least one block that is not page furniture (a
+`nav`, `header`, `footer` or `form` region, a furniture label such as
+`banner` or `breadcrumb`, a control, a footnote, a heading the site uses for
+furniture such as "Kontakt" or "Auf dieser Seite" on a page that is not only a
+contact page) and when it is not a bare list of links (list items marked
+`link-only`, or a "Links" heading whose blocks are nothing but their link
+texts). The rules were written for the concept-extraction jobs, which read one
+section at a time; the concepts package imports them from here, so the jobs
+and the build's coverage stage agree on what a section is.
+
+A *curation candidate* is a record a curator is expected to read: eligible,
+not superseded, the preferred representation of its source, and not a
+language variant or an out-of-scope page. The first rule that excludes a
+record is its `candidate_exclusion`. Language variants are not candidates
+because the pack decides per fact whether an English version stands next to
+the German excerpt; a variant that is cited counts as cited, one that is not
+is not asked for.
+
+A *repeated section* is a content section whose text, whitespace and case
+aside, also stands on another candidate page of the same host: the contact
+card, the counter hours, the closure notice a site prints on every page of a
+service. The index marks it on every page it appears on with the number of
+pages, from two up, and the reading view marks each of its blocks
+`repeated on N pages` and lists the ranges in its header. The mark informs
+and never hides: on the page that owns the card, the card is the fact; on the
+other pages a reader who sees the mark cites it once, from the owner, instead
+of restating it as a fact of every page. What counts as boilerplate to set
+aside is not decided here: the build's coverage stage applies the pack's
+`boilerplate_min_pages` (default five, never below three) to the same
+repetition, and reports where a fact cites each such text. Counting is per
+host because the same sentence on two authorities' sites is two authorities
+saying it, not one site's furniture. The coverage stage counts units, so a
+text that also stands on a rolled-up or reference page can show one page
+fewer there than in the index.
+
+Why this lives in the extractor: every consumer used to derive "which records
+should someone look at" with its own filters, and the numbers disagreed. One
+definition in the dataset lets the build say, per pack, which content
+sections no fact cites (section 6), and lets the question "was this page ever
+read?" have one answer.
+
+### 3.4 Reading view
 
 `reading/<document_id>.md` is for the knowledge expert. Header: title, source
 and document URL, version, attribution, language fields, retrieval date and
@@ -187,9 +212,9 @@ furniture, hidden and footnote marks in brackets. Tables are rendered as
 Markdown tables. The JSON record is the source of truth; the view is
 regenerated whenever the record is written.
 
-## 5. Processing rules
+## 4. Processing rules
 
-### 5.1 Selection
+### 4.1 Selection
 
 | Option | Effect |
 | --- | --- |
@@ -199,13 +224,13 @@ regenerated whenever the record is written.
 | `--source ID` | Only targets attributed to that source (repeatable) |
 | `--document-id ID` | Only that record |
 
-### 5.2 Integrity before parsing
+### 4.2 Integrity before parsing
 
 For every selected target: read `latest.json`, resolve each snapshot path,
 refuse a path that escapes the run, read the bytes, compare SHA-256 and
 length with the manifest. A mismatch raises and stops the run.
 
-### 5.3 Format dispatch and decoding
+### 4.3 Format dispatch and decoding
 
 Decided from the bytes, with the declared content type and file suffix as
 fallbacks: `%PDF-`; a ZIP with `word/document.xml` or `xl/workbook.xml`; an
@@ -221,24 +246,24 @@ UTF-8 whatever the headers say, because Latin-1 text is almost never valid
 UTF-8 while misdeclared headers are common. Invalid bytes are never replaced
 silently.
 
-### 5.4 HTML and PDF rules
+### 4.4 HTML and PDF rules
 
-HTML, reproduced from the predecessor's walker: `script`, `style`,
-`noscript`, `svg`, `canvas`, `template` and `head` are ignored and counted;
-structural elements start a new block, inline elements join the enclosing
-block; headings maintain the `heading_path`; a table is one block with rows,
-cells, header flags and spans; region, ARIA roles, `in_main`, explicit hidden
-state, footnote markers and list context come from the ancestors; a
-`<base href>` changes link resolution; the text-integrity check compares the
-whitespace-stripped body text with the blocks.
+HTML: `script`, `style`, `noscript`, `svg`, `canvas`, `template` and `head`
+are ignored and counted; structural elements start a new block, inline
+elements join the enclosing block; headings maintain the `heading_path`; a
+table is one block with rows, cells, header flags and spans; region, ARIA
+roles, `in_main`, explicit hidden state, footnote markers and list context
+come from the ancestors; a `<base href>` changes link resolution; the
+text-integrity check compares the whitespace-stripped body text with the
+blocks.
 
-Added in extractor version 0.2.0: a client-side data table (seen on Stadt
-Wallisellen pages) ships an empty `<tbody>` and its rows as JSON in a
-`data-entities` attribute, `{"data": [{column key: HTML}]}`, with each header
-cell naming its key in `data-data`. The rows are read from that attribute in
-header order, their HTML reduced to text, appended to the table block and
-recorded in `inline_data`; the text-integrity check leaves them out, because
-they are not DOM text. Without this the emergency numbers, collection dates,
+A client-side data table (the Stadt Wallisellen pages have them) ships an
+empty `<tbody>` and its rows as JSON in a `data-entities` attribute,
+`{"data": [{column key: HTML}]}`, with each header cell naming its key in
+`data-data`. The rows are read from that attribute in header order, their
+HTML reduced to text, appended to the table block and recorded in
+`inline_data`; the text-integrity check leaves them out, because they are
+not DOM text. Without this the emergency numbers, collection dates,
 department contacts and legal-collection entries of those pages were saved
 but not extracted. A table without header keys or valid JSON is extracted as
 before.
@@ -258,7 +283,7 @@ minimum, digits ignored) marks its paragraph `page-header` or
 `page-footer`. AcroForm fields come from pypdf; pages without text are
 listed; there is no OCR.
 
-### 5.5 Page kind, eligibility, title, headings
+### 4.5 Page kind, eligibility, title, headings
 
 | Signal | Page kind |
 | --- | --- |
@@ -279,7 +304,7 @@ the source URL. `main_headings` are the `h1` elements inside `main` without
 furniture labels; failing that, the `h1` elements outside header, footer and
 nav; failing that, all of them.
 
-### 5.6 Identity and language
+### 4.6 Identity and language
 
 `document_id` hashes the source URL and the raw bytes. A page downloaded
 again with identical bytes keeps its ID and its record; a page whose bytes
@@ -288,9 +313,9 @@ IDs follow the document ID. `language_declared` is the `lang` attribute of
 `<html>`. `language_hint` is the manifest `language` (set for discovered
 language variants), else the registry entry's language, else a language code
 that is a whole path segment of the URL (`/de/`, `/eli/cc/.../de`) or a
-`_fr` / `-en` file-name suffix; `/it-services/` no longer counts as Italian.
+`_fr` / `-en` file-name suffix (`/it-services/` is not such a segment).
 
-### 5.7 Representation groups and duplicates
+### 4.7 Representation groups and duplicates
 
 Records with the same `source_url` form a `representation_group`. A PDF whose
 group has an eligible HTML record lists it in `html_counterparts` and is not
@@ -300,11 +325,11 @@ but different bytes (print views, untranslated language variants, pages
 with a build stamp) list each other in `identical_text_records`. All stay
 separate records because their URLs and attributions differ.
 
-### 5.8 Reuse, resumption, workers
+### 4.8 Reuse, resumption, workers
 
 An existing record is reused when its raw hash equals the snapshot hash, its
 status is not `extraction_failed`, and either its extractor version is the
-current one or it was adopted from the predecessor. `--force` re-extracts
+current one or the record was adopted rather than extracted. `--force` re-extracts
 everything. Records whose ID no longer matches a `latest.json` snapshot are
 marked `superseded` in the index and deleted with `--prune`; records outside
 the current selection are kept. The index and summary are rebuilt from
@@ -312,7 +337,7 @@ the current selection are kept. The index and summary are rebuilt from
 consistent directory after the next one. `--workers N` extracts in a process
 pool; the parent writes the index and the group fields.
 
-## 6. Validation
+## 5. Validation
 
 The extractor asserts the offset round trip for every block as it writes a
 record. `swisstip-extract-validate --text <dir>` re-reads a dataset and
@@ -321,15 +346,14 @@ block offsets and block hashes; the raw response of every record present in
 the run with the recorded hash; the index equal to the records on disk;
 every eligible record with a reading view. Nonzero exit on any failure.
 
-## 7. Contract with curation and the release build
+## 6. Contract with curation and the release build
 
 A curated fact points at a `document_id` and a block range. The release
 build resolves it to the exact excerpt and records, per evidence item, the
 excerpt, the code-point offsets, the record's `content_sha256`, the raw hash,
 retrieval time and URL, the block IDs and the language. A rebuild with the
 same extractor version over the same run reproduces the same IDs, offsets
-and hashes; the MVP dataset built from the adopted predecessor records has
-been shown to have the same block hashes as a fresh extraction.
+and hashes.
 
 When a page is downloaded again, `swisstip.extraction.anchors` re-anchors
 the curated range instead of failing the whole build:
@@ -349,7 +373,18 @@ heading were added, removed or rewritten. The build decides what the review
 mark does with each outcome; the proposal is that `same-text` and a clean
 `moved` keep it and everything else clears it.
 
-## 8. Command line
+The contract runs the other way as well. The build's `coverage` stage
+(`swisstip.build.coverage`) reads the index's candidates and the records'
+content sections and asks which of them no fact cites and no disposition in
+`releases/<pack>/curation-coverage.yaml` names. Before it existed, a page
+could be catalogued, downloaded, extracted and never read, and nothing said
+so: the release's document list is derived from its citations, so validating
+the release cannot find a document outside it. A disposition binds the
+`document_id`, that is the source URL and the raw bytes, so a page downloaded
+anew loses its disposition and is judged again, the same way a cited range
+is re-anchored.
+
+## 7. Command line
 
 ```shell
 ./.venv/Scripts/python.exe -m pip install -e "packages/extraction[office]"
@@ -362,7 +397,7 @@ mark does with each outcome; the proposal is that `same-text` and a clean
 
 The options are listed in the [package README](../../packages/extraction/README.md).
 
-## 9. Package layout, dependencies, tests
+## 8. Package layout, dependencies, tests
 
 ```text
 packages/extraction/
@@ -377,7 +412,7 @@ packages/extraction/
     reading_view.py             Markdown view of a record
     dataset.py                  reuse, prune, index, summary, group fields, output guards
     anchors.py                  make_anchor and relocate
-    legacy.py                   adopt a predecessor record into a run
+    legacy.py                   adopt an already extracted record into a run
     extract_cli.py              argument parsing, worker pool, exit code
     validate.py                 dataset checks and validation.json
   tests/                        tests on synthetic runs and documents; no network
@@ -387,20 +422,11 @@ Dependencies, pinned: `lxml` 6.1.3, `pypdfium2` 5.13.0, `pypdf` 6.18.0;
 optional group `office`: `olefile` 0.47, `striprtf` 0.0.33. No Pillow, no
 Lingua.
 
-## 10. The datasets of both packs
+## 9. The datasets of both packs
 
-The text datasets under `<run>/text/` were seeded from the predecessor's
-datasets rather than extracted afresh: a one-time script outside Git
-(`.local/scripts/import_legacy_text.py`) matched every saved snapshot of a
-run to an old record by URL and raw hash, adopted it through
-`legacy.adopt` (new document and block IDs, attribution, catalogue hash,
-paths; blocks, offsets and hashes untouched) and recorded the adoption in
-`legacy-text-import.json`. Both datasets were then re-extracted with
-`--force` from the saved responses, so every record now carries this
-extractor's version and labels (furniture, PDF paragraphs, declared
-charsets) and no adopted record remains. On the MVP run the re-extraction
-changed no document hash, block ID, block position, offset or text hash
-(record `.local/experiments/2026-09-13-concept-extraction.md`).
+Every record of both datasets is extracted from the saved responses by this
+extractor, with its version and its labels (furniture, PDF paragraphs,
+declared charsets); no adopted record remains.
 
 | Dataset | Records | Eligible | Blocks | Text | Disk |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -422,13 +448,7 @@ URL plus the bytes, each is one record, and it carries the plugin
 attribution (the source IDs of its ELI page) because plugin document folders
 are read before `pages/`.
 
-For reference, the predecessor's datasets: 121 records, 26,179 blocks and 61
-MB for its 10 September corpus; 11,728 records, 1,232,104 blocks and 3.7 GB
-for the nationwide crawl, both with a duplicate JSONL copy.
-
-Earlier states of this document: [history](../history/extraction-history.md).
-
-## 11. Out of scope
+## 10. Out of scope
 
 - Language identification by a classifier, topic tagging, assertion or
   sentence splitting: a later semantic stage, if one is wanted at all.
@@ -437,4 +457,4 @@ Earlier states of this document: [history](../history/extraction-history.md).
   the Fedlex plugin resolves the ones that matter.
 - Any change to the run directory or the catalogue.
 - The curation file format and the release build script (WP2 and WP4 of the
-  specification); section 7 states what they can rely on.
+  specification); section 6 states what they can rely on.

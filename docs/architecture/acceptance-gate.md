@@ -1,6 +1,6 @@
 # Acceptance gate
 
-**Last update:** 19 September 2026
+**Last update:** 22 September 2026
 
 **Status:** sections 2 to 5 and the `accept` and `ready` stages, the
 committed-record test, `--require-ready`, the container and the harness of
@@ -10,8 +10,8 @@ section 6 are implemented in `packages/core`, `packages/runtime`,
 committed pack; every claim of the suites quotes its cited excerpt, and
 every case carries the answer block the harness runs. Gate G5 is advisory
 for both packs until the first graded runs on the current releases exist
-(section 9). The console's part of section 6 is planned; section 8 lists
-the steps in order.<br>
+(section 9). The console's part of section 6 is planned; section 8 names
+what remains.<br>
 **Schema versions:** `swiss-tip-acceptance/v1`,
 `swiss-tip-acceptance-report/v1`, `swiss-tip-acceptance-answers/v1`,
 `swiss-tip-readiness/v1`<br>
@@ -32,12 +32,10 @@ acceptance gate adds that proof: a fixed set of user questions with expected
 answers, taken from the acceptance-test documents, that a release must pass
 before it counts as ready.
 
-Before this gate the same ground was covered by four separate lists that
-could drift apart: the grounding cases compiled into the knowledge builder,
-the standing checks seeded by the admin console, the expectations of the
-MCP round-trip scripts and the case tables of the OpenCode harness. The
-gate replaces the first two with one file per pack and is meant to feed the
-other two.
+One file per pack holds that set, and the MCP round-trip scripts and the
+OpenCode harness take their cases from it, so the expectations of the
+knowledge builder, the console, the round trip and the harness cannot drift
+apart.
 
 ## 2. The acceptance file
 
@@ -96,15 +94,14 @@ Rules the loader enforces: case IDs are unique; a claim's concept and a
 fact ID or a phrase; a case with a translated search step names its
 `language`.
 
-The fields `language`, `translated` and `retrieval` were added after the
-first suites were attested. They enter the suite digest only when set, so a
-suite that does not use them keeps the digest its readiness record names;
-every other field counts with its default.
+The fields `language`, `translated` and `retrieval` enter the suite digest
+only when set, so a suite that does not use them keeps the digest its
+readiness record names; every other field counts with its default.
 
-A missing concept fails its case; it is never trimmed from the request the
-way the console's seeded checks trimmed it. Rewording a fact breaks the
-claims that quote it on purpose: the case is updated in the same commit, so
-a changed expected answer is visible in review.
+A missing concept fails its case; it is never trimmed from the request.
+Rewording a fact breaks the claims that quote it on purpose: the case is
+updated in the same commit, so a changed expected answer is visible in
+review.
 
 ## 3. The model-free check
 
@@ -201,6 +198,18 @@ recorded and stated in `LIMITATIONS.md`, so a pack of unreviewed facts can be
 ready with that limitation visible. A per-pack `require_human_review` policy
 flag is the place to tighten this.
 
+The record also carries `coverage`, the counts of the pipeline's `coverage`
+stage when `curation-coverage.json` is the report of this release's content
+digest: how many candidate records and content sections the text dataset
+holds, how many a fact cites, how many a curator dispositioned in
+`curation-coverage.yaml`, how many are neither, and whether the report is
+clean. It is information, not a gate: whether an unclean report stops the
+build is the curation's `coverage_policy` (`report`, the default, or
+`enforce`), decided per pack, so that a pack with history writes its
+dispositions before the stage can fail it, and a frozen pack is not broken by
+a rule it never had. Promoting it to a gate G7 is the step after `mvp-zurich`
+is clean under `enforce`.
+
 ## 6. Where the gate is enforced
 
 | Where | Behaviour | Status |
@@ -224,7 +233,8 @@ packages/core      acceptance.py   models, the suite digest, the answers file an
                    readiness.py    the readiness record and readiness_status(release_path)
 packages/runtime   acceptance.py   check_acceptance over ReleaseService (no YAML: the container has no PyYAML)
 packages/build     acceptance.py   load and save the YAML file; load_regression combines a pack's two suites
-apps/knowledge-builder             the accept stage and the ready stage with gates G1 to G6
+apps/knowledge-builder             the accept stage, the coverage stage (swisstip.build.coverage, informational in
+                                   readiness) and the ready stage with gates G1 to G6
 apps/mcp-server                    --require-ready, the readiness field and the content digest of the health payload
 scripts/test/mock-mcp              suite_cases.py builds the harness cases from the suites; --answers aggregates
                                    the grades into acceptance-answers.json
@@ -236,56 +246,28 @@ apps/admin-console                 reads and writes the suite, shows readiness (
 The serving side imports nothing from the build side; the server reads
 `readiness.json` and nothing else of the gate.
 
-## 8. Steps
+## 8. What remains
 
-1. Done: models, runner and loader; the compiled grounding cases and the
-   console's standing cases converted into the two suites, with the
-   questions, expected answers and traps of the acceptance-test documents;
-   the `accept` stage; the committed-pack test; `grounding.py` and
-   `grounding_cases.py` removed after a one-time comparison showed both
-   runners agree on both packs.
-2. Done: `excerpt_contains` on every claim of both suites (22 claims in
-   `mvp-zurich`, 23 in `mvp-wallisellen`), `fact_id` where two served facts
-   share a phrase, and claims added for the parts of the expected answers
-   the suites had not covered (the permit duty and the issuing authority in
-   UAT-2e, the shorter routes in UAT-5, the foundation funding, the ten
-   years, the cantonal rate, the calendar import in Wallisellen). Every
-   served statement the claims touch has a verbatim backing phrase; the
-   one defect found was in the suite itself: the UAT-2e claim "the employer
-   applies for the permit" had matched the labour-market-test fact of
-   `third-country-work` on the word "employer", while the application duty
-   is stated by `aig-work-permit`. The claim was reworded and the duty given
-   its own claim. Two limits of a phrase check: a flattened table is read as
-   text (the 2026 rate is matched as `93 %` near `Politische Gemeinde`, not
-   as a column), and a statement no claim covers is not checked at all.
-3. Done: the `ready` stage with gates G1 to G4 and G6, `readiness.json`
-   bound to the release bytes, the committed-record test, `--require-ready`
-   with the `readiness` field of the health payload, and the container
-   (record copied, `--require-ready` at build time and in the entry point,
-   `build_image.py` refusing a candidate). Both committed packs carry a
-   record attested on 15 September 2026.
-4. Done: the harness builds its cases from the suites (the sixteen prompt
-   edge variants and two probes that only the harness had were added to the
-   Wallisellen suite, so it now holds 30 cases), records the content digest
-   of the release every run served, writes one grading packet for the
-   two-turn UAT-1 run, and aggregates the grades with `--answers`; the
-   policy fields and gate G5.
+The gate itself is complete. What is left lies outside it: the first graded
+runs on the current releases (then `answer_check: required` for
+`mvp-zurich`, section 9), the console's part of section 6, the MCP
+round-trip scripts replaying the suite, and gate G7, curation coverage,
+which section 5 describes as information until `mvp-zurich` is clean under
+`coverage_policy: enforce`.
 
-All four steps are done. What remains is outside the gate itself: the first
-graded runs on the current releases (then `answer_check: required` for
-`mvp-zurich`), the console's part of section 6, and the MCP round-trip
-scripts replaying the suite.
+Two limits of a phrase check stay: a flattened table is read as text (the
+2026 rate is matched as `93 %` near `Politische Gemeinde`, not as a column),
+and a statement no claim covers is not checked at all.
 
 ## 9. Decisions taken
 
 - The answer-quality check is to be `required` for `mvp-zurich` (the default
   release, shipped in the image) and `advisory` for `mvp-wallisellen`. Both
-  suites say `advisory` today: no graded run on the current releases exists
-  (the runs of 14 September 2026 against the published image recorded the
-  release ID only and were not graded), and a `required` policy without one
-  would leave the repository with a release that cannot be attested and a
-  failing committed-record test. The flip to `required` is the commit that
-  adds the first `acceptance-answers.json` for `mvp-zurich`.
+  suites say `advisory` while no graded run on the current releases exists:
+  a `required` policy without one would leave the repository with a release
+  that cannot be attested and a failing committed-record test. The flip to
+  `required` is the commit that adds the first `acceptance-answers.json` for
+  `mvp-zurich`.
 - Readiness does not require human review (section 5).
 - The server refuses a candidate inside the container and only warns
   locally, so a candidate stays easy to serve during curation.

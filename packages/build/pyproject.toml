@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swisstip-build"
-version = "0.2.5"
+version = "0.3.0"
 description = "Swiss TIP release build: curation file plus text dataset to a validated knowledge release"
 requires-python = ">=3.14"
 dependencies = [
@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 swisstip-build-release = "swisstip.build.build_cli:main"
+swisstip-coverage = "swisstip.build.coverage_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

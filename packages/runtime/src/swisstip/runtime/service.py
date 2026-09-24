@@ -41,6 +41,13 @@ from .semantic import SemanticError, SemanticSearch
 STOPWORDS = {"a", "an", "and", "as", "at", "by", "do", "for", "i", "in", "is", "it", "my", "of", "on", "or", "the",
              "to", "when", "with", "should", "must", "have", "need", "can", "am", "me", "next", "week", "latest",
              "no", "not",
+             # Single characters are tokens (see tokens()), so the one-letter function words need naming. "e" is the
+             # prefix of E-Mail, E-ID and e-Umzug, a morpheme and not the name of a type; it lifted the office-contact
+             # concepts, whose aliases carry "E-Mail", into the hits of a rent question announced by e-mail. "s" and
+             # "z" are the Zurich German article and preposition of "Wo isch s Amt z Winterthur?"; counted as words,
+             # they read as the question's most distinctive unmatched terms. A pack that names a type S or Z (the
+             # permit S of temporary protection is listed, not published) reaches it through the embedding only.
+             "e", "s", "z",
              # Question words: the authored "questions" field is an anchor, so "what" or "does" matched every concept
              # whose sample questions used them.
              "does", "what", "where", "which", "who", "how", "why", "this", "that", "these", "those", "you", "your",
@@ -137,15 +144,36 @@ RESULT_LIMITATIONS_NOTE = ("Not a legal review: English paraphrases of the cited
 SEARCH_LANGUAGE_RETRY = (" One exception: if the question is in a language other than {languages} and this query was "
                          "not already translated, search once more with its key terms translated into {preferred} "
                          "before declining.")
-QUERY_LANGUAGE_NOTE = ("Write search queries in {languages}: lexical search matches only {these}. Send a question in "
-                       "{one_of} as asked, without translating it; translate the key terms of a question in any other "
-                       "language into {preferred} before searching, and still answer in the user's language.")
+# With several query languages the note opens with the rule of one search: callers sent an English question in English
+# and in German, side by side, and both searches found the same concepts (mvp-zurich-2026-09-19-v15, lexical and
+# hybrid). The better-indexed language is named only as the target of a translation, no longer as "preferred". The
+# wording alone does not stop a caller that opens with two parallel calls; the caller's own prompt does
+# (docs/architecture/tool-contracts.md, section 4.2).
+QUERY_LANGUAGE_NOTE = ("{one_search}Write the search query in {languages}: lexical search matches only {these}. Send a "
+                       "question in {one_of} as asked, without translating it; translate the key terms of a "
+                       "question in any other language into {preferred} before searching, and still answer in the "
+                       "user's language.")
+QUERY_LANGUAGE_ONE_SEARCH = ("Search ONCE per question, in {languages}, never in more than one of them: a second "
+                             "search in another language rarely finds other concepts. ")
 INSTRUCTIONS = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. Scope: "
                 "{scope} A question normally takes two calls: search with the question and, when known, the user's "
                 "canton or municipality as jurisdiction, then resolve the relevant "
-                "concept_ids with the user's jurisdiction, today's date and the context fields the search hits name. "
+                "concept_ids with the user's jurisdiction, today's date and the context the question implies. "
                 "Call get_coverage only when unsure whether the question is in scope, and get_evidence only for a "
                 "verbatim quote. {languages} Follow guidance_for_caller in every result.")
+# The release's context vocabulary, sent once per session with the instructions and again on the resolve schema,
+# because a client may drop either. A caller that knows the fields and their published values before its first call
+# fills the context on the first resolve instead of learning it from a NEEDS_CONTEXT round trip. The mapping from
+# what the user said ("a Czech citizen") to a published value (population eu_efta) stays the caller's: the release
+# publishes the categories and what each one means, never a table of nationalities that would go stale.
+CONTEXT_NOTE = ("Context fields of this release, with the values its facts are published for. Derive them from what "
+                "the user said and send them on the first resolve; a field a concept does not use is ignored, and "
+                "each search hit names the fields its own concept requires.")
+CONTEXT_NOTE_BRIEF = ("This release has {count} context fields, too many to list here; a search hit names the fields "
+                      "its concept requires, with their values: {names}.")
+# The list is a session-once cost, not a per-call one, so the whole vocabulary is worth its bytes; a pack with far
+# more fields than the ones a question can plausibly need falls back to the names alone.
+CONTEXT_NOTE_BUDGET = 4000
 GUIDANCE_SUPPORTED = ("These facts and citations are everything this release holds for the requested concepts. Answer "
                       "now from the statements only, cite only the returned URLs, and collect the required_user_facts "
                       "before computing any date. Do not add documents, fees, deadlines, contacts, links or procedures that "
@@ -214,6 +242,18 @@ def search_terms(count: int) -> str:
     return f"{count} search term" if count == 1 else f"{count} search terms"
 
 
+def context_vocabulary(fields: dict[str, ContextField]) -> str:
+    """The release's context fields with their published values, for the instructions and the resolve schema."""
+    if not fields:
+        return ""
+    lines = [f"- {name} ({', '.join(spec.enum) if spec.enum else 'any value'}): {' '.join(spec.description.split())}"
+             for name, spec in sorted(fields.items())]
+    block = "\n".join([CONTEXT_NOTE, *lines])
+    if len(block) <= CONTEXT_NOTE_BUDGET:
+        return block
+    return CONTEXT_NOTE_BRIEF.format(count=len(fields), names=", ".join(sorted(fields)))
+
+
 def query_languages(release: Release) -> tuple[list[QueryLanguage], list[str]]:
     """The languages lexical search matches, best first, and the source languages left out as partial.
 
@@ -258,8 +298,17 @@ def stem(token: str) -> str:
     return token[:6] if len(token) > 6 else token
 
 
+# A one-character token often carries the whole question when a type is named by a letter or a digit: "What is an L
+# permit?", "Tarif B", "Visum D", "Kreis 5". Without it the question comes down to a noun that nearly every concept
+# of the topic carries. Such a token is kept; which types a pack names is the pack's business, read from its
+# aliases like any other term. A character attached to a word by an apostrophe is grammar, not a name ("the
+# national's permit", "l'autorisation"), and is dropped.
+ELISION = re.compile(r"(?<!\w)[a-z0-9]['’]|['’][a-z0-9](?!\w)")
+
+
 def tokens(text: str) -> set[str]:
-    return {stem(collapse_umlauts(t)) for t in re.findall(r"[a-z0-9]+", fold(text)) if t not in STOPWORDS and len(t) > 1}
+    folded = ELISION.sub(" ", fold(text))
+    return {stem(collapse_umlauts(t)) for t in re.findall(r"[a-z0-9]+", folded) if t not in STOPWORDS}
 
 
 FACET_TOKENS = frozenset(tokens(FACET_WORDS))
@@ -298,6 +347,7 @@ class ReleaseService:
         self.concept_authority = {c.concept_id: concept_authority([self.fact_weights[f] for f in c.fact_ids], self.policy)
                                   for c in release.concepts}
         self.context_fields = {name: spec for concept in release.concepts for name, spec in concept.context_schema.items()}
+        self.context_note = context_vocabulary(self.context_fields)
         # The levels each topic publishes, to tell a user elsewhere that a narrower level exists for another place only.
         self.topic_jurisdictions: dict[str, set[str]] = {}
         for concept in release.concepts:
@@ -334,17 +384,19 @@ class ReleaseService:
             self.search_limitations.append(unadvertised)
         codes = [item.code for item in self.query_languages]
         if codes:
-            preferred = language_name(codes[0]) if len(codes) == 1 else f"{language_name(codes[0])} (preferred)"
-            listed = preferred if len(codes) == 1 else f"{preferred} or {language_list(codes[1:])}"
+            several = len(codes) > 1
             self.query_language_note = QUERY_LANGUAGE_NOTE.format(
-                languages=listed, these="this language" if len(codes) == 1 else "these languages",
-                one_of="it" if len(codes) == 1 else "one of them", preferred=language_name(codes[0]))
+                languages=language_list(codes), these="these languages" if several else "this language",
+                one_search=QUERY_LANGUAGE_ONE_SEARCH.format(languages=language_list(codes)) if several else "",
+                one_of="one of them" if several else "it", preferred=language_name(codes[0]))
             retry = SEARCH_LANGUAGE_RETRY.format(languages=language_list(codes), preferred=language_name(codes[0]))
         else:
             self.query_language_note, retry = "", ""
         self.search_notes = {"strong": SEARCH_MATCH_NOTE, "weak": SEARCH_WEAK_NOTE + retry, "none": SEARCH_EMPTY_NOTE + retry}
         self.instructions = " ".join(INSTRUCTIONS.format(scope=manifest.scope_statement.strip(),
                                                          languages=self.query_language_note).split())
+        if self.context_note:
+            self.instructions += "\n" + self.context_note
 
     def tool_description(self, name: str) -> str:
         """The contract's description, with this release's query languages on search."""
@@ -358,6 +410,9 @@ class ReleaseService:
         if name == "search" and self.query_language_note:
             query = schema["properties"]["query"]
             query["description"] = "Question or key terms to find published concepts. " + self.query_language_note
+        if name == "resolve" and self.context_note:
+            context = schema["properties"]["context"]
+            context["description"] = " ".join(context["description"].split()) + "\n" + self.context_note
         if name in ("search", "resolve"):
             jurisdiction = schema["properties"]["jurisdiction"]
             jurisdiction["description"] = " ".join(jurisdiction["description"].split()) + " " + self.jurisdiction_note()
@@ -501,6 +556,12 @@ class ReleaseService:
         anything and 1 when one concept's anchors carry every distinctive word of the question; the weight is the
         same mass in units of the rarest possible token. Unlike the score, both ignore field weights and the prior."""
         query = tokens(query_text) - self.common_tokens - FACET_TOKENS
+        # A one-character token that no label, alias or question carries is grammar the stopword list does not know
+        # (the Zurich German "s" and "z" of "Wo isch s Amt z Winterthur?"), not the name of a type: a type a pack
+        # names is in its aliases. It is left out rather than counted as the question's most distinctive unmatched
+        # word; a statement that merely mentions the letter does not make it a name.
+        named = {token for fields in self.search_index.values() for name in ANCHOR_FIELDS for token in query & fields[name]}
+        query = {token for token in query if len(token) > 1 or token in named}
         weights = {token: self.token_weight.get(token, self.unknown_token_weight) for token in query}
         total = sum(weights.values())
         if not total:

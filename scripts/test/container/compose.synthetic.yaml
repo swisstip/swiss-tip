@@ -1,0 +1,20 @@
+# Override of the root compose.yaml for the test of the OpenCode image: the
+# server is the slim MCP image with the synthetic test release mounted
+# (synthetic_pack.py), not a pack's slim image, so the test needs no knowledge
+# base and no image of the packs repository. Search is lexical, so the test
+# starts the services it names and leaves the embedding sidecar out:
+#
+#   python scripts/test/container/synthetic_pack.py --out /tmp/synthetic
+#   SWISSTIP_PACK=synthetic SWISSTIP_TEST_SERVER_IMAGE=swiss-tip-mcp:0.3.0-slim SWISSTIP_TEST_PACK_DIR=/tmp/synthetic \
+#     docker compose -f compose.yaml -f scripts/test/container/compose.synthetic.yaml --profile demo up -d --wait swiss-tip demo
+#
+# SWISSTIP_PACK only satisfies compose.yaml, whose image this file replaces;
+# SWISSTIP_REGISTRY names the OpenCode image as usual.
+services:
+  swiss-tip:
+    image: ${SWISSTIP_TEST_SERVER_IMAGE:?set SWISSTIP_TEST_SERVER_IMAGE to the slim MCP image}
+    # Replaces compose.yaml's --semantic-index, for which the synthetic pack has no file. It repeats an argument of
+    # the image's entry point, because an empty command does not replace one in every Compose version.
+    command: ["--transport", "streamable-http"]
+    volumes:
+      - ${SWISSTIP_TEST_PACK_DIR:?set SWISSTIP_TEST_PACK_DIR to the directory synthetic_pack.py wrote}:/srv/swiss-tip:ro

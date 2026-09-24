@@ -1,5 +1,5 @@
-# What opencode_web_shim.py imports, at the versions the basic image
-# (swiss-tip-mcp 0.2.4) resolves, so that the shim runs on the same libraries
+# What opencode_web_shim.py imports, at the versions the slim MCP image
+# (swiss-tip-mcp:0.2.4-slim) resolves, so that the shim runs on the same libraries
 # in the demo image and in this one.
 httpx==0.28.1
 starlette==1.6.0

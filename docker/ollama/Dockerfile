@@ -4,7 +4,7 @@
 # the qwen3-embedding:0.6b model inside, and nothing else - no server and no
 # knowledge release. It serves the model on the loopback address only, so it
 # is used by a server container whose network namespace it joins: a slim
-# release image (docker/slim) or the basic image (docker/mcp) gets hybrid
+# release image (docker/slim) or the slim MCP image (docker/mcp-slim) gets hybrid
 # search from it. The repository's compose.yaml starts both:
 #
 #   docker compose up -d --wait
@@ -15,25 +15,25 @@
 #   docker run -d --name swiss-tip-embeddings --network container:swiss-tip swiss-tip-ollama:qwen3-embedding-0.6b
 #
 # The Ollama runtime, the model and the start check are copied out of the
-# semantic image (docker/semantic), so the model is byte for byte the one the
+# MCP image (docker/mcp), so the model is byte for byte the one the
 # pack images serve and the packs' semantic indexes were built with, and
 # nothing is pulled from the Ollama registry here. The build starts Ollama
 # once and fails unless the copied model has the expected manifest digest.
 #
-#   docker build -t swiss-tip-semantic:0.2.5 docker/semantic
+#   docker build -t swiss-tip-mcp:0.3.0 docker/mcp
 #   docker build -t swiss-tip-ollama:qwen3-embedding-0.6b docker/ollama
 
-ARG SEMANTIC_IMAGE=swiss-tip-semantic:0.2.5
+ARG MCP_IMAGE=swiss-tip-mcp:0.3.0
 ARG PYTHON_IMAGE=python:3.14-slim
 
-FROM ${SEMANTIC_IMAGE} AS semantic
+FROM ${MCP_IMAGE} AS mcp
 
-# The Python base of the basic image: the start check and the health check
+# The Python base of the slim MCP image: the start check and the health check
 # are Python, and a client that pulls both images shares these layers.
 FROM ${PYTHON_IMAGE}
 ARG EMBEDDING_MODEL=qwen3-embedding:0.6b
 # The manifest digest recorded in the committed semantic indexes, as in
-# docker/semantic/Dockerfile. The model comes from the semantic image, so a
+# docker/mcp/Dockerfile. The model comes from the MCP image, so a
 # mismatch means that image was built for another digest.
 ARG EMBEDDING_MODEL_DIGEST=ac6da0dfba84a81fdbfbaf330198c33cd77c4cdfc53e8bc50eb581914a15621d
 ARG OLLAMA_VERSION=0.34.0
@@ -62,11 +62,11 @@ RUN useradd --uid 10001 --create-home --home-dir /home/swisstip --shell /usr/sbi
  && mkdir -p /usr/local/lib/swiss-tip /usr/share/doc/swiss-tip
 
 # tini reaps Ollama's runner processes and passes signals to the whole group.
-COPY --from=semantic /usr/bin/tini /usr/bin/ollama /usr/bin/
-COPY --from=semantic /usr/lib/ollama /usr/lib/ollama
-COPY --from=semantic --chown=10001:10001 /opt/ollama/models /opt/ollama/models
-COPY --from=semantic /usr/local/lib/swiss-tip/ollama_ready.py /usr/local/lib/swiss-tip/
-COPY --from=semantic /usr/share/doc/swiss-tip/ /usr/share/doc/swiss-tip/
+COPY --from=mcp /usr/bin/tini /usr/bin/ollama /usr/bin/
+COPY --from=mcp /usr/lib/ollama /usr/lib/ollama
+COPY --from=mcp --chown=10001:10001 /opt/ollama/models /opt/ollama/models
+COPY --from=mcp /usr/local/lib/swiss-tip/ollama_ready.py /usr/local/lib/swiss-tip/
+COPY --from=mcp /usr/share/doc/swiss-tip/ /usr/share/doc/swiss-tip/
 COPY --chmod=755 serve-embeddings.sh /usr/local/bin/serve-embeddings
 COPY embeddings_health.py /usr/local/lib/swiss-tip/
 

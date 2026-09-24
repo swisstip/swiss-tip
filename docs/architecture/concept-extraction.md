@@ -1,25 +1,13 @@
 # Concept extraction - technical design
 
-**Last update:** 20 September 2026
+**Last update:** 21 September 2026
 
-**Status:** phases 1 to 3 implemented and tested in `packages/concepts`. Offline tests cover the pipeline, providers, recovery,
-exchange, packaging and legacy migration. Since 16 September 2026 a third
-call per chunk classifies the basis of every retained proposal (section
-5.7); no dataset has been extracted with it yet. The MVP text refresh preserves
-all block identities, offsets and hashes, and its 84 build citations resolve
-`same-snapshot`. The full dataset refresh passed all five validation checks;
-its 12,117 records and acceptance results are recorded
-separately in the implementation record `.local/experiments/2026-09-13-concept-extraction.md`.
-The legacy migration record `.local/experiments/2026-09-13-concept-legacy-migration.md`
-lists anchored, dropped and skipped candidates. No live pilot or expert
-assessment has run; phases 4 and 5 remain planned.<br>
-**Reproduces:** the V3 concept-extraction pipeline of the SwissTIP
-predecessor: `packages/ingestion/concepts.py`, `concept_review.py`,
-`prompt_templates.py` and the bundled prompts; `apps/knowledge-builder`'s
-`concept_cli.py`, `concept_recovery.py`, `concept_batch.py`,
-`model_profiles.py`, `provider_factory.py` and the DeepSeek, Hugging Face,
-Groq and Ollama adapters; `scripts/corpora/assistant_extraction.py`; about
-4,100 lines with the V1, V2 and V4 paths that are not ported<br>
+**Status:** phases 1 to 3 implemented and tested in `packages/concepts`;
+offline tests cover the pipeline, providers, recovery, exchange, packaging
+and legacy migration. A third call per chunk classifies the basis of every
+retained proposal (section 4.7); no dataset has been extracted with it. No
+live pilot or expert assessment has run; phases 4 and 5 remain planned
+(section 10).<br>
 **Consumers:** the curation file of a pack (facts of kind
 `model-candidate`), the review queue of the admin console (its "Accept
 candidate" action), and step 2 of the KB2 migration in [TODO.md](../../TODO.md).
@@ -55,7 +43,7 @@ releases/<pack>/curation.yaml        facts of kind model-candidate, status model
 releases/<pack>/release.json
 ```
 
-Principles, carried over from the predecessor and from section 3.2 of the
+Principles, from section 3.2 of the
 [functional specification](../product/functional-specification.md):
 
 - **The model selects, it does not quote.** Evidence is chosen from
@@ -65,7 +53,7 @@ Principles, carried over from the predecessor and from section 3.2 of the
   cite.
 - **One section per concept.** A concept names its primary section and
   cites only that section; conditions of a sibling section are never
-  borrowed. This is the V3 rule that made the review meaningful.
+  borrowed. This is the V3 rule that makes the review meaningful.
 - **Separate review.** A second call, with its own prompt and schema,
   returns one verdict per proposal. A proposal it does not support stays in
   the report as rejected and is never packaged. The verdict is a model
@@ -84,70 +72,37 @@ Principles, carried over from the predecessor and from section 3.2 of the
   knowledge builder are untouched.
 - **Original language.** All prose a candidate carries is in the language
   of the page, as the V3 prompts require and the review checks. An English
-  rendering is a separate, optional step (section 11).
+  rendering is a separate, optional step (section 10).
 
-## 2. What is reproduced, what changed, what is left out
-
-| Predecessor element | Decision |
-| --- | --- |
-| The V3 prompt texts: extraction = `concept_extraction_v2.md` + `concept_extraction_v3_extension.md`, review = `concept_review_v3.md` | Reproduced byte for byte as package data, with the same concatenation. The port must reproduce the SHA-256 of the effective prompts recorded in the assistant batches of 11 September: `ccd968b7...` (extraction) and `893394d8...` (review) |
-| Extraction schema: at most 6 concepts per chunk; label, alternative labels, type, granularity, description, scope, 1 to 5 questions, confidence, 1 to 5 evidence items chosen from an `evidence_id` enum, relations, `primary_section_id` from a section enum | Reproduced (section 5.5) |
-| Review schema: one verdict per `review_id` with `decision` (supported, unsupported, uncertain), `issue` (nine codes) and a reason of 1 to 500 characters; parser rules | Reproduced (section 5.7) |
-| Structural validation of every proposal: field lengths, enums, scope not a breadcrumb or section name, evidence inside the primary section, confidence 0 to 1, no unknown evidence ID | Reproduced (section 5.6) |
-| `_VisiblePageParser` HTML normalizer, `source_snapshots.py`, source plugins, the V4 logical-block walker | Replaced by the text records: a section is a run of blocks under one heading path, a span is a block (section 5.2). No second parser of the saved HTML |
-| Evidence spans cut per paragraph and at 500 characters, IDs `section-NNNN:start:end`, the heading path glued to the first span of a section | Changed: spans are whole blocks, cut at 500 characters at word boundaries only when longer, IDs `bNNNNN:start:end` into the block text, heading path sent once per section (section 5.4). The 11 September batches carry quotes with a heading-path prefix; the legacy adapter strips it (section 7.3) |
-| Content selection by exact heading words (`_FURNITURE_HEADINGS`), embedded news, generic link-only chunks | Reproduced as the fallback; extended with the record's own labels: region, furniture, hidden, footnote, control, PDF page header and footer (section 5.3) |
-| Chunks of 6,400 characters with a 400-character overlap, split at character positions | Changed: split at block boundaries, so no span straddles two chunks; the overlap applies only inside a single block longer than a chunk |
-| Provider protocol `generate_structured(system_prompt, user_prompt, response_schema)` returning `ModelCompletion` with provider, model, requested and observed model, token counts, request ID | Reproduced (section 6.1) |
-| DeepSeek, Hugging Face (PublicAI, Apertus), Groq, Ollama adapters over `urllib`, no redirects, 1 MB request and response caps, no SDK dependency | Reproduced (section 6.2) |
-| Assistant file exchange as a script that fakes a Hugging Face profile | Changed: a first-class `exchange` adapter with the same request and response files (section 6.3) |
-| Two TOML files, `model-profiles.toml` merged into `semantic-models.toml`; `config/semantic-models.toml` relative to the working directory | Collapsed into one committed `config/semantic-models.toml` at the repository root, found from the repository root, `--config` overrides. Secrets only from the fixed environment variables |
-| `RecoverableProvider`: request budget including failed attempts, retries on 408, 429, 500, 502, 503 and 504 with backoff and `Retry-After`, model-identity enforcement, review split on a truncated review, statistics | Reproduced in `budget.py` and `checkpoints.py` (section 5.9) |
-| Checkpoints `swisstip.model-response-checkpoint/v2` keyed by the normalized page and the request | Reproduced as `v3`: the key is the request itself plus the record's `content_sha256` and the profile (section 5.9) |
-| Ceilings: pages per run, characters per run, requests per page, requests per run | Reproduced; added: a per-document character cap, a soft token ceiling, a wall-clock limit |
-| Output: one `swisstip.concept-proposal-batch/v1` document on standard output | Replaced by a dataset directory with one report per record and an index, like the text dataset (section 4). The batch format is read by the packaging step's legacy adapter |
-| A page fails as a whole when one chunk returns invalid JSON | Changed: the chunk is recorded as failed with the raw completion and its checkpoint kept aside; the other chunks proceed (section 5.10) |
-| Consolidation of exact matches and duplicate review pairs across reports (`concept_batch.py`) | Reproduced at job level (section 4.4) |
-| `experimental_knowledge.py`, `extraction_review.py` (CSV review packets) | Left out; the admin console's review queue is the review interface |
-| V1, V2 and V4 prompt profiles, structured claims, coverage audit, bounded repair, the `--structured` path | Left out. The V3 switch of 10 September was the predecessor's own decision after the V4 cost review |
-| Input discovery over files, directories and wildcards; `max_file_bytes`; snapshot manifests | Left out; the selection is by the text index, as in the extraction package |
-| GUI, control API, worker, PostgreSQL, the runtime's retrieval providers | Left out |
-| Curation entries | New: nothing in the predecessor wrote curation entries from candidates; the KB1 curation was authored by hand from the batches. Section 7 defines the packaging step |
-| Basis of the evidence | New (16 September 2026): a third call per chunk says what each retained proposal's evidence is (an act and its article, an ordinance, a treaty, a directive, the authority's own guidance, a directory entry or a portal summary) and at which level; the V3 prompts and their hashes are untouched, the classification is a separate prompt `basis_classification_v1.md` (section 5.7) |
-
-## 3. Inputs
+## 2. Inputs
 
 | Input | Used for |
 | --- | --- |
 | `<run>/text/index.json` | Selection (attribution kind, source IDs, eligibility, preferred representation, superseded, language) and the reuse check |
 | `<run>/text/documents/<document_id>.json` | `blocks` with `kind`, `text`, `start`, `end`, `heading_path`, `source_locator` (region, furniture, `explicit_hidden`, `is_footnote`, PDF labels); `content_sha256`, `acquisition.raw_sha256`, `title`, `language_declared`, `language_hint`, `source_url`, `source_registry` |
-| `config/semantic-models.toml` | Profiles (adapter, model, base URL, provider, timeout, response mode), generation settings, extraction limits, retry settings (section 6.1) |
+| `config/semantic-models.toml` | Profiles (adapter, model, base URL, provider, timeout, response mode), generation settings, extraction limits, retry settings (section 5.1) |
 | Environment | `DEEPSEEK_API_KEY`, `HF_TOKEN`, `GROQ_API_KEY`; one variable per hosted adapter, fixed by name. The repository's Git-ignored `.env.dev` already defines these three names |
 | Package data `prompts/*.md` | The V3 prompts and the basis prompt; `--extraction-prompt`, `--review-prompt` and `--basis-prompt` replace a whole prompt with a file, recorded by path and hash |
 | `releases/<pack>/curation.yaml` | Packaging only: the topics and context fields the entries must fit, the concepts already present |
-| A `swisstip.concept-proposal-batch/v1` file | Packaging only, through the legacy adapter (section 7.3) |
+| A `swisstip.concept-proposal-batch/v1` file | Packaging only, through the legacy adapter (section 6.3) |
 
 Selection options mirror the extraction package: `--scope attributed`
 (default: catalogue targets, `in-scope` and `language-variant` discovered
 pages, plugin documents) or `all`; `--kind`, `--source`, `--document-id`,
-repeatable; new: `--language` (declared or hinted language of the record)
-and `--max-pages`. A record is selected only when it is eligible, the
+repeatable; `--language` (declared or hinted language of the record) and
+`--max-pages`. A record is selected only when it is eligible, the
 preferred representation of its source URL, and not superseded. PDF records
 take part: their blocks are `pdf_paragraph` or `pdf_page` blocks. Records
 whose text exceeds `max_characters_per_document` (default 120,000; the three
 Fedlex acts of the full pack) are listed and skipped unless `--allow-large`.
 
-Text records adopted from the predecessor carried no `furniture` labels.
-The content selection of section 5.3 works without them, less precisely.
-The phase 0 refresh re-extracted both runs with `--force`, so every record
-now carries them; the MVP comparison found no block ID, offset or hash
-changes. See the
-implementation record `.local/experiments/2026-09-13-concept-extraction.md`
-and [extraction.md](extraction.md), section 10.
+Every record of both runs carries `furniture` labels
+([extraction.md](extraction.md), section 9). The content selection of
+section 4.3 also works without them, less precisely.
 
-## 4. Outputs
+## 3. Outputs
 
-### 4.1 Layout
+### 3.1 Layout
 
 Default output `.local/<pack>/concepts/`, overridable with `--output`. The
 candidate dataset is working data of the same kind as the console's state
@@ -155,7 +110,7 @@ under `.local/<pack>/console/`: it holds prompts and raw model output, it is
 large, and what is meant to be committed is the packaged curation entry,
 which names the job and the report it came from. The run directory of a
 committed pack (`releases/<pack>/`) is never written, which keeps rule 1
-of section 5.2 of the specification intact. The command refuses an output
+of section 4.2 of the specification intact. The command refuses an output
 path inside `pages/`, `*-documents/` or `text/`.
 
 ```text
@@ -175,7 +130,7 @@ concepts/
 
 `job_id` is `<date>-<profile>-<six hex digits of the plan hash>`.
 
-### 4.2 Report
+### 3.2 Report
 
 `schema_version: swisstip.concept-candidates/v1`, one file per record.
 
@@ -197,7 +152,7 @@ concepts/
 | `output_sha256` | SHA-256 over the canonical JSON of `candidates` |
 | `generated_at`, `warnings` | |
 
-### 4.3 Candidate
+### 3.3 Candidate
 
 | Field | Content |
 | --- | --- |
@@ -206,13 +161,13 @@ concepts/
 | `primary_section_id`, `heading_path` | The section the concept cites and its heading path |
 | `evidence` | One item per selected span: `evidence_id`, `block_id`, `block_number`, `start`, `end` (code points into `content_text`), `quote` (exactly `content_text[start:end]`), `text_sha256` of the block |
 | `review` | The verdict for this proposal: `decision: supported`, `issue: none`, `reason` |
-| `basis` | What the evidence is, from the basis call (section 5.7): `kind` in act, ordinance, treaty, directive, guidance, directory, summary; `level` in federal, cantonal, municipal; `norm` (the act, SR number and article as the sources state them; required for act, ordinance, treaty and directive, else null); `refers_to` (a norm the evidence names without reproducing it, else null); `reason`. Null when the call was skipped or failed |
+| `basis` | What the evidence is, from the basis call (section 4.7): `kind` in act, ordinance, treaty, directive, guidance, directory, summary; `level` in federal, cantonal, municipal; `norm` (the act, SR number and article as the sources state them; required for act, ordinance, treaty and directive, else null); `refers_to` (a norm the evidence names without reproducing it, else null); `reason`. Null when the call was skipped or failed |
 | `validation_state` | `CANDIDATE`, always; the packaging step and the review queue own the later states |
 
-### 4.4 Job summary
+### 3.4 Job summary
 
 `jobs/<job_id>/summary.json` carries the plan, the ceilings and what was
-used of them, the execution statistics of the predecessor (`network_attempts`,
+used of them, the execution statistics (`network_attempts`,
 `retry_attempts`, `checkpoint_hits`, `incomplete_completions`,
 `review_fallbacks`, token totals with the caveat that failed attempts are
 not counted), the elapsed time, and the two consolidation views of
@@ -222,9 +177,9 @@ exactly on language, label, scope, type, granularity and description) and
 language, capped at 200, never merged). `summary.json` at the top level
 aggregates the reports on disk and is rebuilt at the end of every job.
 
-## 5. Processing rules
+## 4. Processing rules
 
-### 5.1 Selection and reuse
+### 4.1 Selection and reuse
 
 A report is reused, and the record skipped, when a report exists whose
 `content_sha256`, both prompt hashes, profile name, model and `settings`
@@ -234,7 +189,7 @@ with failures, and the checkpoints make the successful chunks free. A
 record whose report exists but whose `content_sha256` changed (a new
 download attempt) is extracted anew; the old report is kept until `--prune`.
 
-### 5.2 Sections from a record
+### 4.2 Sections from a record
 
 A section is a maximal run of consecutive blocks with the same
 `heading_path`. The heading block that opens it belongs to it and is not a
@@ -248,7 +203,7 @@ Table blocks are one span each: their `text` as the extractor wrote it.
 `pdf_page` and `pdf_paragraph` blocks are ordinary spans. There is no second
 parse of the saved bytes and no change to any offset.
 
-### 5.3 Content selection
+### 4.3 Content selection
 
 A block is excluded from the spans, with the reason recorded on its
 section, when any of the following holds:
@@ -269,7 +224,7 @@ section, when any of the following holds:
 block of the notification page carries `in_main: false`. Labels never remove
 text from the record; they decide only what is offered as a span.
 
-### 5.4 Chunks and evidence spans
+### 4.4 Chunks and evidence spans
 
 Kept sections are packed in order into chunks of at most
 `chunk_content_characters` (default 6,400) counting each span's text plus a
@@ -287,9 +242,11 @@ of a chunk lists `evidence_id`, `section_id` and `text` per span; the
 model's schema enumerates exactly these IDs, so an unknown ID is refused by
 the provider's JSON mode where it exists and by the validator always.
 
-### 5.5 The extraction call
+### 4.5 The extraction call
 
-One call per chunk. System prompt: the V3 extraction prompt. User prompt:
+One call per chunk. System prompt: the V3 extraction prompt (the bundled
+prompt texts are package data; a test pins their SHA-256,
+`ccd968b7...` for extraction and `893394d8...` for review). User prompt:
 the V3 `untrusted_page` object with `document_id`, `title`, `language`,
 `chunk_index`, `chunk_count`, the chunk's `sections` (`section_id`,
 `heading_path`, `fragment_start` when the section was split) and
@@ -299,7 +256,7 @@ the `primary_section_id` enum of the chunk. The provider's JSON mode is
 requested where the adapter supports it; the local validation stays
 mandatory in every case.
 
-### 5.6 Structural validation
+### 4.6 Structural validation
 
 Every proposal is checked before the review, and a failing one goes to
 `rejected` with `stage: structural`:
@@ -316,9 +273,9 @@ Every proposal is checked before the review, and a failing one goes to
   belongs to it.
 
 A chunk whose completion is not a JSON object with exactly one `concepts`
-array, or has more entries than the limit, fails as a whole (section 5.10).
+array, or has more entries than the limit, fails as a whole (section 4.10).
 
-### 5.7 The review call and the basis call
+### 4.7 The review call and the basis call
 
 One call per chunk with at least one structurally valid proposal. System
 prompt: the V3 review prompt. User prompt: the V3 `untrusted_review` object
@@ -338,10 +295,10 @@ recorded under `reviews`; the rejected proposals under `rejected` with
 `stage: review`. When the review completion is truncated (`finish_reason`
 `length`) and there is more than one proposal, the proposals are re-batched
 in halves down to `review_fallback_batch_size` (default 2) and reviewed
-again, verdicts renumbered and stitched, as the predecessor did; the split
-is recorded in `review_fallbacks`.
+again, verdicts renumbered and stitched; the split is recorded in
+`review_fallbacks`.
 
-**The basis call** (16 September 2026) follows the review: one call per
+**The basis call** follows the review: one call per
 chunk with at least one supported proposal, skipped with
 `classify_basis = false` in the extraction settings or `--no-classify-basis`.
 System prompt: `basis_classification_v1.md`, a separate prompt so the V3
@@ -370,7 +327,7 @@ check (5.1) compares the basis prompt hash only when the call is on, so
 reports of the two-call pipeline stay reusable for a run without it. The
 plan counts three requests per chunk with the call on, two without.
 
-### 5.8 Merge, identity, consolidation
+### 4.8 Merge, identity, consolidation
 
 Within a record, proposals from different chunks that agree on label, scope,
 type, granularity, description and primary section are merged: labels,
@@ -381,7 +338,7 @@ rather than resolved by order. `candidate_id` is derived as in 4.3. Across
 records, the job summary groups exact matches and lists near matches for
 review; nothing is merged across records.
 
-### 5.9 Budgets, retries, checkpoints
+### 4.9 Budgets, retries, checkpoints
 
 The plan (`plan.json`, also the output of `--dry-run`) lists every selected
 record with its sections, chunks and the request count: two per chunk
@@ -392,9 +349,9 @@ overridable on the command line:
 | Ceiling | Default | Effect |
 | --- | --- | --- |
 | `max_model_requests_per_page` | 12 | A record needing more is skipped and listed before the run starts |
-| `max_model_requests_per_run` | 400 | The run refuses to start when the plan exceeds it; the count includes retries and failed attempts, as in the predecessor |
+| `max_model_requests_per_run` | 400 | The run refuses to start when the plan exceeds it; the count includes retries and failed attempts |
 | `max_total_input_characters` | 1,200,000 | Over the kept sections of the selection |
-| `max_characters_per_document` | 120,000 | See section 3 |
+| `max_characters_per_document` | 120,000 | See section 2 |
 | `max_prompt_tokens_per_run` | none | Soft: the job stops before the next request once the recorded usage exceeds it |
 | `--max-minutes` | none | Soft: the job stops before the next request |
 | `max_retries`, `backoff_seconds`, `max_backoff_seconds`, `max_retry_after_seconds` | 3, 2, 30, 300 | Transient HTTP statuses 408, 429, 500, 502, 503, 504 and network timeouts; `Retry-After` honoured as seconds or HTTP date and refused beyond the cap; a progress line every 15 seconds while waiting |
@@ -423,7 +380,7 @@ both the parent and child responses replay without provider calls. Each
 job summary's execution statistics describe the latest invocation, while
 its report totals include reused candidates and completion usage.
 
-### 5.10 Failure handling
+### 4.10 Failure handling
 
 | Event | Effect |
 | --- | --- |
@@ -438,9 +395,9 @@ otherwise; 2 on a usage error. A report written is never a claim that a
 candidate is correct; the report says what was proposed, what was rejected
 and by which stage.
 
-## 6. Providers
+## 5. Providers
 
-### 6.1 Protocol and configuration
+### 5.1 Protocol and configuration
 
 ```python
 class Provider(Protocol):
@@ -528,47 +485,44 @@ provider = "anthropic-assistant"
 ```
 
 The loader rejects unknown keys, any `api_key` or `token` value, a profile
-whose adapter is unknown, and the validation bounds of the predecessor
-(chunk size at least 500, overlap at most half the chunk, at most 100
-concepts per chunk, per-page ceiling at most the per-run ceiling, retries at
-most 5, backoff at most 60 seconds, `Retry-After` cap at most 3,600 seconds,
-review batch at most 10). The token variable is fixed per adapter and read
-only for the selected profile: `DEEPSEEK_API_KEY`, `HF_TOKEN`,
-`GROQ_API_KEY`; Ollama and the exchange need none. There is no fallback
-from one profile to another.
+whose adapter is unknown, and the validation bounds (chunk size at least
+500, overlap at most half the chunk, at most 100 concepts per chunk,
+per-page ceiling at most the per-run ceiling, retries at most 5, backoff at
+most 60 seconds, `Retry-After` cap at most 3,600 seconds, review batch at
+most 10). The token variable is fixed per adapter and read only for the
+selected profile: `DEEPSEEK_API_KEY`, `HF_TOKEN`, `GROQ_API_KEY`; Ollama and
+the exchange need none. There is no fallback from one profile to another.
 
-### 6.2 Adapters
+### 5.2 Adapters
 
 All four hosted and local adapters use `urllib.request` with a handler that
 refuses redirects (so a bearer token cannot follow one), a `User-Agent` of
 `SwissTIP/0.1`, `stream: false`, a 1 MB request and a 1 MB response cap,
-exactly one choice, no implicit retry (retries belong to section 5.9), and a
+exactly one choice, no implicit retry (retries belong to section 4.9), and a
 JSON decoder that rejects duplicate keys, non-finite numbers and invalid
 UTF-8.
 
 | Adapter | Request | Response checks |
 | --- | --- | --- |
 | `deepseek` | `POST /chat/completions`, `response_format: {type: json_object}`, `thinking: {type: disabled}`, the response schema serialized into the system prompt, `max_tokens`, `temperature` | `model` equals the requested model; one choice; `finish_reason == stop`, else the completion is `incomplete` with the reason; no `refusal` or `tool_calls`; content parses to a JSON object |
-| `huggingface` | OpenAI-compatible `POST /chat/completions` at the router with `model: "<model>:<provider>"`; `response_format: {type: json_schema, json_schema: {name, schema, strict: true}}`, or `prompt_only` (schema appended to the system prompt); for `publicai` additionally `disable_fallbacks: true` and `cache: {no-cache: true, no-store: true}`, because PublicAI substituted `aisingapore/Qwen-SEA-LION-v4-32B-IT` and served cached completions on 9 September; optional `X-HF-Bill-To` | `finish_reason` in stop, eos_token, stop_sequence; the observed model must be the requested one or an approved alias listed in the adapter with the date it was verified; 429 bodies classified into token-limit and rate-limit errors from at most 4 KB of valid JSON |
+| `huggingface` | OpenAI-compatible `POST /chat/completions` at the router with `model: "<model>:<provider>"`; `response_format: {type: json_schema, json_schema: {name, schema, strict: true}}`, or `prompt_only` (schema appended to the system prompt); for `publicai` additionally `disable_fallbacks: true` and `cache: {no-cache: true, no-store: true}`, because PublicAI substitutes `aisingapore/Qwen-SEA-LION-v4-32B-IT` and serves cached completions without them; optional `X-HF-Bill-To` | `finish_reason` in stop, eos_token, stop_sequence; the observed model must be the requested one or an approved alias listed in the adapter with the date it was verified; 429 bodies classified into token-limit and rate-limit errors from at most 4 KB of valid JSON |
 | `groq` | OpenAI-compatible with strict `json_schema`, `reasoning_effort: low`, `max_completion_tokens` | As DeepSeek; the explicit `User-Agent` is required (HTTP 403 `error code: 1010` without it) |
 | `ollama` | `POST /api/chat` with `format: <schema>`, `think: false`, `options: {num_ctx, num_predict, temperature}`, `keep_alive` | `done` true and `done_reason == stop` |
 
-The experiments of 9 and 10 September in the predecessor
-(`docs/experiments/2026-09-09-v4-model-comparison*.md`,
-`2026-09-09-apertus-publicai-fallback.md`) are why DeepSeek is the default:
-it retained a usable draft in every run, GPT-OSS approved unsupported claims
-in its reviews, and no usable Apertus completion was obtained through
-PublicAI after fallbacks were disabled. The Apertus profiles stay for the
+DeepSeek is the default because it is the only model measured to retain a
+usable draft in every run: GPT-OSS approved unsupported claims in its
+reviews, and no usable Apertus completion was obtained through PublicAI with
+fallbacks disabled. The Apertus profiles stay for the
 day that changes and are marked `untested-live` in the configuration until a
 recorded run says otherwise.
 
-### 6.3 Exchange adapter
+### 5.3 Exchange adapter
 
-The `exchange` adapter is how the 11 batches of 11 September were produced:
-an assistant in the IDE answered request files by hand. The port keeps the
-file formats so that workflow continues unchanged:
+The `exchange` adapter lets an assistant in the IDE answer the request
+files by hand, which is how the batches under `.local/extraction/` were
+produced:
 
-- `generate_structured` computes the key of section 5.9. If
+- `generate_structured` computes the key of section 4.9. If
   `exchange/responses/<key>.json` exists, its `content` is returned as a
   completion with `provider: anthropic-assistant` and the configured model.
   Otherwise the request is written to `exchange/requests/<key>.json`
@@ -591,13 +545,12 @@ The assistant that answers is a provider like any other: its answers pass
 the same validation, the same review call and the same packaging, and its
 identity is recorded on every completion.
 
-The implemented response envelope requires `observed_model` or `model`
-alongside the JSON string in `content`. Older content-only response files
-need explicit model attribution before replay; a missing observed identity
-is never inferred from configuration. Importing the predecessor's completed
-batches through section 7.3 is unchanged.
+The response envelope requires `observed_model` or `model` alongside the
+JSON string in `content`. A content-only response file needs explicit model
+attribution before replay; a missing observed identity is never inferred
+from configuration. Completed batches are imported through section 6.3.
 
-### 6.4 Identity policy
+### 5.4 Identity policy
 
 `observed_model` comes from the provider's response and is never inferred.
 A completion whose observed model is not the configured model (or, for
@@ -605,14 +558,14 @@ PublicAI, not an approved alias) is refused, whether it comes from the
 network or from a checkpoint: integrity of a checkpoint does not establish
 attribution. Every report lists one identity entry per completion.
 
-## 7. Packaging into the curation file
+## 6. Packaging into the curation file
 
 `swisstip-concepts-package` turns retained candidates into curation entries.
 It is a separate command, never run by the extraction, and it writes the
 curation file only with `--write`; without it the entries are printed and a
 `packaging-report.json` says what would change.
 
-### 7.1 Mapping
+### 6.1 Mapping
 
 | Curation field | From |
 | --- | --- |
@@ -630,14 +583,14 @@ curation file only with `--write`; without it the entries are printed and a
 | `facts[0].language` | The report's `language`, reduced to its two-letter code |
 | `facts[0].jurisdiction` | `--jurisdiction`, else `definition.jurisdiction` of the record's first `source_registry` entry (the KB2 catalogue carries `CH-AG`, `CH-ZH`, ...; the federal entries `CH`); a candidate with neither is listed and not packaged, because a wrong `CH` would answer for every canton |
 | `facts[0].provenance` | `kind: model-candidate`, `review_status: model-candidate-automated-review`, `author: <provider>:<model>`, `source: concepts job <job_id>, document <document_id>, candidate <candidate_id>, prompts <8 hex>/<8 hex>`, `notes: [the review reason]` |
-| `facts[0].evidence` | The candidate's spans grouped by block: consecutive blocks become one citation with `document_id`, `first_block`, `last_block` and an `anchor` from `swisstip.extraction.anchors.make_anchor` on the current record; when the candidate carries a `basis`, each citation gets it as its `basis` (`kind`, `level`, `norm`, `refers_to`, without the reason), which the build labels as it labels a curator's (see [institutions-and-provenance-weights.md](institutions-and-provenance-weights.md), section 4.3) and the reviewer confirms or corrects in the workbench |
+| `facts[0].evidence` | The candidate's spans grouped by block: consecutive blocks become one citation with `document_id`, `first_block`, `last_block` and an `anchor` from `swisstip.extraction.anchors.make_anchor` on the current record; when the candidate carries a `basis`, each citation gets it as its `basis` (`kind`, `level`, `norm`, `refers_to`, without the reason), which the build labels as it labels a curator's (see [institutions-and-provenance-weights.md](institutions-and-provenance-weights.md), section 2.3) and the reviewer confirms or corrects in the workbench |
 
 The cited excerpt is the whole block range, since the build cites blocks; a
 span that was a 500-character cut of a longer block cites the block. The
 anchor pins the text at packaging time, so a later download attempt goes
 through the build's relocation like any curated citation.
 
-### 7.2 Rules
+### 6.2 Rules
 
 - **Idempotent.** A candidate already present (same `candidate_id` in a
   fact's `provenance.source`) is skipped. A packaged fact whose kind or
@@ -659,13 +612,13 @@ through the build's relocation like any curated citation.
   priority 4 and its accept action (`screens/review.py`, implemented) is
   what turns one into `curated-statement` with `human-reviewed`.
 
-### 7.3 Legacy batches
+### 6.3 Legacy batches
 
 `--legacy-batch FILE` reads a `swisstip.concept-proposal-batch/v1` document
-of the predecessor (the 11 files under
+that was produced outside this pipeline (the assistant batches under
 `.local/extraction/assistant-v3-2026-09-11/runs/batch-*/result.json` of the
-predecessor checkout: 100 reports, 377 retained candidates, 91 rejected).
-This is step 2 of the KB2 migration. For each retained candidate:
+predecessor checkout). This is step 2 of the KB2 migration. For each
+retained candidate:
 
 1. The record is found by `provenance.source_url` (else `final_url`) and
    `provenance.sha256` through the text index; failing the hash, the newest
@@ -683,19 +636,16 @@ This is step 2 of the KB2 migration. For each retained candidate:
 The count of anchored, dropped and ambiguous candidates is the acceptance
 record of this step and goes into `.local/experiments/`.
 
-## 8. Sizing and budget
+## 7. Sizing and budget
 
-The figures in this table describe the adopted dataset before the phase 0
-refresh and remain sizing estimates. Refreshed dataset counts and the
-implemented MVP plans are recorded in the
-implementation acceptance `.local/experiments/2026-09-13-concept-extraction.md`.
-Use `--dry-run` for the actual selection and ceilings before starting a job.
+The figures in this table are sizing estimates. Use `--dry-run` for the
+actual selection and ceilings of a run before starting a job.
 
 Chunks and requests follow from the characters of the kept sections; the
 figures below use all characters of the eligible preferred records as an
 upper bound, one chunk per 6,400 characters and two requests per chunk; the
-basis call of 16 September 2026 adds a third, smaller request to every
-chunk with a supported proposal, so a plan with it counts about half as
+basis call adds a third, smaller request to every chunk with a supported
+proposal, so a plan with it counts about half as
 many requests again. The
 token figure assumes about 10,000 tokens per chunk (roughly 8,000 in and
 2,000 out: the chunk text once in the spans, the prompts, the schema with
@@ -711,19 +661,19 @@ by the measured value of the pilot.
 | Full run, everything eligible | 10,992 | 165,621,271 | 25,900 | 51,800 | 260 M |
 
 The last row is not a target; the out-of-scope pages are outside the
-residence topic by attribution. At the 19.7 seconds per DeepSeek call
-measured in the predecessor's rerun, the catalogue pages take about half an
-hour sequentially, the MVP attributed scope about six hours and the KB2
-scope about nineteen hours; `--workers N` runs records in parallel subject
-to the provider's rate limit. Cost is tokens times the provider's list price
-on the day; the job records both token counts per request, and the pilot of
-section 11 fixes the number before anything larger runs.
+residence topic by attribution. At about 20 seconds per DeepSeek call, the
+catalogue pages take about half an hour sequentially, the MVP attributed
+scope about six hours and the KB2 scope about nineteen hours; `--workers N`
+runs records in parallel subject to the provider's rate limit. Cost is
+tokens times the provider's list price on the day; the job records both
+token counts per request, and the pilot of section 10 fixes the number
+before anything larger runs.
 
 The Fedlex acts are better served by KB2 step 3 (source sections per
 article) than by concept extraction over 120 chunks of statute text; the
 default skips them.
 
-## 9. Command line
+## 8. Command line
 
 ```shell
 ./.venv/Scripts/python.exe -m pip install -e packages/concepts
@@ -750,18 +700,18 @@ default skips them.
 | Option | Effect |
 | --- | --- |
 | `--run DIR`, `--output DIR` | The run whose `text/` is read; the candidate dataset, default `.local/<pack>/concepts/` |
-| `--scope`, `--kind`, `--source`, `--document-id`, `--language`, `--max-pages`, `--allow-large` | Selection (section 3) |
+| `--scope`, `--kind`, `--source`, `--document-id`, `--language`, `--max-pages`, `--allow-large` | Selection (section 2) |
 | `--profile NAME`, `--config FILE` | The provider profile; without `--profile` only `--dry-run` is allowed |
 | `--dry-run` | Write `plan.json`, print the request count and the ceilings, create no provider |
-| `--max-requests`, `--max-minutes`, `--max-prompt-tokens` | Override the ceilings of section 5.9 |
+| `--max-requests`, `--max-minutes`, `--max-prompt-tokens` | Override the ceilings of section 4.9 |
 | `--workers N` | Records in parallel; requests within a record stay sequential |
-| `--force`, `--retry-failed`, `--prune`, `--fresh-inference` | Reuse control (section 5.1); `--fresh-inference` ignores checkpoints but writes new ones |
+| `--force`, `--retry-failed`, `--prune`, `--fresh-inference` | Reuse control (section 4.1); `--fresh-inference` ignores checkpoints but writes new ones |
 | `--extraction-prompt FILE`, `--review-prompt FILE`, `--basis-prompt FILE` | Replace a whole prompt; the report records the path and hash |
-| `--no-classify-basis` | Skip the basis call (section 5.7); two requests per chunk, candidates without a basis |
+| `--no-classify-basis` | Skip the basis call (section 4.7); two requests per chunk, candidates without a basis |
 | `--on-missing capture` or `fail` | Exchange adapter only |
-| `--verbose` | Progress lines on standard error, as in the predecessor |
+| `--verbose` | Progress lines on standard error |
 
-## 10. Package layout, dependencies, tests
+## 9. Package layout, dependencies, tests
 
 ```text
 packages/concepts/
@@ -794,7 +744,7 @@ from the standard library; no HTTP client library and no provider SDK. The
 knowledge builder does not gain a stage: a model call is neither offline
 nor deterministic, and the pipeline's stages are both. The admin console
 may later start the command as a job behind the same confirmation as the
-download flag (section 11, phase 5).
+download flag (section 10, phase 5).
 
 Tests, each on synthetic records built in a temporary directory, no network:
 
@@ -802,7 +752,7 @@ Tests, each on synthetic records built in a temporary directory, no network:
 | --- | --- |
 | Sections and selection | Runs by heading path; heading blocks not spans; every exclusion rule of 5.3 once, on a record with and without furniture labels; contact-only page kept |
 | Chunks and spans | Packing at block boundaries; an oversize block split with overlap and correct offsets; the 500-character cut; every span's `quote` equals `content_text[start:end]`; ID enum equals the catalogue |
-| Prompts | The bundled prompts hash to the predecessor's values; an override is recorded by path and hash |
+| Prompts | The bundled prompts hash to their pinned values; an override is recorded by path and hash |
 | Validation | Each rule of 5.6 rejects exactly its case; a valid proposal passes; verdict parser rules of 5.7 |
 | Flow | A record through the fake provider yields the expected report: merge of two chunks, conflict preserved, review rejection recorded, quality metrics, `output_sha256` stable |
 | Budgets | The plan refuses over the ceilings before any call; a retry on 429 with `Retry-After`; refusal beyond the cap; the review split on a truncated review |
@@ -813,29 +763,24 @@ Tests, each on synthetic records built in a temporary directory, no network:
 | Packaging | Every field of 7.1; contiguous spans become one citation; anchor equals `make_anchor`; idempotent second run; an accepted fact untouched; missing jurisdiction listed; stale content skipped; dry build resolves `same-snapshot` |
 | Legacy | Quote found once, with and without the heading prefix; ambiguous and missing quotes dropped and listed; record found by hash and by URL |
 
-## 11. Implementation plan
+## 10. Remaining phases
 
-Phases 1 to 3 below are implemented and tested; their original size estimates
-are retained for comparison. The phase 0 refresh and the concrete acceptance
-results are in the implementation record `.local/experiments/2026-09-13-concept-extraction.md`.
-Phases 4 and 5 remain planned. The measured offline MVP plan schedules
-28 of 29 selected records for at most 90 requests under the default per-page
-ceiling. The SEM entry FAQ needs 20 requests and is skipped; all 29 require
-`--max-requests-per-page 20 --max-requests 110`.
+Phases 1 to 3 (the pipeline with its fake provider and `--dry-run`, the
+provider adapters with budgets and checkpoints, and packaging with the
+legacy adapter) are implemented and tested. Two phases are open:
 
 | Phase | Delivers | Acceptance | Size |
 | --- | --- | --- | --- |
-| 0 | Re-extract both runs with `swisstip-extract --force --workers 4` so every record carries furniture labels; commit the MVP run's dataset if any file changed | MVP: no block ID, offset or hash changes (`validate-text` and a build with the same evidence hashes); full run: `validation.json` passes. Before 23 September, since the datasets freeze then | Hours of machine time, no code |
-| 1 | `sections.py`, `chunks.py`, `prompts.py`, `schemas.py`, `validation.py`, `extract.py` with the fake provider, `results.py`, `--dry-run` | Prompt hashes reproduced; the dry-run plan of the 29 MVP catalogue pages lists chunks and requests; the flow tests pass | About 1,100 source lines, 450 test lines |
-| 2 | `providers/` with `deepseek` and `exchange` first, then `huggingface`, `groq`, `ollama`; `config.py`, `budget.py`, `checkpoints.py`, the CLI | Adapter tests on canned responses; a stopped job resumes with zero new requests; `check` on the exchange directory | About 900 source lines, 350 test lines |
-| 3 | `package.py`, `legacy.py`, `package_cli.py` | The 377 legacy candidates anchored onto the full-pack dataset with the drop list recorded (KB2 step 2 done); a packaged pack builds, validates, and its candidates appear in the review queue at priority 4 and can be accepted | About 450 source lines, 250 test lines |
-| 4 | Pilot: the 29 MVP catalogue pages through `deepseek_flash` with `--max-requests 100`, recorded in `.local/experiments/` with requests, tokens, seconds, candidates retained and rejected, and the expert's verdict on a sample of 20 | Measured tokens per chunk replace the estimate of section 8; a go or no-go for the KB2 scope with its cost | One afternoon |
+| 4 | Pilot: the 29 MVP catalogue pages through `deepseek_flash` with `--max-requests 100`, recorded in `.local/experiments/` with requests, tokens, seconds, candidates retained and rejected, and the expert's verdict on a sample of 20 | Measured tokens per chunk replace the estimate of section 7; a go or no-go for the KB2 scope with its cost | One afternoon |
 | 5 | Optional: an English rendering call per retained candidate (label and statement in English, kept beside the original, `language: en` on a second fact); the console job with confirmation; the "Draft with assistant" button of the console design (4.5) on this provider layer | Each its own record under `.local/experiments/` | Later |
 
-Phases 1 to 3 are offline and can proceed during the freeze; phase 4 needs
-the network and a key, and its outputs stay under `.local/` until packaged.
+Phase 4 needs the network and a key, and its outputs stay under `.local/`
+until packaged. The offline MVP plan schedules 28 of 29 selected records for
+at most 90 requests under the default per-page ceiling; the SEM entry FAQ
+needs 20 requests and is skipped, so all 29 require
+`--max-requests-per-page 20 --max-requests 110`.
 
-## 12. Out of scope
+## 11. Out of scope
 
 - Any change to the release format, the tool contracts, the server or the
   build beyond reading facts of kind `model-candidate`, which they already
@@ -849,7 +794,7 @@ the network and a key, and its outputs stay under `.local/` until packaged.
 - Automatic acceptance of any candidate, whatever its confidence or verdict.
 - A vector index, retrieval or ranking; `search` stays lexical.
 
-## 13. Open questions
+## 12. Open questions
 
 - **Language of the statement.** The V3 prompts write in the page language
   and the review rejects English prose on a German page, while section 3.4
@@ -858,7 +803,7 @@ the network and a key, and its outputs stay under `.local/` until packaged.
   language (that is what the review checked) and makes English a separate
   rendering step (phase 5). The alternative, an English description in the
   extraction call, would need a new prompt profile and lose the equivalence
-  with the batches of 11 September.
+  with the existing batches.
 - **Which pack gets candidates first.** Recommended: KB2
   (`releases/swiss-residence/curation.yaml`), where the legacy batches
   already belong and where unreviewed content is declared. For KB1,

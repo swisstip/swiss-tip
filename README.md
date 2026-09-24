@@ -48,11 +48,11 @@ uvx swisstip-mcp --release <packs>/releases/<pack>/release.json --require-ready 
 claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
 ```
 
-With Docker, the basic image with the pack mounted, or a pack's own image
+With Docker, the slim MCP image with the pack mounted, or a pack's own image
 from the packs repository:
 
 ```shell
-docker run --rm -p 8000:8000 -v "<packs>/releases/<pack>:/srv/swiss-tip:ro" ghcr.io/swisstip/swiss-tip-mcp:latest
+docker run --rm -p 8000:8000 -v "<packs>/releases/<pack>:/srv/swiss-tip:ro" ghcr.io/swisstip/swiss-tip-mcp:latest-slim
 ```
 
 From this checkout, after the installation below:
@@ -108,7 +108,7 @@ the route a pack takes from catalogue to served release.
 | `apps/` | `mcp-server`, `knowledge-builder`, `admin-console` |
 | `packages/` | `core` (release format, validator, tool contracts), `runtime` (the four operations, lexical and hybrid search), `ingestion`, `extraction`, `build`, `concepts` |
 | `docs/` | [Functional specification](docs/product/functional-specification.md) and the architecture documents: [release format](docs/architecture/release-format.md), [tool contracts](docs/architecture/tool-contracts.md), [acceptance gate](docs/architecture/acceptance-gate.md), [extraction](docs/architecture/extraction.md), [concept extraction](docs/architecture/concept-extraction.md), [institutions and basis](docs/architecture/institutions-and-provenance-weights.md), [pipeline](docs/architecture/knowledge-base-pipeline.md), [admin console](docs/architecture/admin-console.md) |
-| `docker/`, `compose.yaml`, `Dockerfile` | [Container images](docker/README.md): the basic server image, the semantic image, the slim release image, the embedding sidecar and the OpenCode test image; the root Dockerfile builds the server from this source with a pack as build context |
+| `docker/`, `compose.yaml`, `Dockerfile` | [Container images](docker/README.md): the MCP image, its slim variant without the model, the slim release image, the embedding sidecar and the OpenCode test image; the root Dockerfile builds the server from this source with a pack as build context. The workflow [container-images.yml](.github/workflows/container-images.yml) builds, tests and pushes the images that hold no release; the packs repository builds the ones that hold one |
 | `scripts/pypi/` | The three PyPI distributions `swisstip-core`, `swisstip-mcp` and `swisstip-builder` ([publishing](scripts/pypi/README.md)) |
 | `config/` | Provider profiles of the concepts package |
 

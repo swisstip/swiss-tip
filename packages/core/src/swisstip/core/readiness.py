@@ -39,6 +39,18 @@ class CaseCounts(Strict):
     quarantined: list[str] = Field(default_factory=list)
 
 
+class CoverageCounts(Strict):
+    """What the curation coverage stage found on this release: informational, not a gate (see acceptance-gate.md, section 5)."""
+
+    policy: Literal["report", "enforce"]
+    candidates: int = Field(ge=0, description="Candidate records of the text dataset a curator is expected to read.")
+    content_sections: int = Field(ge=0)
+    cited_sections: int = Field(ge=0)
+    dispositioned_sections: int = Field(ge=0)
+    unclassified_sections: int = Field(ge=0)
+    clean: bool
+
+
 class Readiness(Strict):
     schema_version: Literal["swiss-tip-readiness/v1"] = READINESS_SCHEMA_VERSION
     pack: str
@@ -54,6 +66,8 @@ class Readiness(Strict):
     snapshot_date: date
     stale_from: date
     min_runway_days: int = Field(ge=0)
+    coverage: CoverageCounts | None = Field(default=None, description=(
+        "The curation coverage of this release's content digest, when curation-coverage.json was current at attestation."))
 
 
 def sha256_file(path: Path) -> str:
