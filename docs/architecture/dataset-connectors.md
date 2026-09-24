@@ -576,4 +576,12 @@ case that does not exist yet.
 - **Other cities.** A city whose portal publishes the same shape is five
   more curation files in the packs repository and nothing else; one with
   another shape is one more importer name. Neither is planned before the
-  Zurich datasets are served.
+  Zurich datasets are served. A survey on 23 September 2026 of the ten
+  largest cities after Zurich
+  (`.local/experiments/2026-09-23-waste-calendars-other-cities.md`) found
+  none that publishes the same shape. Basel and St. Gallen publish licensed
+  open data keyed by collection zone, and the others publish feeds without
+  a licence, PDFs, or no dates at all. A second city therefore needs a zone key:
+  rows keyed by zone, a street-to-zone index in the bundle, and `lookup`
+  taking a street. The record drafts this; St. Gallen is the first
+  candidate.
