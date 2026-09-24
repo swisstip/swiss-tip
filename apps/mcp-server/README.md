@@ -45,6 +45,7 @@ The packs of the MVP are published in
 | `--semantic-timeout SECONDS` | Local request timeout; default 10 |
 | `--semantic-min-score SCORE` | Minimum semantic cosine similarity; experimental default 0.5 |
 | `--semantic-candidates N` | Semantic candidates before fusion with lexical ranks; default 10 |
+| `--no-knowledge-graph` | Serve the release as if it carried no knowledge graph: `get_knowledge_graph` is not listed (default on; `SWISSTIP_KNOWLEDGE_GRAPH=0` switches it off, `--knowledge-graph` back on). See [Knowledge graph](#knowledge-graph) |
 | `--connector URL` | A dataset connector to register (repeatable; default `SWISSTIP_CONNECTORS`, comma-separated): its manifest is read once at startup, every dataset that stands behind a concept of the served release is bound to it, `resolve` then offers the dataset in `lookups` and the fifth tool `lookup` is listed. An unreachable connector is logged, probed again on every `/health` request, and never delays the release's own tools; the health payload lists every connector with its status and the datasets registered and rejected. See [docs/architecture/dataset-connectors.md](../../docs/architecture/dataset-connectors.md) |
 
 ## Fetch a pack and run the first tests
@@ -64,6 +65,14 @@ A release that carries a knowledge graph gets a fifth tool,
 other tool's description tell the caller to start each new subject with it and
 search and resolve in the next turn. `/health` names the graph, its hash and
 its review counts. A release without a graph serves the four tools as before.
+
+To serve a release without its graph (an A/B run, or if the graph misleads a
+caller), start the server with `--no-knowledge-graph` or set
+`SWISSTIP_KNOWLEDGE_GRAPH=0` (`0`, `false`, `no` or `off`); `--knowledge-graph`
+overrides the variable. The server then behaves as for a release without a
+graph and `/health` reports `"knowledge_graph": {"status": "disabled", ...}`.
+The release file, its readiness record and a semantic index are unaffected.
+`--print-client-config` carries the switch into the client configuration.
 
 ## Run from PyPI with uv
 

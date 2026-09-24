@@ -58,6 +58,7 @@ from . import SERVER_NAME, SERVER_VERSION
 
 RELEASE_VARIABLE = "SWISSTIP_RELEASE"
 CONNECTORS_VARIABLE = "SWISSTIP_CONNECTORS"
+GRAPH_VARIABLE = "SWISSTIP_KNOWLEDGE_GRAPH"
 MCP_PATH = "/mcp"
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
 
@@ -149,7 +150,8 @@ def health(service: ReleaseService, readiness: dict | None = None) -> dict:
                 freshness=dict(snapshot_date=manifest.freshness.snapshot_date.isoformat(),
                                stale_from=manifest.freshness.stale_from.isoformat()),
                 review_statuses=manifest.review_statuses,
-                knowledge_graph=None if service.graph_index is None else dict(
+                knowledge_graph=dict(status="disabled", graph_id=service.release.knowledge_graph.graph_id)
+                if service.graph_disabled else None if service.graph_index is None else dict(status="served",
                     graph_id=service.graph_index.graph.graph_id, content_sha256=service.graph_index.graph.content_sha256,
                     nodes=len(service.graph_index.graph.nodes), edges=len(service.graph_index.graph.edges),
                     review_statuses=service.graph_index.graph.review_statuses),
@@ -172,9 +174,11 @@ def remote_client_config(url: str, flavour: str) -> dict:
 
 def client_config(release: Path, flavour: str, *, semantic_index: Path | None = None,
                   ollama_url: str = "http://127.0.0.1:11434", semantic_timeout: float = 10,
-                  semantic_min_score: float = 0.5, semantic_candidates: int = 10) -> dict:
+                  semantic_min_score: float = 0.5, semantic_candidates: int = 10, knowledge_graph: bool = True) -> dict:
     python = sys.executable
     args = ["-m", "swisstip.mcp_server.server", "--release", str(release.resolve())]
+    if not knowledge_graph:
+        args.append("--no-knowledge-graph")
     if semantic_index is not None:
         args.extend(["--semantic-index", str(semantic_index.resolve()), "--ollama-url", ollama_url,
                      "--semantic-timeout", str(semantic_timeout), "--semantic-min-score", str(semantic_min_score),
@@ -184,6 +188,11 @@ def client_config(release: Path, flavour: str, *, semantic_index: Path | None = 
                                       "environment": {"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}}}}
     return {"mcpServers": {"swiss-tip": {"command": python, "args": args,
                                          "env": {"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"}}}}
+
+
+def graph_default() -> bool:
+    """The knowledge graph tool is on unless SWISSTIP_KNOWLEDGE_GRAPH is 0, false, no or off."""
+    return os.environ.get(GRAPH_VARIABLE, "1").strip().lower() not in ("0", "false", "no", "off")
 
 
 def main(argv=None) -> int:
@@ -208,6 +217,9 @@ def main(argv=None) -> int:
     parser.add_argument("--semantic-candidates", type=int, default=10, help="maximum semantic candidates before rank fusion")
     parser.add_argument("--connector", action="append", metavar="URL",
                         help=f"a dataset connector to register (repeatable); default ${CONNECTORS_VARIABLE}, comma-separated")
+    parser.add_argument("--knowledge-graph", action=argparse.BooleanOptionalAction, default=graph_default(),
+                        help=f"list get_knowledge_graph when the release carries a graph (default on; ${GRAPH_VARIABLE}=0 "
+                             "switches it off); --no-knowledge-graph serves the release as if it had none")
     args = parser.parse_args(argv)
     logging.basicConfig(stream=sys.stderr, level=args.log_level.upper(), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     if args.print_client_config and args.url:
@@ -222,10 +234,11 @@ def main(argv=None) -> int:
         print(json.dumps(client_config(args.release, args.print_client_config, semantic_index=args.semantic_index,
                                        ollama_url=args.ollama_url, semantic_timeout=args.semantic_timeout,
                                        semantic_min_score=args.semantic_min_score,
-                                       semantic_candidates=args.semantic_candidates), indent=2))
+                                       semantic_candidates=args.semantic_candidates,
+                                       knowledge_graph=args.knowledge_graph), indent=2))
         return 0
     try:
-        service = ReleaseService.from_file(args.release)
+        service = ReleaseService.from_file(args.release, knowledge_graph=args.knowledge_graph)
     except (OSError, ValueError, ReleaseInvalid) as exc:
         print(json.dumps(dict(status="error", release=str(args.release), error=str(exc))), file=sys.stderr if not args.health else sys.stdout)
         return 2

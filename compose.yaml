@@ -57,6 +57,8 @@ services:
     environment:
       # Empty means no connector; the profile "calendar" below is registered with http://127.0.0.1:8100.
       - SWISSTIP_CONNECTORS=${SWISSTIP_CONNECTORS:-}
+      # 0 serves the pack without get_knowledge_graph, as if the release carried no graph.
+      - SWISSTIP_KNOWLEDGE_GRAPH=${SWISSTIP_KNOWLEDGE_GRAPH:-1}
     ports:
       - "${SWISSTIP_PORT:-8000}:8000"
 

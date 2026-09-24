@@ -1010,8 +1010,9 @@ the offer), `lookup` (the dates).
 
 ## 11. `get_knowledge_graph`
 
-Listed first, and only for a release that carries a knowledge graph
-(design: [knowledge-graph.md](knowledge-graph.md)). The graph is orientation,
+Listed first, and only for a release that carries a knowledge graph and a
+server not started with `--no-knowledge-graph` or `SWISSTIP_KNOWLEDGE_GRAPH=0`
+(design: [knowledge-graph.md](knowledge-graph.md), section 7). The graph is orientation,
 not evidence: the caller answers from `resolve`'s facts only.
 
 ### Request

@@ -309,7 +309,27 @@ class GraphServerTests(unittest.TestCase):
         report, tools = asyncio.run(run())
         self.assertEqual(tools[0], "get_knowledge_graph")
         self.assertEqual(report["knowledge_graph"]["graph_id"], "ch")
+        self.assertEqual(report["knowledge_graph"]["status"], "served")
         self.assertEqual(health(ReleaseService.from_file(FIXTURE))["knowledge_graph"], None)
+
+    def test_the_graph_can_be_switched_off_at_startup(self):
+        for argv, environment in ((["--no-knowledge-graph"], {}), ([], {"SWISSTIP_KNOWLEDGE_GRAPH": "0"})):
+            with self.subTest(argv=argv, environment=environment), patch.dict(os.environ, environment):
+                output = StringIO()
+                with redirect_stdout(output):
+                    self.assertEqual(main(["--release", str(GRAPH_FIXTURE), "--health", *argv]), 0)
+                self.assertEqual(json.loads(output.getvalue())["knowledge_graph"], dict(status="disabled", graph_id="ch"))
+        with patch.dict(os.environ, {"SWISSTIP_KNOWLEDGE_GRAPH": "0"}):
+            output = StringIO()
+            with redirect_stdout(output):
+                main(["--release", str(GRAPH_FIXTURE), "--health", "--knowledge-graph"])
+            self.assertEqual(json.loads(output.getvalue())["knowledge_graph"]["status"], "served")
+        service = ReleaseService.from_file(GRAPH_FIXTURE, knowledge_graph=False)
+        self.assertEqual(service.tools(), ["get_coverage", "search", "resolve", "get_evidence"])
+        self.assertNotIn("get_knowledge_graph", service.instructions)
+        self.assertNotIn("get_knowledge_graph", service.tool_description("search"))
+        self.assertIn("--no-knowledge-graph", client_config(GRAPH_FIXTURE, "generic", knowledge_graph=False)
+                      ["mcpServers"]["swiss-tip"]["args"])
 
 
 if __name__ == "__main__":

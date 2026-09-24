@@ -368,7 +368,8 @@ def argument_error(path: str, message: str, code: ErrorCode = ErrorCode.INVALID_
 
 class ReleaseService:
     def __init__(self, release: Release, semantic_search: SemanticSearch | None = None,
-                 semantic_error: str | None = None, connectors: ConnectorRegistry | None = None):
+                 semantic_error: str | None = None, connectors: ConnectorRegistry | None = None,
+                 knowledge_graph: bool = True):
         self.release = release
         self.semantic_search = semantic_search
         self.semantic_error = semantic_error
@@ -437,9 +438,11 @@ class ReleaseService:
         else:
             self.query_language_note, retry = "", ""
         self.search_notes = {"strong": SEARCH_MATCH_NOTE, "weak": SEARCH_WEAK_NOTE + retry, "none": SEARCH_EMPTY_NOTE + retry}
-        # The orientation graph, when the release carries one; the tool is offered only then.
+        # The orientation graph, when the release carries one and the operator has not switched it off; the tool is
+        # offered only then. Switched off, the server behaves as for a release without a graph.
         from .graph import GraphIndex
-        graph = release.knowledge_graph
+        graph = release.knowledge_graph if knowledge_graph else None
+        self.graph_disabled = release.knowledge_graph is not None and graph is None
         self.graph_index = GraphIndex(graph, release.topics) if graph is not None else None
         self.graph_evidence = {e.evidence_id: e for e in graph.evidence} if graph is not None else {}
         self.graph_institutions = {i.institution_id: i for i in graph.institutions} if graph is not None else {}
@@ -505,10 +508,11 @@ class ReleaseService:
 
     @classmethod
     def from_file(cls, path: Path, semantic_search: SemanticSearch | None = None,
-                  semantic_error: str | None = None) -> "ReleaseService":
+                  semantic_error: str | None = None, knowledge_graph: bool = True) -> "ReleaseService":
         release = load_release(path)
         assert_valid(release)
-        return cls(release, semantic_search=semantic_search, semantic_error=semantic_error)
+        return cls(release, semantic_search=semantic_search, semantic_error=semantic_error,
+                   knowledge_graph=knowledge_graph)
 
     # --- helpers -------------------------------------------------------------
 

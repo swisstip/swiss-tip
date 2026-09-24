@@ -191,6 +191,17 @@ guidance says the release does not cover the subject. Every served item states
 its review status (once for the whole result when all agree), every edge its
 source URL, and `get_evidence` reads a graph evidence ID like a fact's.
 
+**Kill switch.** An operator can serve a release that carries a graph without
+it: `swisstip-mcp --no-knowledge-graph`, or `SWISSTIP_KNOWLEDGE_GRAPH=0` in
+the environment (`--knowledge-graph` overrides the variable). The server then
+lists the four tools, the instructions and descriptions without the
+graph-first wording, and `get_evidence` refuses graph evidence IDs, exactly as
+for a release without a graph. `/health` reports
+`knowledge_graph: {status: disabled, graph_id}`; the release, its hash, its
+readiness record and a semantic index stay valid, since nothing in the file
+changes. It is meant for A/B runs of a caller with and without the graph, and
+for switching the graph off if it misleads callers in production.
+
 ## 8. Admin console
 
 Screen 4.10 of [admin-console.md](admin-console.md): the overview (curation
