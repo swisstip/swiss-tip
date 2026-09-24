@@ -51,7 +51,7 @@ class PluginDownloadTests(unittest.TestCase):
         write_json(folder / f"{key}.request.json", {"sha256": hashlib.sha256(body).hexdigest()})
         return output, folder / f"{key}.json"
 
-    def fake_snapshot(self, target, output, hosts, transport):
+    def fake_snapshot(self, target, output, hosts, transport, respect_robots=True):
         path = output / "pages" / target["url_id"] / "attempt-001" / "response.html"
         path.parent.mkdir(parents=True)
         path.write_bytes(b"<html><title>Law</title><p>A residence permit is required.</p></html>")

@@ -257,7 +257,7 @@ class DownloadCliTests(unittest.TestCase):
     def test_download_skips_intact_pages_not_ready_seeds_and_retries_on_request(self) -> None:
         calls: list[str] = []
 
-        def fake_snapshot(target, output, allowed_hosts=None, transport="urllib"):
+        def fake_snapshot(target, output, allowed_hosts=None, transport="urllib", respect_robots=True):
             calls.append(target["url"])
             attempt = len(list((output / "pages" / target["url_id"]).glob("attempt-*"))) + 1
             path = output / "pages" / target["url_id"] / f"attempt-{attempt:03d}" / "response.html"

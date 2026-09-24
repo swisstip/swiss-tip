@@ -101,6 +101,29 @@ stages, the [admin console](apps/admin-console/README.md) the review
 screens, and the [pipeline document](docs/architecture/knowledge-base-pipeline.md)
 the route a pack takes from catalogue to served release.
 
+## Source etiquette
+
+Acquisition is operator-triggered and **build-time only**: the MCP server
+never crawls at request time, it serves a prebuilt, hashed release. The
+downloader (`swisstip-download`) respects `robots.txt` and its crawl delays,
+identifies itself, stays within a per-host rate limit and a declared budget,
+and **fails closed** when a robots policy cannot be read.
+
+This is the default and the recommended setting. An operator who is
+authorised to access a host — a data-sharing agreement, an authoritative
+mandate — can override it per run with `--no-obey-robots`; the run then
+records `robots_status: "overridden"` in its report so the decision is
+auditable rather than silent. The default (`--obey-robots`) leaves the
+fail-closed behaviour in place.
+
+```shell
+swisstip-download --catalogue releases/<pack>/sources.json --output releases/<pack> --download
+swisstip-download --catalogue releases/<pack>/sources.json --output releases/<pack> --download --no-obey-robots
+```
+
+Quoted official texts kept in a release remain the property of their
+publishers and are reproduced only as cited evidence, see [NOTICE](NOTICE).
+
 ## Repository
 
 | Path | Contents |
