@@ -1,6 +1,6 @@
 # PyPI distributions
 
-**Last update:** 23 September 2026
+**Last update:** 24 September 2026
 
 The repository keeps one `pyproject.toml` per component under `packages/` and
 `apps/`, for editable development installs. PyPI gets four distributions
@@ -44,9 +44,12 @@ Knowledge releases are not published to PyPI.
 
 | Trigger | Publishes to |
 | --- | --- |
-| Push of a tag `v<version>`, for example `v0.3.0` | PyPI, as `<version>` |
-| Manual run ("Run workflow") with a version, for example `0.3.0rc1` | TestPyPI |
+| Push of a tag `v<version>`, for example `v0.3.0` | `<version>` |
+| Manual run ("Run workflow") with a version, for example `0.3.0` | `<version>` |
 | Push to any branch | nothing; it builds and tests as `<version>.dev0` |
+
+The version decides the index: a release candidate, ending in `rc<N>` (for
+example `0.3.0rc1`), goes to TestPyPI; every other version goes to PyPI.
 
 A branch push is how the build is verified before a release tag exists: the
 publish jobs run for a tag and for a manual run only. The manual run needs
@@ -93,10 +96,12 @@ workflow and environment combination for one project name only.
    `pypi-builder`. The first upload creates each project; its pending
    publisher then becomes its publisher.
 2. **TestPyPI** (<https://test.pypi.org/manage/account/publishing/>, a separate
-   account): the same three, with the environments `testpypi-core`,
-   `testpypi-mcp` and `testpypi-builder`.
-3. **GitHub** (repository Settings, Environments): create the six
-   environments. Limit the three `pypi-*` environments to tags matching `v*`,
+   account): the same, with the environments `testpypi-core`,
+   `testpypi-mcp`, `testpypi-calendar-connector` and `testpypi-builder`.
+3. **GitHub** (repository Settings, Environments): create the `pypi-*` and
+   `testpypi-*` environments. A manual run publishes from the branch it is
+   started on, so limit the `pypi-*` ones to tags matching `v*` and the
+   default branch,
    and add yourself as a required reviewer of `pypi-core`: a tag push then
    waits for one approval before anything is uploaded, and the other two
    packages follow only after the core is published.

@@ -2,9 +2,12 @@
 # swisstip-calendar-connector, swisstip-builder) from the component source trees, test them, and publish
 # them with PyPI trusted publishing, so no token is stored anywhere.
 #
-#   push a tag v<version>, e.g. v0.3.0      build, test, publish to PyPI
-#   run the workflow by hand with a version  build, test, publish to TestPyPI
+#   push a tag v<version>, e.g. v0.3.0      build, test, publish
+#   run the workflow by hand with a version  build, test, publish
 #   push to any branch                       build and test only, nothing is published
+#
+# A release candidate (a version ending in rc<N>, e.g. 0.3.0rc1) goes to
+# TestPyPI, every other version to PyPI, whichever of the two triggers it.
 #
 # A branch push is how the build is verified before a release tag exists: the
 # publish jobs below run for a tag and for a manual run only, so a branch push
@@ -23,7 +26,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish to TestPyPI, PEP 440 normalised, e.g. 0.3.0rc1
+        description: Version to publish, PEP 440 normalised; 0.3.0rc1 goes to TestPyPI, 0.3.0 to PyPI
         required: true
         type: string
 
@@ -37,6 +40,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      index: ${{ steps.version.outputs.index }}
     steps:
       - uses: actions/checkout@v7
 
@@ -45,6 +50,7 @@ jobs:
           python-version: "3.14"
 
       - name: Version
+        id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
@@ -57,7 +63,13 @@ jobs:
             version="$(python scripts/pypi/check_versions.py).dev0"
           fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
-          echo "Building version $version"
+          # A release candidate is published to TestPyPI, every other version to PyPI.
+          case "$version" in
+            *rc[0-9]*) index=testpypi ;;
+            *) index=pypi ;;
+          esac
+          echo "index=$index" >> "$GITHUB_OUTPUT"
+          echo "Building version $version for $index"
 
       # The distributions take their version from the command line of build_distributions.py, not from the
       # component files, so a file left at the previous version would be published under the tag's version
@@ -146,8 +158,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}-core
-      url: ${{ github.event_name == 'push' && 'https://pypi.org' || 'https://test.pypi.org' }}/project/swisstip-core/
+      name: ${{ needs.build.outputs.index }}-core
+      url: ${{ needs.build.outputs.index == 'testpypi' && 'https://test.pypi.org' || 'https://pypi.org' }}/project/swisstip-core/
     permissions:
       id-token: write
     steps:
@@ -162,17 +174,17 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: upload/
-          repository-url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          repository-url: ${{ needs.build.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
 
   publish:
-    needs: publish-core
+    needs: [build, publish-core]
     runs-on: ubuntu-latest
     strategy:
       matrix:
         package: [mcp, calendar-connector, builder]
     environment:
-      name: ${{ github.event_name == 'push' && 'pypi' || 'testpypi' }}-${{ matrix.package }}
-      url: ${{ github.event_name == 'push' && 'https://pypi.org' || 'https://test.pypi.org' }}/project/swisstip-${{ matrix.package }}/
+      name: ${{ needs.build.outputs.index }}-${{ matrix.package }}
+      url: ${{ needs.build.outputs.index == 'testpypi' && 'https://test.pypi.org' || 'https://pypi.org' }}/project/swisstip-${{ matrix.package }}/
     permissions:
       id-token: write
     steps:
@@ -189,4 +201,4 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: upload/
-          repository-url: ${{ github.event_name == 'push' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+          repository-url: ${{ needs.build.outputs.index == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}
