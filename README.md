@@ -18,11 +18,29 @@ Built for the **[Swiss {ai} Weeks](https://zh.ai-weeks.ch/)** hackathon in Zuric
 
 ## Quick start
 
-One command, and Docker is all you need. The image carries everything: the
-MCP server, the `mvp-zurich` knowledge base with its readiness attestation and
-semantic index, and a CPU-only Ollama with the `qwen3-embedding:0.6b` model,
-so search is hybrid (lexical plus embeddings) from the first request. No
-clone, no Python, no API key and no model download.
+Three ways in, from the simplest to the most involved. Every one of them
+speaks Streamable HTTP at `/mcp`, needs no authentication, and has a
+`/health` endpoint beside it.
+
+**Hosted for you.** During the hackathon days a running instance is hosted on
+AWS; connect any MCP client to it, with nothing to install:
+
+```shell
+claude mcp add --transport http swiss-tip https://51-96-83-1.sslip.io/mcp
+```
+
+Its `/health` is at `https://51-96-83-1.sslip.io/health`.
+
+The same host runs a demo OpenCode client that is already connected to it.
+Open <https://demo.51-96-83-1.sslip.io/> and sign in as `opencode`; the
+hackathon team gives out the password on request.
+
+**On your machine, with Docker.** One command and Docker is all you need.
+The image carries everything: the MCP server, the `mvp-zurich` knowledge base
+with its readiness attestation and semantic index, and a CPU-only Ollama with
+the `qwen3-embedding:0.6b` model, so search is hybrid (lexical plus
+embeddings) from the first request. No clone, no Python, no API key and no
+model download.
 
 ```shell
 docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
@@ -30,8 +48,7 @@ docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
 
 The first run pulls about 850 MB, roughly three minutes on a normal
 connection; the server then answers within about 15 seconds of starting, once
-the model is loaded. Check it, and connect any MCP client to
-`http://127.0.0.1:8000/mcp` (Streamable HTTP, no authentication):
+the model is loaded. Check it, and connect your client:
 
 ```shell
 curl -s http://127.0.0.1:8000/health
@@ -39,12 +56,16 @@ claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
 ```
 
 A healthy `/health` reports `"status": "ok"`, the release ID, the `readiness`
-record with status `ready`, and `search.configured_mode` set to `hybrid`. The
-tag `mvp-zurich` always serves the newest attested release of that pack; the
+record with status `ready`, and `search.configured_mode` set to `hybrid`;
+every `search` result names its own `retrieval_mode` as well. The tag
+`mvp-zurich` always serves the newest attested release of that pack; the
 packs repository also publishes a tag per release for pinning an exact one.
 
-To develop the server, run it from source or build a knowledge base, see
-[developer setup](docs/developer-setup.md).
+**Other images, or from source.** Other images serve the same release for
+narrower cases - a smaller one without the model, a two-container split with
+an embedding sidecar, the calendar connector and a browser demo interface;
+see [container images](docker/README.md). To run the server from source or
+build a knowledge base, see [developer setup](docs/developer-setup.md).
 
 ## How it works
 
@@ -87,36 +108,16 @@ whatever release is loaded; the snapshot below describes the current one.
   specific person; asylum, social assistance and debt enforcement; cantons
   other than Zurich and municipalities other than the City of Zurich beyond
   arrival registration. `get_coverage` returns the full list.
-- **Sources:** authoritative Swiss pages only — federal (`admin.ch`,
+- **Sources:** authoritative Swiss pages only - federal (`admin.ch`,
   `fedlex.data.admin.ch`, `ch.ch`), cantonal (`zh.ch`), and municipal
   (`stadt-zuerich.ch`); every fact cites an exact excerpt with its URL, access
   date and hash.
 
-**Current release — `mvp-zurich-2026-09-24-v1`:** 20 topics, 212 concepts and
+**Current release - `mvp-zurich-2026-09-24-v1`:** 20 topics, 212 concepts and
 **1,273 facts, all human-reviewed**, cited to 1,531 excerpts across 336 official
-documents; source snapshot 2026-09-23, stale from 2026-11-22. Coverage grows
+documents. Coverage grows
 with each release, so these figures are a snapshot: the running server reports
 the live numbers through `get_coverage` and `/health`.
-
-## Run the server
-
-One image, one command, hybrid search:
-
-```shell
-docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
-```
-
-The image is the whole server: the release it serves, its readiness
-attestation, the semantic index and the embedding model. Nothing else is
-needed, and nothing has to be configured. Every `search` result names its own
-`retrieval_mode`, which is `hybrid` here.
-
-Other container images exist for narrower cases — a smaller image without the
-model, a two-container split with an embedding sidecar, the calendar connector
-and a browser demo interface. They serve the same release and are described
-under [container images](docker/README.md) and in
-[developer setup](docs/developer-setup.md); the command above is the one to
-use.
 
 ## Source etiquette
 
@@ -124,10 +125,10 @@ Acquisition is operator-triggered and **build-time only**: the MCP server
 never crawls at request time, it serves a prebuilt, hashed release. The
 downloader respects `robots.txt` and its crawl delays, identifies itself,
 stays within a per-host rate limit and a declared budget, and **fails closed**
-when a robots policy cannot be read. That is the default; an operator
-authorised to access a host can override it per run with `--no-obey-robots`,
-and the run records `robots_status: "overridden"` so the decision is auditable
-rather than silent. The commands are in
+when a robots policy cannot be read. That is the default; whoever builds the
+content can override it per run with `--no-obey-robots`, accepting all the
+consequences, and the run records `robots_status: "overridden"` so the
+decision is auditable rather than silent. The commands are in
 [developer setup](docs/developer-setup.md#source-etiquette).
 
 Quoted official texts kept in a release remain the property of their
@@ -161,7 +162,7 @@ release goes stale.
 
 This matters most for the values that move: fees, rates, opening hours,
 officeholders and deadlines. Two things keep those honest. Amounts and
-calculators are **out of scope** by declaration, not by omission — tariff
+calculators are **out of scope** by declaration, not by omission - tariff
 tables, tax and pension amounts, premiums and every calculator are listed in
 `out_of_scope`, which `get_coverage` returns. And where a rate is published,
 the statement carries its own effective date rather than presenting it as

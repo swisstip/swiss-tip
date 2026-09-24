@@ -23,7 +23,7 @@ two smaller image variants.
 ## Then, if you are developing
 
 Use the local toolchain when you are changing the code, running the unit
-tests, building or curating a knowledge base, or rebuilding a semantic index —
+tests, building or curating a knowledge base, or rebuilding a semantic index -
 none of which the published image can do. That means uv and Python 3.14, as
 below. The rule of thumb:
 
@@ -202,11 +202,10 @@ downloader (`swisstip-download`) respects `robots.txt` and its crawl delays,
 identifies itself, stays within a per-host rate limit and a declared budget,
 and **fails closed** when a robots policy cannot be read.
 
-This is the default and the recommended setting. An operator who is
-authorised to access a host — a data-sharing agreement, an authoritative
-mandate — can override it per run with `--no-obey-robots`; the run then
-records `robots_status: "overridden"` in its report so the decision is
-auditable rather than silent. The default (`--obey-robots`) leaves the
+This is the default and the recommended setting. Whoever builds the content
+can override it per run with `--no-obey-robots`, accepting all the
+consequences; the run then records `robots_status: "overridden"` in its
+report so the decision is auditable rather than silent. The default (`--obey-robots`) leaves the
 fail-closed behaviour in place.
 
 ```shell
