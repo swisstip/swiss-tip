@@ -248,6 +248,41 @@ swisstip-download --catalogue releases/<pack>/sources.json --output releases/<pa
 Quoted official texts kept in a release remain the property of their
 publishers and are reproduced only as cited evidence, see [NOTICE](NOTICE).
 
+## Credentials and the prebuilt index
+
+**No credentials.** The server needs no API key, no token and no account, at
+build time or at run time, and it makes no call to any external service while
+answering: it serves a local release, and the embedding model runs locally
+(inside the full image, or in the sidecar beside the slim one). There is
+nothing to hand over in order to run or test it, and the repository holds no
+secrets.
+
+**The prebuilt index ships with the release.** `semantic-index.json` is part
+of a pack's release bundle, so every route above already has it: inside the
+image, or downloaded with the release by the quick start. Nothing has to be
+embedded, crawled or fetched by hand before the first request. The index is
+bound to its release by the release ID, the release content hash, a hash of
+every embedded text and the model's own digest; the server refuses an index
+built for another release or another model.
+
+It is rebuilt from the release with the same code that built it, against a
+local Ollama serving the model:
+
+```shell
+./.venv/bin/python -m swisstip.runtime.search_cli index \
+    --release <packs>/releases/<pack>/release.json \
+    --output <packs>/releases/<pack>/semantic-index.json
+```
+
+`--model` selects another embedding model (default `qwen3-embedding:0.6b`) and
+`--base-url` another Ollama address. The `benchmark` subcommand of the same
+CLI measures concept retrieval against a case set. Building the index is a
+step of its own: the [knowledge builder](apps/knowledge-builder/README.md)
+pipeline does not create it, it checks it, and its `ready` stage refuses a
+release whose committed index or attested hybrid run does not match. So a new
+release means rebuilding the index with the command above before the pack is
+attested.
+
 ## Repository
 
 | Path | Contents |
