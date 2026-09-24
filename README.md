@@ -70,14 +70,19 @@ no API key and no model download.
 docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
 ```
 
-The image is about 850 MB and the server answers about 15 seconds after it
-starts. `curl -s http://127.0.0.1:8000/health` then reports `"status": "ok"`,
-the release ID, a `readiness` status of `ready` and `search.configured_mode`
-`hybrid`; any MCP client connects to `http://127.0.0.1:8000/mcp`:
+The image is about 850 MB, and the server answers within about 15 to 30
+seconds of starting, once the model is loaded. `curl -s http://127.0.0.1:8000/health`
+then reports `"status": "ok"`, the release ID, a `readiness` status of `ready`
+and `search.configured_mode` `hybrid`; any MCP client connects to
+`http://127.0.0.1:8000/mcp`:
 
 ```shell
 claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
 ```
+
+If port 8000 is already taken, the run fails with `Bind for 0.0.0.0:8000
+failed: port is already allocated`; publish another host port instead, for
+example `-p 9000:8000`, and use it in the two commands above.
 
 The [other ways to run it](#run-the-server) below are the same release in
 different packaging, down to a 165 MB image without the model.
