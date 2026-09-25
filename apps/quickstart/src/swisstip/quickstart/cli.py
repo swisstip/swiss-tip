@@ -3,7 +3,8 @@
     swisstip-quickstart <pack>                            fetch the pack's current release into .local/packs/<pack>,
                                                           check it and run the tests on it
     swisstip-quickstart <pack> --ref <commit|tag|branch>  the release as of that ref of the packs repository; default main
-    swisstip-quickstart <pack> --serve                    the above, then serve the pack on http://127.0.0.1:8000/mcp
+    swisstip-quickstart <pack> --serve                    the above, then serve the pack on http://127.0.0.1:8000/mcp,
+                                                          with its calendar connector when the pack has datasets
     swisstip-quickstart <pack> --no-fetch                 the checks and tests on the files fetched before, offline
     swisstip-quickstart --url http://127.0.0.1:8000/mcp   the round trip against a running server, such as a container
 
@@ -14,16 +15,19 @@ The packs are published in a public GitHub repository (swisstip/swiss-tip-mvp; -
 releases/<pack>/: the release, its readiness record, its semantic index and its acceptance suite. The command
 resolves the ref to one commit, reads the pack's readiness record at that commit and fetches what the record
 attests: release.json must hash to the record's release_sha256, semantic-index.json to its index binding and
-acceptance.yaml to its suite binding; regression.yaml and the pack's README.md come along when the pack has them.
+acceptance.yaml to its suite binding; regression.yaml and the pack's README.md come along when the pack has them,
+and so do the pack's dataset bundles, datasets/<pack>/<dataset>/dataset.json, listed through the GitHub API.
 The files land in <packs-dir>/<pack>/ (default .local/packs/<pack>/, outside Git) with a source.json that names the
 repository and commit they came from; a file whose hash already matches is not downloaded again.
 
 The tests need no model and no network. The release validates and its readiness record names exactly this file,
 the check the server's --require-ready makes; the attested semantic index, when there is one, is bound to exactly
-this release; the pack's acceptance suite and its regression pack are replayed against the release with the code
-of the pipeline's accept stage; and a client round trip over MCP stdio runs against the server started from this
-environment. The command ends with the commands that serve the pack and connect a client. This package knows no
-pack by name: the pack is the argument, or SWISSTIP_PACK, the name compose.yaml takes as well.
+this release; the dataset bundles validate and bind to concepts of the release, as the server registers them; the
+pack's acceptance suite and its regression pack are replayed against the release with the code of the pipeline's
+accept stage; and a client round trip over MCP stdio runs against the server started from this environment. The
+command ends with the commands that serve the pack and connect a client; --serve starts the calendar connector on
+the loopback address first when the pack has datasets, so the server lists lookup. This package knows no pack by
+name: the pack is the argument, or SWISSTIP_PACK, the name compose.yaml takes as well.
 """
 
 import argparse
@@ -31,8 +35,14 @@ import hashlib
 import json
 import os
 import re
+<<<<<<< HEAD
 import ssl
+=======
+import shutil
+import subprocess
+>>>>>>> main
 import sys
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -43,6 +53,7 @@ from pathlib import Path
 
 import yaml
 
+from swisstip.calendar_connector.server import BUNDLE_NAME, ConnectorService
 from swisstip.core.acceptance import AcceptanceFile
 from swisstip.core.readiness import Readiness, load_readiness, readiness_path, readiness_status, sha256_file
 from swisstip.core.validation import ReleaseInvalid
@@ -50,6 +61,7 @@ from swisstip.mcp_server.roundtrip import roundtrip
 from swisstip.mcp_server.server import MCP_PATH
 from swisstip.mcp_server.server import main as serve_main
 from swisstip.runtime.acceptance import check_acceptance, issues_of
+from swisstip.runtime.connectors import ConnectorRegistry
 from swisstip.runtime.semantic import SemanticError, load_index, semantic_index_binding
 from swisstip.runtime.service import ReleaseService
 
@@ -57,6 +69,7 @@ DEFAULT_REPOSITORY = "swisstip/swiss-tip-mvp"
 PACK_VARIABLE = "SWISSTIP_PACK"
 DEFAULT_PACKS_DIR = Path(".local") / "packs"
 SOURCE_FILE = "source.json"
+DATASETS_DIR = "datasets"
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 Fetch = Callable[[str], bytes]
 
@@ -127,6 +140,7 @@ class FetchedPack:
     directory: Path
     record: Readiness
     files: dict[str, str] = field(default_factory=dict)  # file name: downloaded, kept or absent
+    datasets: list[str] = field(default_factory=list)  # the dataset bundles fetched, by directory name
     notes: list[str] = field(default_factory=list)
 
 
@@ -181,11 +195,44 @@ def fetch_pack(pack: str, *, repository: str = DEFAULT_REPOSITORY, ref: str = "m
                                       "or the record is stale; run the command again")
         target.write_bytes(data)
         result.files[name] = "downloaded"
+    fetch_datasets(result, fetch)
     (directory / SOURCE_FILE).write_text(json.dumps(dict(
         repository=repository, ref=ref, commit=commit, pack=pack, release_id=record.release_id,
-        fetched_at=datetime.now(UTC).isoformat(timespec="seconds"), files=result.files), indent=2) + "\n",
-        encoding="utf-8")
+        fetched_at=datetime.now(UTC).isoformat(timespec="seconds"), files=result.files, datasets=result.datasets),
+        indent=2) + "\n", encoding="utf-8")
     return result
+
+
+def fetch_datasets(result: FetchedPack, fetch: Fetch) -> None:
+    """The pack's dataset bundles at the same commit, datasets/<pack>/<dataset>/dataset.json, into <pack dir>/datasets.
+
+    The readiness record attests no dataset, so their list comes from the GitHub API; when it does not answer, the
+    bundles of an earlier fetch stay as they are. Each bundle carries the content hash of its rows, which the
+    checks and the connector verify when they load it."""
+    listing = f"https://api.github.com/repos/{result.repository}/contents/{DATASETS_DIR}/{result.pack}?ref={result.commit}"
+    try:
+        names = sorted(entry["name"] for entry in json.loads(fetch(listing)) if entry.get("type") == "dir")
+    except NotFound:
+        names = []
+    except (QuickstartError, ValueError, KeyError, TypeError, AttributeError) as exc:
+        result.notes.append(f"the GitHub API did not list {DATASETS_DIR}/{result.pack} ({exc}); "
+                            "the datasets fetched before are kept")
+        return
+    target = result.directory / DATASETS_DIR
+    for name in names:
+        try:
+            data = fetch(f"https://raw.githubusercontent.com/{result.repository}/{result.commit}/"
+                         f"{DATASETS_DIR}/{result.pack}/{name}/{BUNDLE_NAME}")
+        except NotFound:
+            continue
+        (target / name).mkdir(parents=True, exist_ok=True)
+        (target / name / BUNDLE_NAME).write_bytes(data)
+        result.datasets.append(name)
+    # A bundle of an earlier fetch that the pack no longer has would be served as one of this commit's.
+    if target.is_dir():
+        for stale in target.iterdir():
+            if stale.is_dir() and stale.name not in result.datasets:
+                shutil.rmtree(stale)
 
 
 class Checks:
@@ -249,6 +296,26 @@ def check_release(directory: Path, checks: Checks) -> tuple[ReleaseService | Non
             except (OSError, ValueError, SemanticError) as exc:
                 checks.check(f"semantic index loads for this release: {exc}", False)
     return service, record
+
+
+def check_datasets(directory: Path, service: ReleaseService, checks: Checks) -> list[Path]:
+    """The pack's dataset bundles load, validate and bind to concepts of the release; the directories to serve."""
+    bundles = sorted(path.parent for path in (directory / DATASETS_DIR).glob(f"*/{BUNDLE_NAME}"))
+    if not bundles:
+        return []
+    try:
+        connector = ConnectorService(bundles)
+    except (OSError, ValueError) as exc:
+        checks.check(f"datasets load: {exc}", False)
+        return []
+    manifest = connector.manifest().model_dump(mode="json")
+    # The server's own registration, with the connector's manifest handed over in memory instead of over HTTP.
+    entry = ConnectorRegistry(["datasets"], service.release, client=lambda url, path, body=None: (200, manifest)).entries[0]
+    checks.check(f"datasets: {len(entry.registered)} of {len(bundles)} bundles validate and bind to concepts of the release",
+                 len(entry.registered) == len(bundles))
+    for rejected in entry.rejected[:5]:
+        checks.info(f"  {rejected['dataset_id']}: {rejected['reason']}")
+    return bundles
 
 
 def describe(name: str, report: dict) -> str:
@@ -366,13 +433,41 @@ def next_steps(pack: str, directory: Path, record: Readiness | None, repository:
     return "\n".join(lines)
 
 
-def serve(directory: Path, port: int, hybrid: bool, ollama_url: str) -> int:
+def start_connector(datasets: Path, port: int, timeout: float = 30) -> subprocess.Popen | None:
+    """The calendar connector on the loopback address, in a process of its own, once its /health answers; None if not."""
+    process = subprocess.Popen([sys.executable, "-m", "swisstip.calendar_connector.server", "--datasets-dir", str(datasets),
+                                "--host", "127.0.0.1", "--port", str(port)])
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and process.poll() is None:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2):
+                return process
+        except (urllib.error.URLError, OSError):
+            time.sleep(0.3)
+    process.terminate()
+    return None
+
+
+def serve(directory: Path, port: int, hybrid: bool, ollama_url: str, datasets: list[Path], connector_port: int) -> int:
     argv = ["--release", str(directory / "release.json"), "--require-ready", "--transport", "streamable-http",
             "--port", str(port)]
     if hybrid:
         argv.extend(["--semantic-index", str(directory / "semantic-index.json"), "--ollama-url", ollama_url])
+    connector = None
+    if datasets:
+        connector = start_connector(directory / DATASETS_DIR, connector_port)
+        if connector is None:
+            print(f"\nthe calendar connector did not start on 127.0.0.1:{connector_port}; serving without lookup", flush=True)
+        else:
+            argv.extend(["--connector", f"http://127.0.0.1:{connector_port}"])
+            print(f"\ncalendar connector on http://127.0.0.1:{connector_port} with {len(datasets)} datasets", flush=True)
     print(f"\nserving http://127.0.0.1:{port}{MCP_PATH} with /health beside it; Ctrl-C stops the server", flush=True)
-    return serve_main(argv)
+    try:
+        return serve_main(argv)
+    finally:
+        if connector is not None:
+            connector.terminate()
+            connector.wait(timeout=10)
 
 
 def main(argv=None) -> int:
@@ -390,6 +485,9 @@ def main(argv=None) -> int:
     parser.add_argument("--hybrid", action="store_true",
                         help="with --serve: hybrid search with the attested index and a local Ollama that holds its model")
     parser.add_argument("--ollama-url", default="http://127.0.0.1:11434", help="with --hybrid; default http://127.0.0.1:11434")
+    parser.add_argument("--connector-port", type=int, default=8100,
+                        help="with --serve: the loopback port of the pack's calendar connector; default 8100")
+    parser.add_argument("--no-calendar", action="store_true", help="with --serve: without the pack's calendar connector")
     args = parser.parse_args(argv)
     checks = Checks()
     if args.url:
@@ -419,8 +517,12 @@ def main(argv=None) -> int:
             f"{name} {state}" + (f" ({(directory / name).stat().st_size / 1e6:.1f} MB)"
                                  if state != "absent" and (directory / name).stat().st_size >= 1e6 else "")
             for name, state in fetched.files.items()))
+        if fetched.datasets:
+            checks.info(f"datasets: {len(fetched.datasets)} bundles into {shown(directory / DATASETS_DIR)}")
     service, record = check_release(directory, checks)
+    datasets: list[Path] = []
     if service is not None:
+        datasets = check_datasets(directory, service, checks)
         replay_suites(directory, service, record, checks)
         try:
             roundtrip(directory / "release.json",
@@ -432,7 +534,8 @@ def main(argv=None) -> int:
         return 1
     print(next_steps(args.pack, directory, record, args.repository))
     if args.serve and not checks.failures:
-        return serve(directory, args.port, args.hybrid, args.ollama_url)
+        return serve(directory, args.port, args.hybrid, args.ollama_url, [] if args.no_calendar else datasets,
+                     args.connector_port)
     return 1 if checks.failures else 0
 
 

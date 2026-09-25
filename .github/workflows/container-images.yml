@@ -25,6 +25,16 @@
 # model and checks its digest. The sidecar on its own must report healthy,
 # which means the model is loaded.
 #
+# The images that serve (both MCP images, the sidecar and the calendar
+# connector) are built for linux/amd64 and linux/arm64, so an Apple silicon
+# Mac runs them natively. The runner keeps both platforms under one tag in
+# the containerd image store and runs arm64 under QEMU: every test above
+# runs on amd64, the build steps (the model pull and digest check, the
+# sidecar's model load) run on both, and the slim MCP image and the
+# connector are started once more on arm64 and pass the same round trip.
+# docker push then sends both platforms. The OpenCode image stays amd64
+# only: it carries the linux-x64 OpenCode binary and is no part of a server.
+#
 # The OpenCode image is a test image: the agent and web interface of a
 # pack's demo image without a server, a release or a model, for the profile
 # "demo" of compose.yaml or a server elsewhere. It is tested as that profile
@@ -82,7 +92,7 @@ on:
       swisstip_mcp_version:
         description: swisstip-mcp version (the tag of both MCP images and of the calendar connector image)
         type: string
-        default: 0.3.1
+        default: 0.3.4
       package_index:
         description: Index to take swisstip-mcp from; testpypi rehearses a version that is not released yet
         type: choice
@@ -172,6 +182,21 @@ jobs:
             "swisstip-mcp==$VERSION"
           python scripts/test/container/synthetic_pack.py --out "$SYNTHETIC_PACK"
 
+      # Both platforms under one tag need the containerd image store; arm64 runs under QEMU.
+      - name: Use the containerd image store
+        run: |
+          python -c "import json, pathlib; p = pathlib.Path('/etc/docker/daemon.json'); c = json.loads(p.read_text()) if p.exists() else {}; c.setdefault('features', {})['containerd-snapshotter'] = True; print(json.dumps(c))" \
+            > "$RUNNER_TEMP/daemon.json"
+          sudo mv "$RUNNER_TEMP/daemon.json" /etc/docker/daemon.json
+          sudo systemctl restart docker
+          docker info --format '{{ json .DriverStatus }}' | grep -q containerd.snapshotter \
+            || { echo "the Docker daemon does not use the containerd image store"; exit 1; }
+          echo "PLATFORMS=linux/amd64,linux/arm64" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -184,15 +209,19 @@ jobs:
           tags="$MCP_IMAGE:$VERSION-slim"
           if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $MCP_IMAGE:latest-slim"; fi
           tag_args=""; for tag in $tags; do tag_args="$tag_args -t $tag"; done
-          docker build -f docker/mcp-slim/Dockerfile --build-arg SWISSTIP_MCP_VERSION="$VERSION" \
+          docker build --platform "$PLATFORMS" -f docker/mcp-slim/Dockerfile --build-arg SWISSTIP_MCP_VERSION="$VERSION" \
             --build-arg PACKAGE_INDEX="$INDEX_URL" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
             $tag_args .
-          docker run -d --name slim -p 8001:8000 -v "$SYNTHETIC_PACK:/srv/swiss-tip:ro" "$MCP_IMAGE:$VERSION-slim"
-          for attempt in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8001/health && break; sleep 1; done
-          # The image serves with --require-ready, so an answer means the readiness record was accepted.
-          python scripts/test/mcp/check_wheel.py --url http://127.0.0.1:8001/mcp || { docker logs slim | tail -40; exit 1; }
-          docker rm -f slim
+          # The image serves with --require-ready, so an answer means the readiness record was accepted. The same
+          # round trip on amd64, then on arm64 under QEMU.
+          for platform in linux/amd64 linux/arm64; do
+            docker run -d --name slim --platform "$platform" -p 8001:8000 -v "$SYNTHETIC_PACK:/srv/swiss-tip:ro" "$MCP_IMAGE:$VERSION-slim"
+            for attempt in $(seq 1 120); do curl -fs -o /dev/null http://127.0.0.1:8001/health && break; sleep 1; done
+            echo "$platform: $(docker exec slim uname -m)"
+            python scripts/test/mcp/check_wheel.py --url http://127.0.0.1:8001/mcp || { docker logs slim | tail -40; exit 1; }
+            docker rm -f slim
+          done
           echo "$tags" >> "$RUNNER_TEMP/push.txt"
 
       - name: Build the MCP image
@@ -201,7 +230,8 @@ jobs:
           tags="$MCP_IMAGE:$VERSION"
           if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $MCP_IMAGE:latest"; fi
           tag_args=""; for tag in $tags; do tag_args="$tag_args -t $tag"; done
-          docker build --build-arg BASE_IMAGE="$MCP_IMAGE:$VERSION-slim" \
+          # The model is pulled, checked against its digest and loaded on each platform, arm64 under QEMU.
+          docker build --platform "$PLATFORMS" --build-arg BASE_IMAGE="$MCP_IMAGE:$VERSION-slim" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
             $tag_args docker/mcp
           echo "$tags" >> "$RUNNER_TEMP/push.txt"
@@ -210,8 +240,8 @@ jobs:
         if: env.BUILD_SIDECAR == '1'
         run: |
           # Ollama and the model are copied out of the MCP image of this run, or of ghcr.io; the build
-          # itself fails unless the copied model has the expected digest and loads.
-          docker build --build-arg MCP_IMAGE="$MCP_IMAGE:$VERSION" \
+          # itself fails unless the copied model has the expected digest and loads, on each platform.
+          docker build --platform "$PLATFORMS" --build-arg MCP_IMAGE="$MCP_IMAGE:$VERSION" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
             -t sidecar:build docker/ollama
           model=$(docker image inspect --format '{{ index .Config.Labels "swiss-tip.embedding.model" }}' sidecar:build)
@@ -273,22 +303,32 @@ jobs:
           tags="$CALENDAR_IMAGE:$VERSION"
           if [ "$PUSH_LATEST" = 1 ]; then tags="$tags $CALENDAR_IMAGE:latest"; fi
           tag_args=""; for tag in $tags; do tag_args="$tag_args -t $tag"; done
-          docker build -f docker/calendar-connector/Dockerfile --build-arg SWISSTIP_VERSION="$VERSION" \
+          docker build --platform "$PLATFORMS" -f docker/calendar-connector/Dockerfile --build-arg SWISSTIP_VERSION="$VERSION" \
             --build-arg PACKAGE_INDEX="$INDEX_URL" \
             --label org.opencontainers.image.revision="$GITHUB_SHA" \
             $tag_args .
-          docker run -d --name calendar -p 8101:8100 \
-            -v "$PWD/apps/calendar-connector/tests/fixtures:/srv/swiss-tip/datasets:ro" "$CALENDAR_IMAGE:$VERSION"
-          for attempt in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8101/health && break; sleep 1; done
-          python scripts/test/connector/check_connector.py --url http://127.0.0.1:8101 || { docker logs calendar | tail -40; exit 1; }
-          docker rm -f calendar
+          for platform in linux/amd64 linux/arm64; do
+            docker run -d --name calendar --platform "$platform" -p 8101:8100 \
+              -v "$PWD/apps/calendar-connector/tests/fixtures:/srv/swiss-tip/datasets:ro" "$CALENDAR_IMAGE:$VERSION"
+            for attempt in $(seq 1 120); do curl -fs -o /dev/null http://127.0.0.1:8101/health && break; sleep 1; done
+            echo "$platform: $(docker exec calendar uname -m)"
+            python scripts/test/connector/check_connector.py --url http://127.0.0.1:8101 || { docker logs calendar | tail -40; exit 1; }
+            docker rm -f calendar
+          done
           echo "$tags" >> "$RUNNER_TEMP/push.txt"
 
       - name: Push the tested images
         if: inputs.push
         run: |
+          # From the containerd image store a push sends every platform the tag holds: amd64 and arm64, and amd64
+          # alone for the OpenCode image. The registry must then list what the run built.
           for tag in $(cat "$RUNNER_TEMP/push.txt"); do
             docker push "$tag"
+            case "$tag" in "$OPENCODE_IMAGE":*) continue ;; esac
+            platforms=$(docker buildx imagetools inspect --format '{{ range .Manifest.Manifests }}{{ .Platform.OS }}/{{ .Platform.Architecture }} {{ end }}' "$tag") \
+              || { echo "$tag was pushed as a single-platform image"; exit 1; }
+            echo "$tag: $platforms"
+            case "$platforms" in *linux/amd64*linux/arm64*|*linux/arm64*linux/amd64*) ;; *) echo "$tag was pushed without both platforms"; exit 1 ;; esac
           done
 
       - name: Summary

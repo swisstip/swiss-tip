@@ -147,6 +147,30 @@ class SnapshotTests(unittest.TestCase):
         (self.output / snapshot_record["relative_path"]).write_bytes(b"tampered")
         self.assertFalse(saved_and_intact(result, self.output))
 
+    def test_browser_user_agent_only_when_the_catalogue_entry_asks_and_robots_keep_the_crawler_name(self) -> None:
+        responses = {
+            "https://official.example/robots.txt": FakeResponse(200, b"User-agent: *\nAllow: /\n", content_type="text/plain"),
+            "https://official.example/allowed/start": FakeResponse(200, b"<title>Ferien</title>"),
+        }
+        for entries, expected in (([], acquisition.DEFAULT_USER_AGENT),
+                                  ([{"user_agent": "browser"}], acquisition.BROWSER_USER_AGENT)):
+            with self.subTest(entries=entries):
+                self.target["registry_entries"] = entries
+                factory, opener = fake_crawler(responses)
+                with patch.object(acquisition, "SafeCrawler", factory), patch("swisstip.ingestion.crawler.time.sleep"):
+                    result = snapshot(self.target, self.output, ("official.example",))
+                self.assertEqual(result["status"], "saved")
+                self.assertEqual(result["user_agent"], expected)
+                self.assertEqual(set(opener.user_agents), {expected})
+        # A group for the crawler's own name still binds when the browser form is sent.
+        self.target["registry_entries"] = [{"user_agent": "browser"}]
+        denied = self.run_snapshot({
+            "https://official.example/robots.txt": FakeResponse(
+                200, b"User-agent: SwissTIPDemoCrawler\nDisallow: /\n\nUser-agent: *\nAllow: /\n", content_type="text/plain"),
+        })
+        self.assertEqual(denied["status"], "not_saved")
+        self.assertEqual(denied["report"]["skipped"][0]["reason"], "robots-disallowed")
+
     def test_error_pages_served_with_success_are_flagged_by_title_or_main_heading(self) -> None:
         # The ch.ch shell of 10 and 11 September 2026: no <title>, the error in the heading.
         chch = b'<html><body><div><h1>Error Page (404) </h1></div><h2 class="title">Error Page (404) </h2></body></html>'

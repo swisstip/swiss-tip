@@ -47,6 +47,7 @@ class SourceCatalogTests(unittest.TestCase):
             "Seed path must be inside its allowlist": lambda d: d["sources"][0]["definition"].update(allowed_path_prefixes=["/elsewhere/"]),
             "Scan sets require unique, known source IDs": lambda d: d["scan_sets"].update(broken=["missing-id"]),
             "Invalid scan status": lambda d: d["sources"][0].update(scan_status="done"),
+            "user_agent must be absent or 'browser'": lambda d: d["sources"][0].update(user_agent="Googlebot"),
             "Unknown planning topic": lambda d: d["sources"][0].update(topic_hints=["nope"]),
         }
         with tempfile.TemporaryDirectory() as directory:

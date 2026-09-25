@@ -5,9 +5,9 @@
 # (release.json and readiness.json, optionally semantic-index.json) on
 # /srv/swiss-tip; the slim release images (docker/slim) carry one instead.
 #
-#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.3.1-slim .
-#   docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.1-slim
-#   docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.1-slim --transport stdio
+#   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.3.4-slim .
+#   docker run --rm -p 8000:8000 -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.4-slim
+#   docker run --rm -i -v "$PWD/releases/<pack>:/srv/swiss-tip:ro" swiss-tip-mcp:0.3.4-slim --transport stdio
 #
 # The build context is the repository root, for LICENSE and NOTICE; the
 # Dockerfile.dockerignore next to this file admits those two files only.
@@ -31,7 +31,7 @@
 
 ARG PYTHON_IMAGE=python:3.14-slim
 FROM ${PYTHON_IMAGE}
-ARG SWISSTIP_MCP_VERSION=0.3.1
+ARG SWISSTIP_MCP_VERSION=0.3.4
 # Empty is PyPI. Another index is used with PyPI behind it, for the dependencies.
 ARG PACKAGE_INDEX=""
 

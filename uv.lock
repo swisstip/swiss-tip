@@ -1633,7 +1633,7 @@ wheels = [
 
 [[package]]
 name = "swiss-tip"
-version = "0.3.1"
+version = "0.3.4"
 source = { virtual = "." }
 dependencies = [
     { name = "swisstip-core" },
@@ -1674,7 +1674,7 @@ build = [
 
 [[package]]
 name = "swisstip-admin-console"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "apps/admin-console" }
 dependencies = [
     { name = "fastapi" },
@@ -1716,7 +1716,7 @@ provides-extras = ["test"]
 
 [[package]]
 name = "swisstip-build"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "packages/build" }
 dependencies = [
     { name = "pydantic" },
@@ -1735,7 +1735,7 @@ requires-dist = [
 
 [[package]]
 name = "swisstip-calendar-connector"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "apps/calendar-connector" }
 dependencies = [
     { name = "pydantic" },
@@ -1754,7 +1754,7 @@ requires-dist = [
 
 [[package]]
 name = "swisstip-concepts"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "packages/concepts" }
 dependencies = [
     { name = "swisstip-build" },
@@ -1769,7 +1769,7 @@ requires-dist = [
 
 [[package]]
 name = "swisstip-core"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "pydantic" },
@@ -1780,7 +1780,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.12,<3" }]
 
 [[package]]
 name = "swisstip-extraction"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "packages/extraction" }
 dependencies = [
     { name = "lxml" },
@@ -1806,12 +1806,12 @@ provides-extras = ["office"]
 
 [[package]]
 name = "swisstip-ingestion"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "packages/ingestion" }
 
 [[package]]
 name = "swisstip-knowledge-builder"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "apps/knowledge-builder" }
 dependencies = [
     { name = "pydantic" },
@@ -1851,7 +1851,7 @@ requires-dist = [
 
 [[package]]
 name = "swisstip-mcp-server"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "apps/mcp-server" }
 dependencies = [
     { name = "mcp" },
@@ -1874,10 +1874,11 @@ requires-dist = [
 
 [[package]]
 name = "swisstip-quickstart"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "apps/quickstart" }
 dependencies = [
     { name = "pyyaml" },
+    { name = "swisstip-calendar-connector" },
     { name = "swisstip-core" },
     { name = "swisstip-mcp-server" },
     { name = "swisstip-runtime" },
@@ -1886,6 +1887,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "pyyaml", specifier = ">=6,<7" },
+    { name = "swisstip-calendar-connector", editable = "apps/calendar-connector" },
     { name = "swisstip-core", editable = "packages/core" },
     { name = "swisstip-mcp-server", editable = "apps/mcp-server" },
     { name = "swisstip-runtime", editable = "packages/runtime" },
@@ -1893,7 +1895,7 @@ requires-dist = [
 
 [[package]]
 name = "swisstip-runtime"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "packages/runtime" }
 dependencies = [
     { name = "pydantic" },

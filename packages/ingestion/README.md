@@ -1,6 +1,6 @@
 # swisstip-ingestion
 
-**Last update:** 20 September 2026
+**Last update:** 25 September 2026
 
 Build-side source acquisition for Swiss TIP: download the exact pages of a
 source catalogue, resolve Fedlex legal texts to dated documents, and report
@@ -53,6 +53,14 @@ groups matched by the `SwissTIPDemoCrawler` token, a 25 MB
 response cap, redirects limited to the plan's host allowlist and the public
 network only. The exit code is nonzero while any target or plugin document is
 unsaved.
+
+A registry entry with `"user_agent": "browser"` is fetched with a desktop
+browser's User-Agent instead, for its seed and every Markdown link attributed
+to it; the attempt's manifest records the User-Agent sent. It exists for
+official hosts that reset the connection for any self-identifying crawler
+(`www.gl.ch` and the `tg.ch` sites). robots.txt is still matched by the
+`SwissTIPDemoCrawler` token, so a group written for the crawler keeps
+binding. No other value is accepted.
 
 ## Run layout
 

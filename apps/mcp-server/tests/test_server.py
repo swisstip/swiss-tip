@@ -177,15 +177,17 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(report["search"]["configured_mode"], "lexical-fallback")
         self.assertTrue(report["search"]["fallback_reason"])
 
-    def test_stdio_round_trip(self):
+    @staticmethod
+    def stdio_session(*extra: str):
         async def run():
             params = StdioServerParameters(command=sys.executable,
-                                           args=["-m", "swisstip.mcp_server.server", "--release", str(FIXTURE)],
+                                           args=["-m", "swisstip.mcp_server.server", "--release", str(FIXTURE), *extra],
                                            env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"})
             async with stdio_client(params) as (read, write):
                 async with ClientSession(read, write) as session:
                     init = await session.initialize()
                     listed = (await session.list_tools()).tools
+<<<<<<< HEAD
                     coverage = await session.call_tool("get_coverage", {})
                     resolved = await session.call_tool("resolve", RESOLVE)
                     error = await session.call_tool("get_evidence", {"evidence_ids": []})
@@ -198,6 +200,34 @@ class ServerTests(unittest.TestCase):
         self.assertIn("Unknown tool", coverage.content[0].text)
         # The release's query languages reach the caller before its first search: in the instructions and in the
         # search description and query field.
+=======
+                    root = await session.call_tool("get_coverage", {})
+                    empty = await session.call_tool("search", {"query": "zzzz"})
+                    resolved = await session.call_tool("resolve", RESOLVE)
+                    error = await session.call_tool("get_evidence", {"evidence_ids": []})
+                    return init, listed, root, empty, resolved, error
+
+        return asyncio.run(run())
+
+    def test_stdio_round_trip(self):
+        init, listed, root, empty, resolved, error = self.stdio_session()
+        self.assertEqual(init.serverInfo.name, "swiss-tip")
+        # get_coverage is hidden by default: not listed, refused when called, named nowhere a caller reads it.
+        self.assertEqual([t.name for t in listed], ["search", "resolve", "get_evidence"])
+        self.assertTrue(root.isError)
+        self.assertEqual(root.structuredContent["error"]["code"], "INVALID_ARGUMENT")
+        self.assertNotIn("get_coverage", init.instructions)
+        for tool in listed:
+            self.assertNotIn("get_coverage", json.dumps([tool.description, tool.inputSchema]), tool.name)
+        self.assertNotIn("get_coverage", empty.content[0].text)
+        # An empty search carries what the coverage root did for a decline: the scope, the out-of-scope list and the
+        # response to give.
+        self.assertEqual(empty.structuredContent["match_strength"], "none")
+        for field in ("scope_statement", "out_of_scope", "out_of_scope_response"):
+            self.assertTrue(empty.structuredContent.get(field), field)
+        # The release's query languages reach the caller before its first search: in the instructions, in the search
+        # description and in the query field.
+>>>>>>> main
         note = "Write the search query in English"
         self.assertIn(note, init.instructions)
         search = next(t for t in listed if t.name == "search")
@@ -209,6 +239,14 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(resolved.structuredContent["results"][0]["citations"][0]["url"], "https://example.gov/doc-a")
         self.assertTrue(error.isError)
         self.assertEqual(error.structuredContent["error"]["code"], "INVALID_ARGUMENT")
+
+    def test_stdio_with_coverage(self):
+        init, listed, root, empty, resolved, error = self.stdio_session("--with-coverage")
+        self.assertEqual([t.name for t in listed], ["get_coverage", "search", "resolve", "get_evidence"])
+        self.assertIn("Call get_coverage only when unsure", init.instructions)
+        self.assertFalse(root.isError)
+        self.assertEqual([q["code"] for q in root.structuredContent["query_languages"]], ["en"])
+        self.assertEqual(resolved.structuredContent["status"], "SUPPORTED")
 
     def test_remote_client_configuration(self):
         url = "https://swiss-tip.example/mcp"
@@ -222,7 +260,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(json.loads(output.getvalue()), remote_client_config(url, "opencode"))
 
     def test_streamable_http_round_trip_in_process(self):
-        service = ReleaseService.from_file(FIXTURE)
+        service = ReleaseService.from_file(FIXTURE, coverage_tool=False)
 
         async def run():
             app = create_http_app(service, host="0.0.0.0")

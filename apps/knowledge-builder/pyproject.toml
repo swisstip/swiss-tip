@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swisstip-knowledge-builder"
-version = "0.3.1"
+version = "0.3.4"
 description = "Swiss TIP knowledge builder: the build pipeline of a pack from catalogue to validated release"
 requires-python = ">=3.14"
 dependencies = [

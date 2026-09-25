@@ -84,7 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--transport", choices=("urllib", "curl"), default="urllib")
     parser.add_argument("--obey-robots", action=argparse.BooleanOptionalAction, default=True,
                         help="respect robots.txt and its crawl delays, failing closed when the policy cannot be read "
-                             "(default); --no-obey-robots overrides it for a host you are authorised to access, and "
+                             "(default); --no-obey-robots overrides it at your own responsibility and "
                              "records robots_status 'overridden' in the run")
     plugins = parser.add_mutually_exclusive_group()
     plugins.add_argument("--source-plugin", action="append", help="enabled source plugin; repeatable; default: fedlex")

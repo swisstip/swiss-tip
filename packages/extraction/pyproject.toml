@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swisstip-extraction"
-version = "0.3.1"
+version = "0.3.4"
 description = "Source-text extraction for Swiss TIP: saved responses to labelled blocks with offsets and hashes"
 requires-python = ">=3.14"
 dependencies = [

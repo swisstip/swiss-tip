@@ -181,10 +181,12 @@ class CoverageRoot(Strict):
     out_of_scope: list[str]
     out_of_scope_response: str
     jurisdictions: list[str]
-    languages: list[str]
+    languages: list[str] = Field(description=(
+        "The languages of the cited source pages, not the languages to search in (see query_languages); answers are "
+        "written in the user's language."))
     query_languages: list[QueryLanguage] | None = Field(default=None, description=(
-        "The languages to write search queries in, best first. Send a question in one of them as asked; translate "
-        "the key terms of a question in any other language into the first one before searching."))
+        "The languages to write search queries in, best first. Translate the key terms of a question in any other "
+        "language into the first one before searching; a question already in one of them is sent as asked."))
     freshness: FreshnessPolicy
     topics: list[TopicSummary]
     institution_levels: dict[str, int] | None = Field(default=None, description=(
@@ -224,11 +226,10 @@ class CoverageTopic(Strict):
 
 class SearchRequest(Placed):
     query: str = Field(min_length=1, description=(
-        "Question or key terms to find published concepts, in one of the server's query languages (get_coverage "
-        "query_languages; English and German unless the server names others). Send a question in one of them as "
-        "asked, in one search; translate the key terms of a question in any other language into the first one named "
-        "before searching. Optional "
-        "local semantic search also accepts other languages, less reliably."))
+        "Question or key terms to find published concepts, in one of the server's query languages (named in the "
+        "server instructions; English and German unless the server names others): translate the key terms of a question "
+        "in any other language into the first one named before searching; a question already in one of them is sent "
+        "as asked, in one search. Optional local semantic search also accepts other languages, less reliably."))
     limit: int = Field(default=3, ge=1, le=10, description=(
         "Maximum hits. Three is enough for a question about one subject; raise it only to explore, at most ten."))
     # No description of its own: next to the model's it would be inlined as an allOf, which small models read poorly.
@@ -287,6 +288,10 @@ class SearchResult(Strict):
     match_signals: MatchSignals | None = Field(default=None, description="The two signals behind match_strength.")
     scope_statement: str | None = Field(default=None, description=(
         "The release's scope statement, sent with weak and none results so the caller can decline without another call."))
+    out_of_scope: list[str] | None = Field(default=None, description=(
+        "Subjects the release leaves out, sent with weak and none results: a question about one of them is declined."))
+    out_of_scope_response: str | None = Field(default=None, description=(
+        "How to decline a question outside the scope, sent with weak and none results."))
     matched_count: int | None = Field(default=None, ge=0, description=(
         "Candidates selected by the active retrieval method before applying limit; not a count of all relevant concepts."))
     truncated: bool = Field(default=False, description="Some selected candidates were omitted by limit.")
@@ -303,7 +308,7 @@ class SearchResult(Strict):
 
 
 class ResolveRequest(Placed):
-    concept_ids: list[str] = Field(min_length=1, max_length=5, description="Concept IDs from get_coverage or search.")
+    concept_ids: list[str] = Field(min_length=1, max_length=5, description="Concept IDs from search.")
     jurisdiction: Jurisdiction = Field(default_factory=Jurisdiction)
     as_of: date | None = Field(default=None, description="Applicability date; omit for today.")
     context: dict[str, str] = Field(default_factory=dict, description="Values for the concept's context_schema fields.")
@@ -597,24 +602,33 @@ class ToolError(Strict):
     error: ErrorBody
 
 
+# The search description in three parts, so that a server can put its own query-language note in place of the generic
+# one, right after the first sentence, where a client that cuts long descriptions short still shows it.
+SEARCH_DESCRIPTION_LEAD = (
+    "Find ranked published concepts for a question or key terms, in ONE call per user question: send one query, "
+    "never two searches side by side and never the same question again in another language or wording, which "
+    "rarely finds other concepts.")
+SEARCH_DESCRIPTION_LANGUAGES = (
+    "Translate first: lexical search matches only the server's query languages (named in the server instructions; "
+    "English and German unless named otherwise), so translate the key terms of a "
+    "question in any other language into the first one named before searching, and still answer in the user's "
+    "language; an untranslated query can match the wrong concept. A question already in a query language is sent as "
+    "asked, in one search and not again in another query language. Optional local semantic search can also find "
+    "concepts in other languages, less reliably.")
+
 TOOL_DESCRIPTIONS = {
     "get_coverage": (
-        "Discover what this server covers. A question normally needs two calls in total: search, then resolve. "
-        "Call get_coverage with no arguments only when you are unsure whether the question is in scope at all: the "
+        "Not a first step: a question needs two calls in total, search, then resolve, and search results carry "
+        "the scope when a question may lie outside it. Call get_coverage with no arguments only when you are unsure whether the question is in scope at all: the "
         "root page (about 5 KB) returns the active release_id, a scope_statement, an out_of_scope list, the covered "
-        "jurisdictions and languages, the query languages for search, the freshness window and the topics. If the question matches out_of_scope "
+        "jurisdictions, the languages of the cited pages (not the search languages), the query languages for search, "
+        "the freshness window and the topics. If the question matches out_of_scope "
         "or lies outside the scope_statement (another topic, another country), follow out_of_scope_response and "
         "make no further calls. With parent_id set to a topic_id it lists that topic's concepts with their "
         "jurisdictions and required context fields; search is the shorter way to the same concept_ids."),
     "search": (
-        "Find ranked published concepts for a question or key terms, in ONE call per user question: send one query, "
-        "never two searches side by side and never the same question again in another language or wording, which "
-        "rarely finds other concepts. Lexical search matches only the server's query "
-        "languages (named in the server instructions and in get_coverage query_languages; English and German unless "
-        "named otherwise): send a question in one of them as asked, in one search and not again in another query "
-        "language, and translate the key terms of a question in any other language into the first one named before "
-        "searching. Optional local semantic search can also find "
-        "concepts in other languages, less reliably. When the user's canton or municipality is known, give it as "
+        SEARCH_DESCRIPTION_LEAD + " " + SEARCH_DESCRIPTION_LANGUAGES + " "
+        "When the user's canton or municipality is known, give it as "
         "jurisdiction, as for resolve: the hits are then the concepts that can apply there, and a concept published "
         "for other places only is named in published_elsewhere instead (do not resolve it; if no hit answers the "
         "question, say that this service does not publish it for the user's place). The result names retrieval_mode "
@@ -628,8 +642,8 @@ TOOL_DESCRIPTIONS = {
         "determines which published facts match. A search hit only says the concept is a retrieval candidate. "
         "match_strength says whether the question's distinctive words reached a published concept at all: on strong, "
         "resolve the relevant hits; on weak or none, the hits rest on incidental words or a nearby subject and the "
-        "result carries the scope_statement, so compare the question with it and decline in this same turn, without "
-        "calling get_coverage, unless a hit is clearly the question's subject."),
+        "result carries the scope_statement and the out_of_scope list, so compare the question with them and decline "
+        "in this same turn, following out_of_scope_response, unless a hit is clearly the question's subject."),
     "resolve": (
         "Return the published facts, evidence citations and, where published, the user facts still needed and a "
         "decision rule for up to five concept_ids in ONE call. Give where the user lives inside the jurisdiction "

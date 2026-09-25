@@ -239,6 +239,17 @@ sidecar, so the server reaches it on `127.0.0.1:8100` and nobody else does:
     network_mode: "service:swiss-tip"
 ```
 
+The single pack image `swiss-tip:<pack>` of a pack with datasets carries
+the connector as well: the packs repository installs
+`swisstip-calendar-connector` of the server's version on the MCP image,
+copies `datasets/<pack>/` in as a second build context, and starts the
+connector on the container's loopback address before the server (the
+script `with-calendar`), so one `docker run` lists `lookup`. The connector
+stays a process of its own that the server reaches over HTTP. The
+quickstart does the same outside a container: it fetches the bundles with
+the release, and `swisstip-quickstart <pack> --serve` starts the connector
+before the server.
+
 The server takes `--connector http://127.0.0.1:8100` (repeatable) or
 `SWISSTIP_CONNECTORS`, comma-separated; `compose.yaml` passes the variable
 through, so `SWISSTIP_CONNECTORS=http://127.0.0.1:8100 docker compose
