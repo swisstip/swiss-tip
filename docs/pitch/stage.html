@@ -129,7 +129,7 @@
   .good { color: var(--ok); }
   /* The part of the minute a slide belongs to - problem, solution, benefit -
      in .kill for the problem and .good for the other two. */
-  .kicker { font-size: clamp(11px, .8vw, 14px); font-weight: 800; text-transform: uppercase;
+  .kicker { font-size: clamp(14px, 1.1vw, 20px); font-weight: 800; text-transform: uppercase;
             letter-spacing: 1.26px; width: fit-content; }
   .slide > .kicker { margin-bottom: calc(clamp(14px, 2.2vh, 30px) / -2); }
   #slides ul { margin: 0; padding-left: 1.1em; font-size: clamp(16px, 1.25vw, 23px);
@@ -193,7 +193,7 @@
      serve - standing on the one platform underneath them. */
   .market { display: flex; flex-direction: column; gap: clamp(6px, .6vw, 10px); max-width: 62rem; }
   .whole .market { max-width: none; }
-  .kbs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  .kbs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
          gap: clamp(10px, 1.1vw, 20px); }
   .kb .why { margin-top: auto; padding-top: .5em; border-top: 1px solid var(--line);
              color: var(--ink); font-weight: 600; }
@@ -388,6 +388,9 @@
           <div class="kb"><span class="tag">Same platform &middot; enterprise</span><b>Company policies</b>
             HR, compliance, IT
             <span class="why">quoted exactly, never paraphrased</span></div>
+          <div class="kb"><span class="tag">Same platform &middot; publishers</span><b>Michelin Guide</b>
+            the stars, served by Michelin itself
+            <span class="why">no invented stars</span></div>
         </div>
         <div class="base"><b>Swiss TIP underneath</b>
           <span>reviewed facts</span><span>&middot;</span><span>official sources</span><span>&middot;</span>
