@@ -37,6 +37,29 @@ first for every new subject. It is built and measured on the branch
   - ground its principles in the constitution's own articles;
   - widen it canton by canton.
 
+**Where it is.** Two pull requests, both from the branch
+`feat/knowledge-graph`, both open:
+- [swiss-tip#6](https://github.com/swisstip/swiss-tip/pull/6): the code,
+  version 0.4.0. It covers the tool, graph build and derive, the admin
+  console screens to explore, review, compile and refresh the graph, and a
+  kill switch (`--no-knowledge-graph` / `SWISSTIP_KNOWLEDGE_GRAPH=0`).
+- [swiss-tip-mvp#2](https://github.com/swisstip/swiss-tip-mvp/pull/2): the
+  packs. It holds the graph `graphs/ch/` (249 nodes, 674 edges), embedded in
+  `mvp-zurich` and `mvp-wallisellen`, and the skill and agents that extend
+  it.
+
+To ship it:
+1. Review and merge the code PR, then tag `v0.4.0rc1` (TestPyPI), check
+   it, and tag `v0.4.0` (PyPI).
+2. Rebuild and attest both packs from their source data (`swisstip-build
+   <pack> --from build --until ready`, with the semantic index and the
+   regression pack), then run the graph regression with and without
+   embeddings.
+3. Merge the packs PR only once 0.4.0 is on PyPI, since an older server
+   rejects a release that carries a graph.
+4. Evaluate with DeepEval against two servers built from the branch: one
+   with the graph and one started with `--no-knowledge-graph`.
+
 **Why.** Orientation before retrieval: the first call of a conversation
 lands on the right level of the state and the right office, and a question
 the service does not cover is declined at once.
