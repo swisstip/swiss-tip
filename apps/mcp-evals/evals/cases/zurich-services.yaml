@@ -102,3 +102,105 @@ cases:
     must_not_claim:
       - No TV or radio means no household fee is due.
       - A different fee amount not stated by the served facts.
+
+  - case_id: UAT-20
+    category: zurich-services
+    difficulty: simple
+    question: "Where is the road traffic office in Oerlikon and when is it open? I need to go there about my driving licence."
+    expected_answer: >-
+      Say that the published location list has no office in Oerlikon, and name
+      Zurich-Albisguetli (Uetlibergstrasse 301, 8036 Zurich) as the city
+      location, which needs no appointment for counter business. Give its
+      counter hours. Do not invent an Oerlikon branch.
+    expected_claims:
+      - The published Road Traffic Office locations do not include Oerlikon.
+      - Zurich-Albisguetli is the city location, at Uetlibergstrasse 301, 8036 Zurich.
+      - Counter business at Zurich-Albisguetli needs no appointment.
+    required_citations:
+      - https://www.zh.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - An invented Road Traffic Office location or address in Oerlikon.
+      - An appointment is required for counter business at Zurich-Albisguetli.
+
+  - case_id: UAT-21
+    category: zurich-services
+    difficulty: simple
+    question: "I need to renew my B permit card at the Personenmeldeamt of the City of Zurich. Can I walk in on Saturday morning without an appointment?"
+    expected_answer: >-
+      Say no to both parts: renewing a permit card needs a booked appointment
+      and a personal visit since 4 May 2026, and the office is closed on
+      Saturday and Sunday (open Monday to Friday, 08.00 to 16.30, in the
+      Stadthaus). Do not invent Saturday hours or a walk-in option.
+    expected_claims:
+      - Renewing a permit card requires a booked appointment and a personal visit.
+      - The appointment requirement applies since 4 May 2026.
+      - The office is closed on Saturday and Sunday.
+      - The office is open Monday to Friday from 08.00 to 16.30.
+    required_citations:
+      - https://www.stadt-zuerich.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - A walk-in renewal without an appointment is possible.
+      - The office is open on Saturday.
+
+  - case_id: UAT-25
+    category: zurich-services
+    difficulty: simple
+    question: "I just moved into a flat in the city of Zurich. Which rubbish bags do I have to use, what do they cost, and when is the rubbish collected?"
+    expected_answer: >-
+      Name the blue Zueri-Sack as the required bag, give the served fee share
+      per bag size without presenting it as the full shop price, and state
+      that collection is weekly on a day found in the disposal calendar or the
+      free ERZ app rather than an invented weekday.
+    expected_claims:
+      - Household waste must go in the blue Zueri-Sack.
+      - The fee share of a 35-litre bag is part of its price, not the whole shop price.
+      - Collection is weekly, on a day found in the disposal calendar.
+      - The free ERZ app lists the collection dates.
+    required_citations:
+      - https://www.stadt-zuerich.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - Any rubbish bag can be used.
+      - An invented weekday for the collection.
+
+  - case_id: UAT-28
+    category: zurich-services
+    difficulty: standard
+    question: "I park my car in a blue zone in the city of Zurich at 12:10 on a Tuesday. Until when may I stay?"
+    expected_answer: >-
+      Explain the lunchtime rule: arrival between 11.30 and 13.30 allows
+      parking until 14.30, not simply one hour from arrival. State that the
+      parking disc must be set correctly and visibly, and that electronic
+      discs are not allowed.
+    expected_claims:
+      - Arrival between 11.30 and 13.30 allows parking until 14.30.
+      - This is not the same as one hour from the time of arrival.
+      - Electronic parking discs are not allowed.
+    required_citations:
+      - https://www.stadt-zuerich.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - Parking is limited to one hour from a 12:10 arrival.
+      - An electronic parking disc is acceptable.
+
+  - case_id: UAT-33
+    category: zurich-services
+    difficulty: simple
+    question: "My flatmate collapsed in our flat in Zurich. What number do I call, and who pays for the ambulance?"
+    expected_answer: >-
+      Say to call 144 immediately. Explain that basic health insurance pays
+      part of the ambulance and rescue costs depending on the case, and that
+      the remaining invoice goes to the patient. Do not claim the ambulance is
+      free or that basic insurance covers it in full.
+    expected_claims:
+      - The emergency number is 144.
+      - Basic insurance pays part of the rescue costs, not all of them.
+      - The remaining invoice goes to the patient.
+    required_citations:
+      - https://www.stadt-zuerich.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The ambulance is free.
+      - Basic insurance covers the full cost of the ambulance.

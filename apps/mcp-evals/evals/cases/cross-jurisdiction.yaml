@@ -113,7 +113,7 @@ cases:
       - Application requirements vary by canton.
       - The release publishes no Lucerne-specific procedure or office.
     required_citations:
-      - https://www.bag.admin.ch
+      - https://www.bag.admin.ch/en/health-insurance-premium-subsidies
     expected_tools: [search, resolve]
     must_not_claim:
       - The SVA Zurich handles the user's Lucerne application.

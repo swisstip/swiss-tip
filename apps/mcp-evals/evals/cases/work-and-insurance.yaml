@@ -109,3 +109,69 @@ cases:
       - The premium reduction is automatic.
       - The reduction starts only the following year after arrival from abroad.
       - A specific income limit or amount not served by the release.
+
+  - case_id: UAT-8
+    category: work-and-insurance
+    difficulty: standard
+    question: "I'm a German citizen and after six years of working in Zurich I am moving back to Berlin for good. Can I get my AHV contributions paid back?"
+    expected_answer: >-
+      Explain that no refund is published for EU/EFTA nationals, and name the
+      groups for which one is: nationals of states without a social security
+      agreement, and nationals of the named agreement states. State the
+      general conditions (at least one full year of contributions, definitive
+      departure) without computing a pension or an amount.
+    expected_claims:
+      - No AHV contribution refund is published for EU/EFTA nationals.
+      - A refund is published for nationals of states without a social security agreement.
+      - A refund is published for nationals of the named agreement states.
+      - At least one full year of contributions is required for a refund.
+    required_citations:
+      - https://www.zas.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The user can get an AHV refund as a German citizen.
+      - A specific refund amount not served by the release.
+
+  - case_id: UAT-9
+    category: work-and-insurance
+    difficulty: standard
+    question: "I'm moving from Zurich to Munich for good next month and start a job there. Can I have my whole pension fund paid out in cash?"
+    expected_answer: >-
+      Explain that the whole amount is not paid out: since 1 June 2007 the
+      mandatory part is blocked while the user remains compulsorily insured in
+      an EU/EFTA state, though the extra-mandatory part can still be paid
+      out. Mention the spouse's written consent and state no tax consequence
+      or amount.
+    expected_claims:
+      - Since 1 June 2007 the mandatory pension part cannot be cashed out when moving to an EU/EFTA state while insured there.
+      - The extra-mandatory part can still be paid out in cash.
+      - A married person needs the spouse's written consent for a cash payment.
+      - Departure to Liechtenstein excludes a cash payment.
+    required_citations:
+      - https://www.bsv.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The whole pension fund can be paid out in cash on this move.
+      - A tax consequence or payout amount not served by the release.
+
+  - case_id: UAT-13
+    category: work-and-insurance
+    difficulty: standard
+    question: "I'm from India, arrived in Zurich two months ago and have an Indian licence. Can I simply swap it for a Swiss one?"
+    expected_answer: >-
+      Explain that an Indian licence is on neither exemption list, so the
+      exchange within twelve months of entry requires a control drive that
+      can be attempted only once. Passing gives the Swiss licence; failing
+      means the person may no longer drive in Switzerland and must complete
+      the full route (theory test, learner's licence, course, driving test).
+    expected_claims:
+      - An Indian licence requires a control drive to be exchanged.
+      - The control drive can be attempted only once.
+      - Passing the control drive gives the Swiss licence.
+      - Failing the control drive requires the full examination route.
+    required_citations:
+      - https://www.zh.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - A simple swap without a control drive is possible.
+      - Multiple attempts at the control drive are allowed.

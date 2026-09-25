@@ -50,6 +50,15 @@ DeepEval and run:
 and contextual recall metrics. It is intentionally opt-in because it may call
 an external judge model; the normal runner is local and credential-free.
 
+Every run writes a self-contained `report.html` next to `summary.json`, with a
+mean/failing table per configuration and a per-case table linking to each
+case's `answer.txt`. Open it directly in a browser. To regenerate it for an
+older run (or after re-scoring) without re-running the harnesses:
+
+```shell
+./eval --report results/<run-id>
+```
+
 Cases live in `evals/cases/benchmark.yaml` and harness commands in
 `evals/config.yaml`. Replace the example case with the pack's reviewed
 acceptance questions before using benchmark results for comparison.

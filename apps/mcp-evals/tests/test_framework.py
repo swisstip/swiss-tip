@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 
 from swisstip.mcp_evals.adapters import CommandAdapter
-from swisstip.mcp_evals.adapters.events import parse_codex_events, parse_opencode_events
+from swisstip.mcp_evals.adapters.events import parse_codex_events, parse_opencode_events, parse_pi_events
 from swisstip.mcp_evals.loader import load_cases, load_config
 from swisstip.mcp_evals.metrics import _expected_output, judge_result_to_dict, merge_judge_scores, score_case
 from swisstip.mcp_evals.models import AgentResult, EvalCase, HarnessConfig
@@ -79,6 +79,22 @@ class EvaluationFrameworkTests(unittest.TestCase):
         self.assertEqual(calls[0].arguments, {"concept_ids": ["x"]})
         self.assertEqual(context, ["evidence"])
 
+    def test_parse_pi_events_matches_tool_execution_start_and_end_by_call_id(self):
+        stdout = "\n".join([
+            json.dumps({"type": "tool_execution_start", "toolCallId": "call_1", "toolName": "resolve",
+                       "args": {"concept_ids": ["x"]}}),
+            json.dumps({"type": "tool_execution_end", "toolCallId": "call_1", "toolName": "resolve",
+                       "result": {"content": [{"type": "text", "text": "evidence"}]}, "isError": False}),
+            json.dumps({"type": "message_end", "message": {"role": "assistant",
+                       "content": [{"type": "text", "text": "Final answer, see https://example.org/page."}]}}),
+        ])
+        answer, calls, citations, context = parse_pi_events(stdout)
+        self.assertEqual(answer, "Final answer, see https://example.org/page.")
+        self.assertEqual(calls[0].name, "resolve")
+        self.assertEqual(calls[0].arguments, {"concept_ids": ["x"]})
+        self.assertEqual(citations, ["https://example.org/page"])
+        self.assertEqual(context, ["evidence"])
+
     def test_scores_claims_citations_tools_and_forbidden_claims(self):
         case = EvalCase(case_id="x", question="q", expected_claims=["Zurich"],
                         required_citations=["official"], expected_tools=["resolve"], must_not_claim=["Bern"])
@@ -144,7 +160,9 @@ class EvaluationFrameworkTests(unittest.TestCase):
         self.assertEqual(score.answer_relevancy, 0.9)
 
         rendered = judge_result_to_dict(judge_result)
-        self.assertEqual(rendered[0]["metrics_data"][0]["score"], 1.0)
+        self.assertEqual(rendered["test_results"][0]["metrics"][0]["score"], 1.0)
+        self.assertEqual(rendered["test_results"][0]["additional_metadata"]["case_id"], "x")
+        self.assertEqual(rendered["test_results"][0]["trace"]["spans"][0]["type"], "llm")
 
     def test_runner_reports_progress(self):
         command = json.dumps([sys.executable, "-c",

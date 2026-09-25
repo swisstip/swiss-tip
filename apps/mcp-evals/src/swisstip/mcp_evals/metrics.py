@@ -1,6 +1,8 @@
 """Deterministic checks and the optional DeepEval bridge."""
 
+from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 from .models import AgentResult, CaseScore, EvalCase
 
@@ -65,13 +67,18 @@ def deepeval_test_case(case: EvalCase, result: AgentResult) -> Any:
                                 "tool_calls": [call.model_dump() for call in result.tool_calls]})
 
 
-def evaluate_with_deepeval(cases: list[Any], metrics: list[Any]) -> Any:
+def evaluate_with_deepeval(cases: list[Any], metrics: list[Any], max_concurrent: int = 3,
+                           throttle_value: float = 0) -> Any:
+    # DeepEval's own default (20) fires enough parallel GEval calls to trip the judge model's
+    # tokens-per-minute rate limit; keep it modest and let callers raise it if their quota allows.
     try:
         from deepeval import evaluate
-        from deepeval.evaluate.configs import DisplayConfig
+        from deepeval.evaluate.configs import AsyncConfig, DisplayConfig
     except ImportError as exc:
         raise RuntimeError("DeepEval is required for judge metrics; install apps/mcp-evals") from exc
-    return evaluate(test_cases=cases, metrics=metrics, display_config=DisplayConfig(print_results=False))
+    async_config = AsyncConfig(max_concurrent=max_concurrent, throttle_value=throttle_value)
+    return evaluate(test_cases=cases, metrics=metrics, display_config=DisplayConfig(print_results=False),
+                    async_config=async_config)
 
 
 def default_deepeval_metrics() -> list[Any]:
@@ -114,18 +121,52 @@ def merge_judge_scores(scores: list[CaseScore], judge_result: Any) -> None:
                 setattr(score, reason_field, metric.reason)
 
 
-def judge_result_to_dict(judge_result: Any) -> list[dict[str, Any]]:
-    """Render DeepEval's result as structured JSON instead of its default repr."""
-    return [
-        {
-            "name": test_result.name,
-            "success": test_result.success,
-            "metadata": test_result.metadata,
-            "metrics_data": [
-                {"name": metric.name, "score": metric.score, "success": metric.success, "reason": metric.reason,
-                 "threshold": metric.threshold}
-                for metric in (test_result.metrics_data or [])
-            ],
-        }
-        for test_result in judge_result.test_results
-    ]
+def judge_result_to_dict(judge_result: Any) -> dict[str, list[dict[str, Any]]]:
+    """Render DeepEval's result in the shape `deepeval inspect` reads (`TraceApi`/`BaseApiSpan`:
+    `testCases[].trace` with camelCase fields, spans bucketed under `llmSpans`)."""
+    timestamp = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+    def metrics_data(test_result: Any) -> list[dict[str, Any]]:
+        return [
+            {"name": metric.name, "score": metric.score, "success": metric.success,
+             "reason": metric.reason, "threshold": metric.threshold}
+            for metric in (test_result.metrics_data or [])
+        ]
+
+    return {
+        "testCases": [
+            {
+                "name": test_result.name,
+                "input": getattr(test_result, "input", None),
+                "actualOutput": getattr(test_result, "actual_output", None),
+                "expectedOutput": getattr(test_result, "expected_output", None),
+                "context": getattr(test_result, "context", None),
+                "retrievalContext": getattr(test_result, "retrieval_context", None),
+                "success": test_result.success,
+                "metricsData": metrics_data(test_result),
+                "trace": {
+                    "uuid": str(uuid4()),
+                    "name": test_result.name,
+                    "status": "SUCCESS" if test_result.success else "ERRORED",
+                    "startTime": timestamp,
+                    "endTime": timestamp,
+                    "input": getattr(test_result, "input", None),
+                    "output": getattr(test_result, "actual_output", None),
+                    "metadata": test_result.metadata,
+                    "metricsData": metrics_data(test_result),
+                    "llmSpans": [{
+                        "uuid": str(uuid4()),
+                        "name": "MCP evaluation",
+                        "status": "SUCCESS" if test_result.success else "ERRORED",
+                        "type": "llm",
+                        "startTime": timestamp,
+                        "endTime": timestamp,
+                        "input": getattr(test_result, "input", None),
+                        "output": getattr(test_result, "actual_output", None),
+                        "metricsData": metrics_data(test_result),
+                    }],
+                },
+            }
+            for test_result in judge_result.test_results
+        ]
+    }

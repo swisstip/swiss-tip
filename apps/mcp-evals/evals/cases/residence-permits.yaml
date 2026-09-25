@@ -40,7 +40,7 @@ cases:
       - Late reunification requires important family reasons.
       - The B-permit conditions do not guarantee approval.
     required_citations:
-      - https://www.fedlex.admin.ch
+      - https://www.zh.ch/de/migration-integration/aufenthalt/familiennachzug-von-drittstaatsangehoerigen/familiennachzug-durch-personen-mit-einer-b-oder-c-bewilligung-beantragen.html
     expected_tools: [resolve]
     must_not_claim:
       - The child can definitely be brought now.
@@ -62,7 +62,8 @@ cases:
       - The important-personal-reasons route does not depend on three years of marriage.
       - The cantonal authority decides the individual case.
     required_citations:
-      - https://www.fedlex.admin.ch
+      - https://fedlex.data.admin.ch/filestore/fedlex.data.admin.ch/eli/cc/2007/758/20260612/de/html/fedlex-data-admin-ch-eli-cc-2007-758-20260612-de-html-3.html  
+      - https://www.ch.ch/de/auslander-in-der-schweiz/einreise-in-die-schweiz/aufenthaltsbewilligung/
     expected_tools: [resolve]
     must_not_claim:
       - The permit will automatically be revoked.
@@ -113,3 +114,51 @@ cases:
     must_not_claim:
       - Receiving social assistance automatically revokes the permit.
       - A specific amount or duration triggers revocation.
+
+  - case_id: UAT-7
+    category: residence-permits
+    difficulty: hard
+    question: "Ich han de Schwiizer Pass und han en Brasilianer ghüratet. Er wohnt no in São Paulo und sött jetzt zu mir nach Züri zügle. Was bruuchts, dass er en Ufenthaltsbewilligung überchunnt, und bis wänn müend mir de Familienachzug aamälde?"
+    expected_answer: >-
+      In German, explain that the spouse of a Swiss citizen is entitled to a
+      residence permit conditioned on living together, that this is not the
+      Art. 44 condition set for a B- or C-permit sponsor, and that the
+      five-year reunification deadline runs from the marriage or entry. Name
+      the cantonal migration office as the authority and state that no
+      documents, fees, or processing times are published for a third-country
+      spouse of a Swiss citizen.
+    expected_claims:
+      - The spouse of a Swiss citizen is entitled to a residence permit conditioned on living together.
+      - The reunification deadline is five years, running from the marriage or entry.
+      - The cantonal migration office issues the permit.
+      - No documents, fees, or processing times are published for this case.
+    required_citations:
+      - https://www.fedlex.admin.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - Suitable housing, no social assistance, or a language condition applies to a Swiss sponsor.
+      - Specific documents, fees, or processing times not served by the release.
+
+  - case_id: UAT-16
+    category: residence-permits
+    difficulty: hard
+    question: "I'm a Turkish citizen and have lived in Switzerland for eleven years, the last eighteen months in the city of Zurich after nine and a half years in Bern. I hold a B permit. Can I apply for Swiss citizenship now?"
+    expected_answer: >-
+      Explain that ordinary naturalisation requires a valid C permit, which
+      this user does not hold, and that the Canton and City of Zurich also
+      require at least two years' residence in the same municipality, which
+      eighteen months does not satisfy. State the language, debt-enforcement,
+      and criminal-record conditions as conditions, and say the release does
+      not decide individual eligibility.
+    expected_claims:
+      - Ordinary naturalisation requires a valid C permit.
+      - The Canton and City of Zurich require at least two years' residence in the same municipality.
+      - Eighteen months in the city does not satisfy that residence requirement.
+      - The release does not decide the user's individual eligibility.
+    required_citations:
+      - https://www.sem.admin.ch
+      - https://www.zh.ch
+    expected_tools: [search, resolve]
+    must_not_claim:
+      - The user can naturalise now on a B permit.
+      - Eleven years of total presence alone satisfies the municipal residence requirement.

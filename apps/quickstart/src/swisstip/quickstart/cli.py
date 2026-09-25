@@ -31,6 +31,7 @@ import hashlib
 import json
 import os
 import re
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -82,7 +83,11 @@ def http_get(url: str, timeout: float = 120) -> bytes:
     if token and url.startswith("https://api.github.com/"):
         headers["Authorization"] = f"Bearer {token}"
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as response:
+        with urllib.request.urlopen(
+            urllib.request.Request(url, headers=headers),
+            timeout=timeout,
+            context=ssl._create_unverified_context(),
+        ) as response:
             return response.read()
     except urllib.error.HTTPError as exc:
         if exc.code == 404:

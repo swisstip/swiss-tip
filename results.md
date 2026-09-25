@@ -1,0 +1,9 @@
+           UAT-39
+
+           --
+
+I\u2019ll check the Swiss TIP published facts for premium reductions in Lucerne, then answer with the official application route.\nYes, you may be eligible **in principle**: Swiss federal guidance says cantons reduce health insurance premiums for insured people in modest economic circumstances.\n\nFor **Lucerne**, however, entitlement, income limits, the amount, and the exact application procedure are decided by the **Canton of Lucerne**. The Swiss TIP release I checked does **not** publish Lucerne\u2019s specific office or procedure. Federally, the application is filed with the **competent cantonal authority** when the canton requires an application.\n\nKey points:\n- Your canton decides whether you qualify and how much you get.\n- If granted, the reduction is paid directly to your health insurer, lowering your bill.\n- For Lucerne-specific forms/deadlines/office, use the Canton of Lucerne\u2019s official premium reduction page or contact the cantonal authority.\n\nSources: FOPH premium subsidies page: https://www.bag.admin.ch/en/health-insurance-premium-subsidies and Health Insurance Act Art. 65 via Fedlex.
+
+           --
+           
+            "reason": "The score is 0.58 because relevant information appears in the 2nd and 3rd nodes in retrieval contexts, which explain that premium reduction is for people in 'modest economic circumstances' and that the canton determines eligibility, procedure, and the competent cantonal authority for applying. However, it is not higher because the 1st node in retrieval contexts is irrelevant and ranked above both relevant nodes: it contains only tool metadata like 'tools.swisstip.get_coverage' and 'does not provide substantive facts about premium reduction, Lucerne, canton rules, or where to apply.'",

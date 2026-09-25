@@ -139,3 +139,50 @@ def parse_opencode_events(stdout: str) -> tuple[str, list[ToolCall], list[str], 
         if isinstance(output, str) and output:
             context.append(output)
     return answer, calls, _extract_citations(answer), context
+
+
+def _assistant_text(message: Any) -> str:
+    content = message.get("content") if isinstance(message, dict) else None
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(block.get("text", "") for block in content
+                         if isinstance(block, dict) and block.get("type") == "text")
+    return ""
+
+
+def parse_pi_events(stdout: str) -> tuple[str, list[ToolCall], list[str], list[str]]:
+    """Parse `pi --mode json` output: a JSONL stream of agent, message and tool-execution events.
+
+    Tool arguments arrive on `tool_execution_start` but the result only arrives on
+    `tool_execution_end`, matched by `toolCallId`; the final answer is the last
+    assistant `message_end` text.
+    """
+    events = _iter_json_lines(stdout)
+    if not events:
+        return stdout.strip(), [], [], []
+    messages: list[str] = []
+    calls: list[ToolCall] = []
+    context: list[str] = []
+    pending_args: dict[str, dict[str, Any]] = {}
+    for event in events:
+        event_type = event.get("type")
+        if event_type == "tool_execution_start":
+            tool_call_id = event.get("toolCallId")
+            if tool_call_id is not None:
+                pending_args[str(tool_call_id)] = event.get("args") or {}
+        elif event_type == "tool_execution_end":
+            result = event.get("result")
+            arguments = pending_args.pop(str(event.get("toolCallId")), {})
+            calls.append(ToolCall(name=str(event.get("toolName", "")), arguments=arguments, result=result))
+            result_text = _tool_result_text(result)
+            if result_text:
+                context.append(result_text)
+        elif event_type == "message_end":
+            message = event.get("message")
+            if isinstance(message, dict) and message.get("role") == "assistant":
+                text = _assistant_text(message)
+                if text:
+                    messages.append(text)
+    answer = messages[-1] if messages else ""
+    return answer, calls, _extract_citations(answer), context

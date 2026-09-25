@@ -186,23 +186,23 @@ class ServerTests(unittest.TestCase):
                 async with ClientSession(read, write) as session:
                     init = await session.initialize()
                     listed = (await session.list_tools()).tools
-                    root = await session.call_tool("get_coverage", {})
+                    coverage = await session.call_tool("get_coverage", {})
                     resolved = await session.call_tool("resolve", RESOLVE)
                     error = await session.call_tool("get_evidence", {"evidence_ids": []})
-                    return init, listed, root, resolved, error
+                    return init, listed, coverage, resolved, error
 
-        init, listed, root, resolved, error = asyncio.run(run())
+        init, listed, coverage, resolved, error = asyncio.run(run())
         self.assertEqual(init.serverInfo.name, "swiss-tip")
-        self.assertEqual([t.name for t in listed], ["get_coverage", "search", "resolve", "get_evidence"])
-        # The release's query languages reach the caller before its first search: in the instructions, in the search
-        # description and in the query field, and on the coverage root.
+        self.assertEqual([t.name for t in listed], ["search", "resolve", "get_evidence"])
+        self.assertTrue(coverage.isError)
+        self.assertIn("Unknown tool", coverage.content[0].text)
+        # The release's query languages reach the caller before its first search: in the instructions and in the
+        # search description and query field.
         note = "Write the search query in English"
         self.assertIn(note, init.instructions)
         search = next(t for t in listed if t.name == "search")
         self.assertIn(note, search.description)
         self.assertIn(note, search.inputSchema["properties"]["query"]["description"])
-        self.assertEqual([q["code"] for q in root.structuredContent["query_languages"]], ["en"])
-        self.assertFalse(root.isError)
         self.assertEqual(resolved.structuredContent["status"], "SUPPORTED")
         self.assertEqual(json.loads(resolved.content[0].text), resolved.structuredContent)
         self.assertEqual(resolved.structuredContent["executed_scope"]["canton_code"], "CH-ZH")
@@ -243,7 +243,7 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(probe.status_code, 200)
         self.assertEqual(probe.json(), health(service))
         self.assertEqual(name, "swiss-tip")
-        self.assertEqual(tools, ["get_coverage", "search", "resolve", "get_evidence"])
+        self.assertEqual(tools, ["search", "resolve", "get_evidence"])
         self.assertEqual(resolved.structuredContent["status"], "SUPPORTED")
         self.assertEqual(json.loads(resolved.content[0].text), resolved.structuredContent)
 

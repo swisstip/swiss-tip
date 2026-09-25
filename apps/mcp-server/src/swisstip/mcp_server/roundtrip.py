@@ -2,8 +2,8 @@
 
 The round trip of the package build (scripts/test/mcp/check_wheel.py, on the installed wheel and the synthetic
 release), of the image build (the slim MCP image with that release mounted) and of the quickstart (on a fetched
-pack). It takes the first concept of the first topic from get_coverage, finds it again with search by its label,
-resolves it for its own jurisdiction with the first allowed value of every required context field, reads the
+pack). It checks the advertised tools, verifies that the disabled get_coverage call is rejected, resolves a known
+search result for its own jurisdiction with the first allowed value of every required context field, reads the
 evidence of a served fact and provokes a typed error. Over stdio the server is started with the interpreter given,
 so the packages installed there are what is tested; with a URL the round trip runs against a running Streamable
 HTTP endpoint, a container. The checks that know a pack's content live with the packs, in swiss-tip-mvp.
@@ -54,14 +54,15 @@ async def run(release: Path | None, url: str | None, report: Report = print_chec
         async with ClientSession(read, write) as session:
             init = await session.initialize()
             tools = [tool.name for tool in (await session.list_tools()).tools]
-            check(f"server {init.serverInfo.name} {init.serverInfo.version} lists the four tools",
-                  tools == ["get_coverage", "search", "resolve", "get_evidence"])
-            root = (await session.call_tool("get_coverage", {})).structuredContent
-            check(f"coverage root of {root.get('release_id')} names topics and jurisdictions",
-                  bool(root.get("topics")) and bool(root.get("jurisdictions")) and bool(root.get("scope_statement")))
-            topic = (await session.call_tool("get_coverage", {"parent_id": root["topics"][0]["topic_id"]})).structuredContent
-            concept = topic["concepts"][0]
-            found = (await session.call_tool("search", {"query": concept["label"], "limit": 10})).structuredContent
+            check(f"server {init.serverInfo.name} {init.serverInfo.version} lists the three tools",
+                tools == ["search", "resolve", "get_evidence"])
+            coverage = await session.call_tool("get_coverage", {})
+            check("get_coverage is disabled", coverage.isError and coverage.structuredContent["error"]["code"] == "INVALID_ARGUMENT")
+            found = (await session.call_tool("search", {"query": "registration", "limit": 10})).structuredContent
+            concept = found["results"][0] if found["results"] else None
+            if concept is None:
+                check("search returns a concept for the round trip", False)
+                return failures
             hit = next((item for item in found["results"] if item["concept_id"] == concept["concept_id"]), None)
             check(f"search by its label finds {concept['concept_id']}", hit is not None)
             schema = (hit or {}).get("context_schema", {})
@@ -71,7 +72,7 @@ async def run(release: Path | None, url: str | None, report: Report = print_chec
             jurisdiction = {"country": parts[0], **({"canton": "-".join(parts[:2])} if len(parts) > 1 else {}),
                             **({"city": code} if len(parts) > 2 else {})}
             resolved = await session.call_tool("resolve", {"concept_ids": [concept["concept_id"]], "jurisdiction": jurisdiction,
-                                                           "as_of": root["freshness"]["snapshot_date"], "context": context})
+                                                           "context": context})
             body = resolved.structuredContent
             facts = body["results"][0].get("facts", []) if not resolved.isError else []
             check(f"resolve for {code} with {context or 'no context'} serves facts with citations: {body.get('status')}",

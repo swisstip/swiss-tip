@@ -6,9 +6,9 @@ import subprocess
 import time
 
 from ..models import AgentResult, EvalCase, HarnessConfig, ToolCall
-from .events import parse_codex_events, parse_opencode_events
+from .events import parse_codex_events, parse_opencode_events, parse_pi_events
 
-_EVENT_PARSERS = {"codex": parse_codex_events, "opencode": parse_opencode_events}
+_EVENT_PARSERS = {"codex": parse_codex_events, "opencode": parse_opencode_events, "pi": parse_pi_events}
 
 
 class CommandAdapter:

@@ -3,13 +3,25 @@ configs:
     harness: opencode
     model: openai/gpt-4.1
     command: [opencode, run, "--format", "json", "--model", "{model}", "{question}"]
+  # opencode-apertus:
+  #   harness: opencode
+  #   model: swisscom/swiss-ai/Apertus-v1.5-70B
+  #   command: [opencode, run, "--format", "json", "--model", "{model}", "{question}"]
+  opencode-gpt-5-5:
+    harness: opencode
+    model: openai/gpt-5.5
+    command: [opencode, run, "--format", "json", "--model", "{model}", "{question}"]
   codex-gpt-5-5:
     harness: codex
     model: gpt-5.5
     command: [codex, --config, web_search="disabled", exec, --json, --model, "{model}", "{question}"]
+  # pi-gpt-5-5:
+  #   harness: pi
+  #   model: openai/gpt-5.5
+  #   command: [pi, --print, --mode, json, --no-session, --model, "{model}", "{question}"]
 benchmark:
-  trials: 3
-  concurrency: 1
+  trials: 1
+  concurrency: 2
   case_files:
     - residence-permits.yaml
     - work-and-insurance.yaml

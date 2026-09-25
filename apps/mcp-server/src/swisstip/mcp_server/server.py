@@ -52,7 +52,7 @@ from swisstip.core.validation import ReleaseInvalid
 from swisstip.runtime.connectors import ConnectorRegistry
 from swisstip.runtime.semantic import (OllamaEmbedder, SemanticError, SemanticSearch, load_index,
                                        semantic_index_binding)
-from swisstip.runtime.service import ALL_TOOL_CONTRACTS, ReleaseService
+from swisstip.runtime.service import ALL_TOOL_CONTRACTS, ReleaseService, argument_error
 
 from . import SERVER_NAME, SERVER_VERSION
 
@@ -60,6 +60,7 @@ RELEASE_VARIABLE = "SWISSTIP_RELEASE"
 CONNECTORS_VARIABLE = "SWISSTIP_CONNECTORS"
 MCP_PATH = "/mcp"
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
+MCP_DISABLED_TOOLS = frozenset({"get_coverage"})
 
 
 def create_server(service: ReleaseService) -> Server:
@@ -73,12 +74,14 @@ def create_server(service: ReleaseService) -> Server:
         return [types.Tool(name=name, description=service.tool_description(name), inputSchema=service.tool_input_schema(name),
                            outputSchema=tool_output_schema(ALL_TOOL_CONTRACTS[name][1]),
                            annotations=types.ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-                for name in service.tools()]
+                for name in service.tools() if name not in MCP_DISABLED_TOOLS]
 
     @server.call_tool(validate_input=False)
     async def call_tool(name, arguments):
         started = time.perf_counter()
-        if name == "search" and service.semantic_search is not None:
+        if name in MCP_DISABLED_TOOLS:
+            result = argument_error("name", f"Unknown tool {name!r}.")
+        elif name == "search" and service.semantic_search is not None:
             result = await asyncio.to_thread(service.dispatch, name, arguments)
         else:
             result = service.dispatch(name, arguments)
