@@ -338,6 +338,14 @@ of the packs repository:
 So the data itself is about 15 MB. Of the 850 MB image pull, the rest is the
 runtime: Python, the server and the embedding model with its runner.
 
+## What comes next
+
+What we would build next, and why, is in
+[next steps and improvements](docs/product/next-steps.md). That covers:
+- the knowledge graph tool, which is built and open for review;
+- source discovery driven from the admin console rather than agent swarms;
+- monetization.
+
 ## Repository
 
 | Path | Contents |
