@@ -33,12 +33,12 @@
   The minute is three slides, problem, solution and benefit, each naming its
   part. The problem sets two questions side by side. The registration one is
   the question the replay answers, and the wrong answer it quotes was
-  recorded: the screenshot is a backup slide. The Rottweiler one is only
-  told: its "AI" line is the usual import checklist, not a recording, and no
+  recorded (docs/images/bad-example.jpg). The Rottweiler one is only told:
+  its "AI" line is the usual import checklist, not a recording, and no
   exchange about it is replayed. The ban it names is served by the release
   (concept zh-banned-dog-breeds: breed-type list II, Rottweiler since
   1 January 2025). The backups follow the close: the contract card, the
-  recorded wrong answer, the architecture and the agent map.
+  architecture and the agent map.
 
   Scale the panel with --ui on #replay; everything in it is sized from that.
 
@@ -69,13 +69,19 @@
   html, body { height: 100%; margin: 0; }
   body {
     background: var(--bg); color: var(--ink); font-family: var(--sans);
-    display: grid; grid-template-columns: 1fr minmax(440px, 37%);
+    display: grid; grid-template-columns: minmax(0, 1fr);
     /* minmax(0, 1fr), not 1fr: a grid item's min-height is auto, so without
        it the panes grow to fit their content, the thread never gets a height
        to scroll inside, and the composer is pushed off the screen. */
     grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
   }
+
+  /* The brand line and the controls span the screen; between them the
+     slides and the replay share the row, the replay on about two fifths. */
+  #body { flex: 1; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr);
+          grid-template-columns: minmax(0, 1fr) minmax(400px, 40%);
+          gap: clamp(20px, 2.5vw, 48px); }
 
   /* ---------------------------------------------------------- the slides */
   #stage { position: relative; display: flex; flex-direction: column;
@@ -95,7 +101,7 @@
                   text-transform: uppercase; letter-spacing: 1.26px; }
   .grad { background: var(--hero); -webkit-background-clip: text; background-clip: text;
           color: transparent; }
-  #slides { flex: 1; position: relative; min-height: 0; }
+  #slides { position: relative; min-height: 0; min-width: 0; }
   .slide {
     position: absolute; inset: 0; opacity: 0; pointer-events: none;
     transition: opacity .18s ease; display: flex; flex-direction: column;
@@ -152,19 +158,10 @@
   .split.maps > div:last-child { justify-self: end; padding-right: clamp(0px, 2vw, 40px); }
   .shots img.shot-waste { left: 0; top: calc(var(--h) * .3); width: calc(var(--h) * .8);
                     height: auto; box-shadow: 0 14px 40px rgba(34, 0, 48, .2); }
-  /* The other assistant's answer, a phone screenshot (1080x2520) cut at 3:4
-     from the top: the question and the wrong date, not the steps below. */
-  .split.wrong ul { margin: .6em 0; }
-  .split.wrong p.fine { color: var(--accent); font-weight: 700; margin-top: .9em;
-                        padding: .35em .7em; border-left: 4px solid var(--accent);
-                        background: rgba(228, 4, 63, .07); width: fit-content; }
-  .split img.bad { height: min(74vh, 780px); max-height: none; aspect-ratio: 3 / 4;
-                   object-fit: cover; object-position: top;
-                   box-shadow: 0 10px 32px rgba(34, 0, 48, .14); }
   body.backup pre.run { width: fit-content; font-size: clamp(12px, .95vw, 18px); }
 
   /* The problem: two questions, the answer a normal assistant gives, and
-     what it leaves out, in the red of .fine. */
+     what it leaves out, in red. */
   .cases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
            gap: clamp(12px, 1.4vw, 24px); }
   .case { display: flex; flex-direction: column; gap: .8em; background: var(--panel);
@@ -195,6 +192,7 @@
   /* The benefit: three markets - the one served today and two it could
      serve - standing on the one platform underneath them. */
   .market { display: flex; flex-direction: column; gap: clamp(6px, .6vw, 10px); max-width: 62rem; }
+  .whole .market { max-width: none; }
   .kbs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
          gap: clamp(10px, 1.1vw, 20px); }
   .kb .why { margin-top: auto; padding-top: .5em; border-top: 1px solid var(--line);
@@ -254,12 +252,11 @@
   #hint { font-size: 13px; color: var(--dim); }
 
   /* ------------------------------------------------------ the right pane */
-  body.backup { grid-template-columns: 1fr; }
-  body.backup #demo { display: none; }
+  body.backup #body, body.whole #body { grid-template-columns: minmax(0, 1fr); }
+  body.backup #demo, body.whole #demo { display: none; }
   #demo { display: flex; flex-direction: column; min-width: 0; min-height: 0;
           overflow: hidden; background: transparent;
-          padding: clamp(20px, 2.8vh, 40px) clamp(20px, 1.8vw, 40px)
-                   clamp(20px, 2.8vh, 40px) clamp(8px, .8vw, 18px); }
+          padding: clamp(14px, 2vh, 28px) 0; }
 
   /* --------------------------------- the interface, drawn from the shots */
   #replay {
@@ -332,7 +329,7 @@
   #go.busy { background: #1c1b1a; }
   #go:disabled { cursor: default; }
 
-  @media (max-width: 1150px) { body { grid-template-columns: 1fr 400px; } }
+  @media (max-width: 1150px) { #body { grid-template-columns: minmax(0, 1fr) 360px; } }
   @media (max-height: 950px) { #replay { --ui: 13.5px; } }
   @media (max-height: 820px) { #replay { --ui: 12.5px; } }
 </style>
@@ -344,6 +341,7 @@
     <span class="claim">shape <span class="brace">{ai}</span> together</span>
     <span class="words">Hands-on, trustworthy, ethical and open</span>
   </header>
+  <div id="body">
   <div id="slides">
 
     <section class="slide on">
@@ -367,7 +365,7 @@
     <section class="slide">
       <div class="mark">0:25 &middot; the answer stands; point at it</div>
       <div class="kicker good">Solution</div>
-      <h1>Swiss TIP.<br>A trusted information <span class="good">platform.</span></h1>
+      <h1>Swiss TIP &ndash; a trusted information <span class="good">platform.</span></h1>
       <div class="props">
         <div class="prop"><b>Any assistant</b>plugs in through MCP</div>
         <div class="prop ok"><b>Reviewed facts</b>the answer comes from them, not from memory</div>
@@ -376,17 +374,17 @@
       </div>
     </section>
 
-    <section class="slide">
+    <section class="slide whole">
       <div class="mark">0:44 &middot; land on the last line</div>
       <div class="kicker good">Benefit</div>
-      <h1>Any knowledge <span class="good">base.</span></h1>
+      <h1>One platform &ndash; any knowledge <span class="good">base.</span></h1>
       <div class="market">
         <div class="kbs">
           <div class="kb on"><span class="tag">Served today &middot; public sector</span><b>Swiss residence</b>
             moving to and living in Zurich
             <span class="why">the authority's own answer, in any assistant</span></div>
           <div class="kb"><span class="tag">Same platform &middot; finance</span><b>Financial regulation</b>
-            MiFID II, FINMA
+            MiFID II, FinSA
             <span class="why">an audit trail for every statement</span></div>
           <div class="kb"><span class="tag">Same platform &middot; enterprise</span><b>Company policies</b>
             HR, compliance, IT
@@ -396,7 +394,7 @@
           <span>reviewed facts</span><span>&middot;</span><span>official sources</span><span>&middot;</span>
           <span>named gaps</span><span>&middot;</span><span>any MCP assistant</span></div>
       </div>
-      <h2>Wherever a wrong answer is <span class="kill">expensive.</span></h2>
+      <h2>Wherever a wrong answer is <span class="kill">too expensive.</span></h2>
     </section>
 
     <section class="slide backup">
@@ -416,24 +414,6 @@
   <b>Zurich      </b> 20 topics - 211 concepts - 1,268 facts - 334 documents
   <b>cantons     </b> registering on arrival in all 26 - Zurich in full
   <b>datasets    </b> 5 waste calendars - 4,547 collection dates</pre>
-    </section>
-
-    <section class="slide backup">
-      <div class="mark">backup &middot; the recorded wrong answer, for questions</div>
-      <div class="split wrong">
-        <img class="bad" src="../images/bad-example.jpg"
-             alt="Another chat assistant: register within 14 days of arrival, no later than September 30, 2026">
-        <div>
-          <h2>A normal assistant gave<br>
-            <span class="kill">a true rule, but the wrong date.</span></h2>
-          <ul>
-            <li>it said: fourteen days from arrival &mdash; <b>September 30</b></li>
-            <li>it never said: <b>register before your first working day</b></li>
-          </ul>
-          <p class="wide">That is the limit that binds.<br>You start work unregistered.</p>
-          <p class="wide fine">And you can be fined for it.</p>
-        </div>
-      </div>
     </section>
 
     <section class="slide backup">
@@ -535,6 +515,30 @@
 
   </div>
 
+  <aside id="demo">
+    <div id="replay">
+      <div id="frame">
+        <div id="title">
+          <span id="sessiontitle">New session</span>
+          <span class="dots">&hellip;</span>
+        </div>
+        <div id="thread"></div>
+
+        <div id="composer">
+        <div class="ph" id="ph"></div>
+        <div class="row">
+          <span class="plus">+</span>
+          <span>Residence-Assistant <span class="caret">&#9662;</span></span>
+          <span>Ling 3.0 Flash Fin Free <span class="caret">&#9662;</span></span>
+          <span>Default <span class="caret">&#9662;</span></span>
+          <button id="go" title="send the question (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6M6 12l6-6 6 6"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+  </div>
+
   <div id="bar">
     <button class="nav" id="prev" title="Left arrow">&larr;</button>
     <button class="nav" id="next" title="Right arrow or space">&rarr;</button>
@@ -543,29 +547,6 @@
     <span id="clock" title="click to start, stop, reset">0:00</span>
   </div>
 </main>
-
-<aside id="demo">
-  <div id="replay">
-    <div id="frame">
-      <div id="title">
-        <span id="sessiontitle">New session</span>
-        <span class="dots">&hellip;</span>
-      </div>
-      <div id="thread"></div>
-
-      <div id="composer">
-      <div class="ph" id="ph"></div>
-      <div class="row">
-        <span class="plus">+</span>
-        <span>Residence-Assistant <span class="caret">&#9662;</span></span>
-        <span>Ling 3.0 Flash Fin Free <span class="caret">&#9662;</span></span>
-        <span>Default <span class="caret">&#9662;</span></span>
-        <button id="go" title="send the question (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6M6 12l6-6 6 6"/></svg></button>
-        </div>
-      </div>
-    </div>
-  </div>
-</aside>
 
 <script>
 (function () {
@@ -593,9 +574,11 @@
     at = Math.max(0, Math.min(slides.length - 1, i));
     slides.forEach(function (s, n) { s.classList.toggle('on', n === at); });
     pips.forEach(function (p, n) { p.classList.toggle('on', n === at); });
-    // A backup slide takes the whole screen; the replay is only hidden, so
-    // coming back finds it where it was.
+    // A backup slide takes the whole screen, and so does the benefit, once
+    // the replay has made its point; the replay is only hidden, so coming
+    // back finds it where it was.
     document.body.classList.toggle('backup', slides[at].classList.contains('backup'));
+    document.body.classList.toggle('whole', slides[at].classList.contains('whole'));
   }
   document.getElementById('prev').onclick = function () { show(at - 1); };
   document.getElementById('next').onclick = function () { show(at + 1); };

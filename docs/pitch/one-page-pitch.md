@@ -22,12 +22,12 @@
 > through MCP and answers from reviewed facts, each with its official
 > source.
 >
-> On the right, an output of a real run: the same question, before
-> Monday, with its sources. And if something isn't covered, it says so
+> On the right, an output of a real run: the same question, register
+> before you start work, with its sources. And if something isn't covered, it says so
 > instead of guessing.
 
 **[0:44 - Benefit]**
 
 > Swiss residence is just our first knowledge base. The same platform can
-> serve financial regulation like MiFID II, or your company's own policies:
-> anywhere a wrong answer is expensive.
+> serve financial regulation like MiFID, or your company's own policies.
+> Because some wrong answers are simply too expensive.
