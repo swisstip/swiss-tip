@@ -9,6 +9,9 @@
 #   docker build -f docker/mcp-slim/Dockerfile -t swiss-tip-mcp:0.3.4-slim .
 #   docker build -t swiss-tip-mcp:0.3.4 docker/mcp
 #
+# Both build for linux/amd64 and linux/arm64 (--platform linux/amd64,linux/arm64
+# with the containerd image store), as the container workflow does.
+#
 # The server only talks to a loopback Ollama, so both run in this container:
 # the entrypoint with-ollama starts Ollama, checks that the model has the
 # digest the semantic indexes were built with, loads it, and starts the
@@ -24,12 +27,14 @@ ARG BASE_IMAGE=swiss-tip-mcp:0.3.4-slim
 ARG OLLAMA_IMAGE=ollama/ollama:0.34.0
 
 # Ollama's CPU runtime only: its binary, the ggml and llama libraries with a
-# CPU backend per x86 generation, and the licences. The CUDA, MLX and Vulkan
-# libraries (4.6 GB) stay out.
+# CPU backend per x86 or Arm generation, and the licences and notices. The
+# CUDA, MLX and Vulkan libraries (4.6 GB) stay out. The arm64 Ollama image has
+# no NOTICE file, so notices are copied where there are any.
 FROM ${OLLAMA_IMAGE} AS ollama
 RUN mkdir -p /out/bin /out/lib/ollama \
  && cp -a /usr/bin/ollama /out/bin/ \
- && cp -a /usr/lib/ollama/lib* /usr/lib/ollama/llama-server /usr/lib/ollama/*LICENSE* /usr/lib/ollama/*NOTICE* /out/lib/ollama/
+ && cp -a /usr/lib/ollama/lib* /usr/lib/ollama/llama-server /usr/lib/ollama/*LICENSE* /out/lib/ollama/ \
+ && find /usr/lib/ollama -maxdepth 1 -name '*NOTICE*' -exec cp -a {} /out/lib/ollama/ \;
 
 FROM ${BASE_IMAGE}
 ARG OLLAMA_IMAGE

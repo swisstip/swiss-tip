@@ -61,7 +61,9 @@ docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
 
 The first run pulls about 850 MB, roughly three minutes on a normal
 connection; the server then answers within about 15 seconds of starting, once
-the model is loaded. Check it, and connect your client:
+the model is loaded. The image is published for `linux/amd64` and
+`linux/arm64`, so an Apple silicon Mac runs it natively, without emulation
+([platforms](docker/README.md#platforms)). Check it, and connect your client:
 
 ```shell
 curl -s http://127.0.0.1:8000/health
@@ -335,6 +337,14 @@ of the packs repository:
 
 So the data itself is about 15 MB. Of the 850 MB image pull, the rest is the
 runtime: Python, the server and the embedding model with its runner.
+
+## What comes next
+
+What we would build next, and why, is in
+[next steps and improvements](docs/product/next-steps.md). That covers:
+- the knowledge graph tool, which is built and open for review;
+- source discovery driven from the admin console rather than agent swarms;
+- monetization.
 
 ## Repository
 

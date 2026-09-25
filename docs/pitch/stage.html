@@ -38,7 +38,7 @@
   exchange about it is replayed. The ban it names is served by the release
   (concept zh-banned-dog-breeds: breed-type list II, Rottweiler since
   1 January 2025). The backups follow the close: the contract card, the
-  architecture and the agent map.
+  architecture, the agent map, what comes next and monetization (docs/product/next-steps.md).
 
   Scale the panel with --ui on #replay; everything in it is sized from that.
 
@@ -245,6 +245,14 @@
              border: 1px solid var(--line); border-radius: var(--corner);
              padding: clamp(16px, 2vw, 30px); margin: 0; white-space: pre; overflow: auto; }
   pre.card b { color: var(--dim); font-weight: 400; }
+  /* What comes next: short cards, two columns, one column on a narrow screen. */
+  .future { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: clamp(10px, 1.4vw, 22px); margin-top: clamp(14px, 2vh, 28px); }
+  .future div { background: var(--panel); border: 1px solid var(--line); border-radius: var(--corner);
+                padding: clamp(10px, 1.2vw, 18px) clamp(12px, 1.4vw, 22px);
+                font-size: clamp(13px, 1vw, 18px); line-height: 1.4; color: var(--dim); }
+  .future b { display: block; color: var(--ink); font-size: 1.12em; margin-bottom: .25em; }
+  @media (max-width: 800px) { .future { grid-template-columns: minmax(0, 1fr); } }
 
   svg.arch { width: 100%; max-height: min(64vh, 760px); display: block; }
   svg.arch .box { fill: var(--panel); stroke: #d9c9e3; stroke-width: 1.2; }
@@ -550,6 +558,47 @@
           <p class="wide">A Claude Code plugin. Eleven steps,
           four subagents, two gates that stay human.</p>
         </div>
+      </div>
+    </section>
+
+    <section class="slide backup">
+      <div class="mark">backup &middot; what comes next (docs/product/next-steps.md)</div>
+      <h2>What comes <span class="good">next</span></h2>
+      <div class="future">
+        <div><b>Orientation before search</b>A knowledge graph tool, called
+        first: which level of the state decides, the office at the user's
+        place, the laws. Built and measured, not in this release.</div>
+        <div><b>Deterministic source discovery</b>Sources found by code from
+        official registers and sitemaps, run and accepted in the admin
+        console. Agents only where code cannot decide: lower, predictable
+        cost.</div>
+        <div><b>A Swiss model, a checked contract</b>Apertus through Swisscom
+        for the model step, once Apertus 2.0 brings agentic and tool use,
+        measured against today's default; the tool schema checked in
+        CI.</div>
+        <div><b>Monetization</b>A hosted subscription, a licence for
+        self-hosting, and packs funded by their publishers: the next
+        slide.</div>
+      </div>
+    </section>
+
+    <section class="slide backup">
+      <div class="mark">backup &middot; monetization (docs/product/next-steps.md)</div>
+      <h2>Monetization</h2>
+      <div class="future">
+        <div><b>Hosted subscription</b>We run the server and keep the packs
+        fresh and attested. Tiers by call volume and by the packs served;
+        nothing to operate for the customer.</div>
+        <div><b>Self-hosting licence</b>An organisation runs the server and
+        the admin console on its own infrastructure, with a licence per
+        instance and access to the attested packs.</div>
+        <div><b>Publisher-funded packs</b>A canton, a commune or a federal
+        office pays for the upkeep and review of its own pack. Every
+        assistant then serves it at no charge, and the publisher's rules are
+        answered correctly wherever people ask.</div>
+        <div><b>Why it fits</b>Revenue follows the value: the operators who
+        serve answers, the organisations that need them in-house, and the
+        authorities whose information is at stake.</div>
       </div>
     </section>
 
