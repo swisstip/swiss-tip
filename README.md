@@ -29,8 +29,8 @@ The pitch is at **[swisstip.github.io/swiss-tip/pitch/stage.html](https://swisst
 | 5 | Start command | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` |
 | 6 | Prebuilt data | Shipped inside the image: release `mvp-zurich-2026-09-25-v3` with its semantic index and readiness attestation, and 15 waste-collection calendars, about 15 MB in all, from `releases/mvp-zurich/` and `datasets/mvp-zurich/` of [swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) ([sizes](#credentials-and-the-prebuilt-index)). Refresh: `docker pull` again, since the tag `mvp-zurich` follows the newest attested release, in the time of the download. The semantic index is rebuilt with the command in [developer setup](docs/developer-setup.md#rebuild-the-semantic-index), about 15 minutes on a CPU. The facts themselves are human-reviewed, so a release is not rebuilt automatically |
 | 7 | Credentials | None. The server needs no API key, token or account and calls no external service while answering ([credentials](#credentials-and-the-prebuilt-index)). Optional variables, all with working defaults: `PORT` (the port inside the container, default `8000`) and `SWISSTIP_CONNECTORS` (set empty to leave out the calendar and the `lookup` tool) |
-| 8 | Hosted endpoint | `https://51-96-83-1.sslip.io/mcp`, no authentication header; `https://51-96-83-1.sslip.io/health`. Up until the evaluation is complete |
-| 9 | Declared scope | Topics: residence permits and registration, cantonal migration offices, newcomers, entry and visas, AHV and pensions, social insurance, work and unemployment, tax at source, household taxes, health insurance, naturalisation, political rights, family benefits, housing, driving licences, vehicles and parking, customs, integration, waste, school holidays ([coverage at a glance](#coverage-at-a-glance)). Geography: federal rules for all of Switzerland; arrival registration in all 26 cantons (AG, AI, AR, BE, BL, BS, FR, GE, GL, GR, JU, LU, NE, NW, OW, SG, SH, SO, SZ, TG, TI, UR, VD, VS, ZG, ZH); the full procedures of ZH and the City of Zurich; waste collection in Basel, St. Gallen and Lugano. Languages: questions in German, French, Italian, Romansh or English; answers in the language of the question |
+| 8 | Hosted endpoint | `https://51-96-83-1.sslip.io/mcp`, no authentication header; `https://51-96-83-1.sslip.io/health`. Runs on AWS in Zurich (`eu-central-2`): one EC2 `t3.small` (2 vCPU, x86_64, Amazon Linux 2023) serving the image of row 5 behind Caddy for HTTPS. Up until the evaluation is complete |
+| 9 | Declared scope | Topics: residence permits and registration, cantonal migration offices, newcomers, entry and visas, AHV and pensions, social insurance, work and unemployment, tax at source, household taxes, health insurance, naturalisation, political rights, family benefits, housing, driving licences, vehicles and parking, customs, integration, waste, school holidays ([coverage at a glance](#coverage-at-a-glance)). Geography: federal rules for all of Switzerland; arrival registration in all 26 cantons (AG, AI, AR, BE, BL, BS, FR, GE, GL, GR, JU, LU, NE, NW, OW, SG, SH, SO, SZ, TG, TI, UR, VD, VS, ZG, ZH); the full procedures of ZH and the City of Zurich; waste collection dates for the City of Zurich (by postal code), Basel and St. Gallen (by collection zone) through `lookup`; for Lugano, which publishes no collection days, only how household, recyclable and bulky waste is handed over. Languages: users may ask in any language. The assistant talks to the server in German or English; statements come back in English, and excerpts in the language of the cited page (German, French, Italian or English) |
 | 10 | One example call | Tool `search`, arguments `{"query": "register arrival City of Zurich", "limit": 3}`: returns the matching concepts, best first - `city-zurich-arrival` with the context it needs (`arrival_origin`) - with `match_strength` `strong` and `retrieval_mode` `hybrid`. The `resolve` that follows, and `curl` commands for both, are in [example calls](docs/example-call.md) |
 | 11 | Known limits | [Not covered](#coverage-at-a-glance): fees, appointments and processing times, amounts and calculators, individual eligibility, asylum, social assistance, other cantons beyond arrival registration, other municipalities beyond the waste of Basel, St. Gallen and Lugano. Weak spots: [LIMITATIONS.md](https://github.com/swisstip/swiss-tip-mvp/blob/main/LIMITATIONS.md) |
 | 12 | robots.txt and terms of use | `--obey-robots` of the downloader, on by default: it follows `robots.txt` and its crawl delays and fails closed when a policy cannot be read; `--no-obey-robots` overrides it and is recorded in the run. Build time only - the server never fetches a page ([source etiquette](#source-etiquette)) |
@@ -42,11 +42,10 @@ Swiss TIP is two repositories, both evaluated on their branch `main`:
 
 | Repository | Purpose | Branch | Commit |
 | --- | --- | --- | --- |
-| [swisstip/swiss-tip](https://github.com/swisstip/swiss-tip) | The MCP server itself: code only, no knowledge base | `main` | [`dee8e12`](https://github.com/swisstip/swiss-tip/commit/dee8e1212c56d77e971cc1d0dcef9f6f7379c3b8) |
+| [swisstip/swiss-tip](https://github.com/swisstip/swiss-tip) | The MCP server itself: code only, no knowledge base | `main` | [`dfb2d3f`](https://github.com/swisstip/swiss-tip/commit/dfb2d3f99fb984f1d7a88483d5aa6c80a8ab53ae) |
 | [swisstip/swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) | The MVP knowledge base only: `mvp-zurich`, release `mvp-zurich-2026-09-25-v3` | `main` | [`f17cd5b`](https://github.com/swisstip/swiss-tip-mvp/commit/f17cd5b6754ce9af43f2da7336daefa513e042a5) |
 
-The commit that adds this table to `swiss-tip` comes after `dee8e12` and
-changes this README only.
+Commits after `dfb2d3f` in `swiss-tip` change this README only.
 
 ## Quick start
 
@@ -242,8 +241,8 @@ below describes the current one.
   data - the City of Zurich by postal code (organic waste, paper, cardboard,
   household waste, the hazardous-waste van), Basel and St. Gallen by
   collection zone - through `lookup` where the calendar connector runs.
-- **Languages:** questions may come in German, French, Italian, Romansh or
-  English. The search terms are copied from the cited pages: German on
+- **Languages:** users may ask in any language; the assistant talks to the
+  server in German or English. The search terms are copied from the cited pages: German on
   nearly every concept, English on some, French and Italian on a few. The
   tools tell the calling assistant to search once, in German or English, and
   to translate the key terms of a French, Italian or Romansh question into
