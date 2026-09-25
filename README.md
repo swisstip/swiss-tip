@@ -106,6 +106,13 @@ search and the calendar connector: five tools, `get_coverage`, `search`,
 [coverage at a glance](#coverage-at-a-glance) and, verbatim, in the
 `scope_statement` and `out_of_scope` that `get_coverage` returns.
 
+**A first check.** [Example calls](docs/example-call.md) shows the server
+working in two calls: a `search` that finds the concept for a question, and a
+`resolve` that returns its human-reviewed fact on registering an arrival in
+the City of Zurich, with its citation. Each comes with its tool name, its
+arguments as JSON, a `curl` command for the hosted instance and what it
+returns.
+
 **Is it the published source?** `/health` names the `release_id`, its
 `content_sha256` and the `readiness` attestation. The `content_sha256` equals
 `manifest.content_sha256` in
@@ -288,7 +295,7 @@ command is in
 | --- | --- |
 | `apps/` | `mcp-server`, `quickstart` (the [one command](apps/quickstart/README.md) that fetches and tests a pack), `knowledge-builder`, `admin-console`, `calendar-connector` (the first [dataset connector](apps/calendar-connector/README.md)) |
 | `packages/` | `core` (release format, validator, tool contracts), `runtime` (the tool operations, lexical and hybrid search, the connector registry), `ingestion`, `extraction`, `build`, `concepts` |
-| `docs/` | [Developer setup](docs/developer-setup.md) (running from source, tests, building a pack), the [functional specification](docs/product/functional-specification.md) and the architecture documents: [release format](docs/architecture/release-format.md), [tool contracts](docs/architecture/tool-contracts.md), [acceptance gate](docs/architecture/acceptance-gate.md), [extraction](docs/architecture/extraction.md), [concept extraction](docs/architecture/concept-extraction.md), [institutions and basis](docs/architecture/institutions-and-provenance-weights.md), [pipeline](docs/architecture/knowledge-base-pipeline.md), [admin console](docs/architecture/admin-console.md), [dataset connectors](docs/architecture/dataset-connectors.md); [connect a client](docs/connect-a-client.md) |
+| `docs/` | [Developer setup](docs/developer-setup.md) (running from source, tests, building a pack), the [functional specification](docs/product/functional-specification.md) and the architecture documents: [release format](docs/architecture/release-format.md), [tool contracts](docs/architecture/tool-contracts.md), [acceptance gate](docs/architecture/acceptance-gate.md), [extraction](docs/architecture/extraction.md), [concept extraction](docs/architecture/concept-extraction.md), [institutions and basis](docs/architecture/institutions-and-provenance-weights.md), [pipeline](docs/architecture/knowledge-base-pipeline.md), [admin console](docs/architecture/admin-console.md), [dataset connectors](docs/architecture/dataset-connectors.md); [connect a client](docs/connect-a-client.md), [example calls](docs/example-call.md) |
 | `docker/`, `compose.yaml`, `Dockerfile` | [Container images](docker/README.md): the MCP image, its slim variant without the model, the slim release image, the embedding sidecar and the OpenCode test image; the root Dockerfile builds the server from this source with a pack as build context. The workflow [container-images.yml](.github/workflows/container-images.yml) builds, tests and pushes the images that hold no release; the packs repository builds the ones that hold one |
 | `scripts/pypi/` | The PyPI distributions `swisstip-core`, `swisstip-mcp`, `swisstip-quickstart`, `swisstip-calendar-connector` and `swisstip-builder` ([publishing](scripts/pypi/README.md)) |
 | `pyproject.toml`, `uv.lock` | The uv workspace of the components, for `uv run` and `uv sync`; each component's own `pyproject.toml` stays the source of its metadata |
