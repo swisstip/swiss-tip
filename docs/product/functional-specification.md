@@ -294,7 +294,8 @@ descriptions say so. Requirements that keep this true:
   resolution call rather than one per level of government;
 - every hit carries what the following `resolve` needs;
 - every result tells the caller when to stop;
-- the orientation stays within 8 KB and says, when no place was given,
+- the orientation walks only the best-matched domain, carries no source
+  URLs, and says, when no place was given,
   whether the answer depends on the canton or the municipality and what to
   ask, instead of picking a place.
 

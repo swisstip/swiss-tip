@@ -1,4 +1,3 @@
-import json
 import unittest
 from datetime import date, datetime, timedelta
 
@@ -8,7 +7,7 @@ from swisstip.core.places import PlaceIndex
 from swisstip.core.release import (EvidenceRecord, Freshness, GraphEdge, GraphNode, KnowledgeGraph, Provenance, Release,
                                    SourceDocument, content_hash, sha256_text)
 from swisstip.core.validation import assert_valid
-from swisstip.runtime.graph import BYTE_BUDGET, GraphCase, GraphChecks, GraphIndex, check_graph
+from swisstip.runtime.graph import GraphCase, GraphChecks, GraphIndex, check_graph
 from swisstip.runtime.service import ReleaseService
 
 from test_service import PLACES, release_with_places
@@ -139,7 +138,6 @@ class GraphToolTests(unittest.TestCase):
         self.assertIn("Einwohnerkontrolle", result.next_search.terms)
         self.assertEqual(result.review_status, "assistant-authored-unreviewed")
         self.assertTrue(all(n.review_status is None for n in result.nodes))
-        self.assertEqual(result.edges[0].source_url, "https://www.ch.ch/federalism")
 
     def test_no_place_returns_generic_roles_and_asks_for_the_municipality(self):
         result = self.call(question="Czech citizen starting work in Zurich next week, when do I register?")
@@ -183,12 +181,20 @@ class GraphToolTests(unittest.TestCase):
         self.assertIn("institution.zh-migrationsamt", {n.node_id for n in result.nodes})
         self.assertEqual(self.call(question="residence permit", reviewed_only=True).nodes, [])
 
-    def test_graph_evidence_is_readable_and_the_result_fits_the_budget(self):
+    def test_only_the_best_domain_is_walked_and_the_others_are_named(self):
         evidence = self.service.dispatch("get_evidence", {"evidence_ids": ["graph-e1"]})
         self.assertEqual(evidence.evidence[0].url, "https://www.ch.ch/federalism")
-        result = self.call(question="register arrival residence permit customs", jurisdiction={"city": "Zurich"})
-        size = len(json.dumps(result.model_dump(mode="json", exclude_none=True), ensure_ascii=False, separators=(",", ":")))
-        self.assertLessEqual(size, BYTE_BUDGET)
+        result = self.call(question="register my arrival, and my residence permit", jurisdiction={"city": "Zurich"})
+        served = {n.node_id for n in result.nodes}
+        self.assertIn("domain.residence", served)
+        self.assertEqual({e.from_id for e in result.edges}, {"domain.registration", "role.residents-office"})
+        self.assertNotIn("role.migration-office", served)
+        self.assertIn('node_ids ["domain.residence"]', result.guidance_for_caller)
+        self.assertEqual(result.covered_topics, ["residence"])
+        walked = self.call(question="register my arrival", node_ids=["domain.residence"], jurisdiction={"city": "Zurich"})
+        self.assertIn("institution.zh-migrationsamt", {n.node_id for n in walked.nodes})
+        self.assertIn("domain.registration", {n.node_id for n in walked.nodes})
+        self.assertNotIn("domain.registration", {e.from_id for e in walked.edges})
 
     def test_a_place_the_register_does_not_hold_is_a_typed_error_or_a_note(self):
         self.assertIsInstance(self.service.dispatch("get_knowledge_graph", {"question": "register", "jurisdiction": {"country": "France"}}),
@@ -212,17 +218,16 @@ class GraphToolTests(unittest.TestCase):
         self.assertEqual(self.service.graph_index.rank("opening hours of the Zurich zoo in Switzerland"), ([], "none"))
         self.assertEqual(self.call(question="register in Zurich").match_strength, "strong")
 
-    def test_an_answer_is_shortened_before_links_are_cut(self):
-        index = self.service.graph_index
-        long = "A long sentence about the office that a caller does not need to orient itself. " * 12
-        index.nodes["role.residents-office"] = index.nodes["role.residents-office"].model_copy(update=dict(summary=long))
-        index.nodes["institution.zh-261-personenmeldeamt"] = index.nodes["institution.zh-261-personenmeldeamt"].model_copy(
-            update=dict(summary=long * 8))
-        result = self.call(question="register arrival", jurisdiction={"city": "Zurich"})
-        served = {n.node_id: n for n in result.nodes}
-        self.assertIn("institution.zh-261-personenmeldeamt", served)
-        self.assertIsNone(served["institution.zh-261-personenmeldeamt"].summary)
-        self.assertEqual(served["domain.registration"].summary, "Reporting arrival to the commune of residence.")
+    def test_the_answer_is_compact_with_no_sources_and_summaries_only_on_request(self):
+        result = self.call(question="residence permit", jurisdiction={"canton": "ZH"})
+        dumped = result.model_dump_json(exclude_none=True)
+        self.assertNotIn("https://", dumped)
+        self.assertTrue(all(n.summary is None for n in result.nodes))
+        self.assertIn("law.aig", {n.node_id for n in result.nodes})
+        asked = self.call(node_ids=["domain.residence"])
+        served = {n.node_id: n for n in asked.nodes}
+        self.assertEqual(served["domain.residence"].summary, "Permits to live in Switzerland.")
+        self.assertIsNone(served["role.migration-office"].summary)
 
 
 class TopicEmbedder:

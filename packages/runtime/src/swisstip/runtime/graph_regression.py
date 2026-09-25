@@ -17,6 +17,7 @@ answer, so two graphs or two matching methods can be compared case by case.
 
 from collections import Counter
 from datetime import UTC, datetime
+from statistics import median
 
 from swisstip.core.acceptance import AcceptanceFile, Case, SearchStep
 from swisstip.core.contracts import GetKnowledgeGraphRequest, KnowledgeGraphResult
@@ -94,6 +95,7 @@ def graph_regression(service: ReleaseService, suite: AcceptanceFile, within: int
         return counts
 
     graph = service.graph_index.graph
+    sizes = [r["bytes"] for r in results if "bytes" in r]
     return dict(schema_version=GRAPH_REGRESSION_SCHEMA_VERSION, pack=suite.pack, release_id=service.release_id,
                 graph_id=graph.graph_id, graph_sha256=graph.content_sha256, suite_sha256=suite.digest(),
                 checked_at=datetime.now(UTC).isoformat(), within=within,
@@ -103,4 +105,4 @@ def graph_regression(service: ReleaseService, suite: AcceptanceFile, within: int
                 unbridged=sorted({r["topic"] for r in results if not r["judged"] and r.get("topic")}),
                 failed_blocking=[r["case_id"] for r in judged if r["blocking"] and not r["passed"]],
                 quarantined_passing=[r["case_id"] for r in judged if not r["blocking"] and r["passed"]],
-                max_bytes=max((r.get("bytes", 0) for r in results), default=0), results=results)
+                max_bytes=max(sizes, default=0), median_bytes=int(median(sizes)) if sizes else 0, results=results)

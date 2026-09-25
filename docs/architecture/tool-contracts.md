@@ -1,6 +1,6 @@
 # Tool contracts
 
-**Last update:** 24 September 2026
+**Last update:** 25 September 2026
 
 **Schema version:** `swiss-tip/v5`<br>
 **Source of truth:** [`packages/core/src/swisstip/core/contracts.py`](../../packages/core/src/swisstip/core/contracts.py)
@@ -1069,16 +1069,17 @@ the state, the principles and every domain with `covered`.
 | `executed_scope` | The place the orientation is for (`CH` when none was given) |
 | `match_strength` | `strong`, `weak` or `none`: whether the question's words reached a domain |
 | `domains` | Root page only: `node_id`, `label`, `covered` |
-| `nodes` | `node_id`, `kind`, `label`, `names` (by language, verbatim from the sources), `summary`, `level`, `place`, `review_status` when it differs from the result's |
-| `edges` | `from_id`, `relation`, `to_id`, `statement`, `place` (holds there and inside it), `source_url`, `review_status` when it differs |
+| `nodes` | `node_id`, `kind`, `label`, `names` (by language, verbatim from the sources), `summary` (only for the nodes asked for by `node_ids`), `level`, `place`, `review_status` when it differs from the result's |
+| `edges` | `from_id`, `relation`, `to_id`, `statement`, `place` (holds there and inside it), `review_status` when it differs |
 | `covered_topics` | Topics of the release that publish facts for the matched domains; empty means the release does not cover the subject |
 | `place_dependence` | `depends_on` (`municipality`, `canton`, `none`), `known`, `reason`, `ask` when the place is not known precisely enough |
 | `next_search` | `query` (the question as asked, to send unchanged), `terms` (official names of the best-matched domain and its offices, to recognise them in the results; not to be added to the query), `jurisdiction` when one was given |
 | `review_status` | The review status of every item that states none |
 | `guidance_for_caller`, `limitations` | What to do next, and the graph's review counts |
 
-A result stays within 8 KB: over it, node summaries other than the matched
-and requested ones and then the edges' `source_url` are omitted before links
-are dropped. `get_evidence` accepts the graph's evidence IDs
+Only the best-matched domain (or the nodes in `node_ids`) is walked; the other
+matched domains are named, and the guidance gives the `node_ids` call that
+walks one. The result carries no source URLs, source pages or publishers, and
+no size limit: it stays small by what it serves. `get_evidence` accepts the graph's evidence IDs
 (`graph-...`) like a fact's.
 

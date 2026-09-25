@@ -589,7 +589,8 @@ class GetKnowledgeGraphRequest(Placed):
         "The user's question, as asked or with its key terms; omit it together with node_ids for the root page "
         "(levels of the state, principles and the domains the graph knows)."))
     node_ids: list[str] = Field(default_factory=list, max_length=5, description=(
-        "Nodes to expand instead of or besides the question, exactly as a previous result named them."))
+        "Nodes to walk instead of the best-matched domain, exactly as a previous result named them: their offices, "
+        "laws and pitfalls, with their summaries."))
     reviewed_only: bool = Field(default=False, description=(
         "Return only nodes and edges a named person confirmed against their excerpts."))
     # No description of its own, as for search: the server's note on the field says what it does.
@@ -604,14 +605,11 @@ class GraphNodeOut(Strict):
         "The name in the languages of the sources, by ISO 639 code, verbatim from a cited excerpt: the words to "
         "search with and to recognise the office by."))
     summary: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
-        "What the node is. Omitted, except for the matched domains, when the result had to be shortened to its size "
-        "limit; pass the node_id in node_ids for it."))
+        "What the node is: served for the nodes asked for by node_ids."))
     level: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
         "Tier of the state: federal, cantonal or municipal."))
     place: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
         "Jurisdiction code of a place, or of the place an institution speaks for."))
-    source_url: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
-        "The official page the summary rests on."))
     review_status: ReviewStatus | None = Field(default=None, exclude_if=lambda value: value is None, description=(
         "Omitted when it is the result's review_status."))
 
@@ -619,15 +617,12 @@ class GraphNodeOut(Strict):
 class GraphEdgeOut(Strict):
     from_id: str
     relation: str = Field(description=(
-        "rules_set_by, executed_by, decided_by, approved_by, first_contact, legal_basis, authoritative_source, "
-        "published_by, varies_by, pitfall, see_also, instance (the institution that plays a role for a place), "
-        "part_of or governed_by."))
+        "rules_set_by, executed_by, decided_by, approved_by, first_contact, legal_basis, varies_by, pitfall or "
+        "instance (the institution that plays a role for a place)."))
     to_id: str
     statement: str = Field(description="The claim in one sentence.")
     place: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
         "Where the claim holds: that place and the places inside it."))
-    source_url: str | None = Field(default=None, exclude_if=lambda value: value is None, description=(
-        "The official page the statement rests on; omitted when the result had to be shortened to its size limit."))
     review_status: ReviewStatus | None = Field(default=None, exclude_if=lambda value: value is None, description=(
         "Omitted when it is the result's review_status."))
 
@@ -713,15 +708,14 @@ SEARCH_DESCRIPTION_LANGUAGES = (
 TOOL_DESCRIPTIONS = {
     "get_knowledge_graph": (
         "Call this FIRST for every new subject, before search: a small map of how Switzerland handles it. With the "
-        "question and, when known, the user's canton or municipality as jurisdiction, it returns the matched domains "
-        "and, as nodes and cited one-sentence edges, which level of the state sets the rules (federal, cantonal, "
+        "question and, when known, the user's canton or municipality as jurisdiction, it returns the best-matched "
+        "domain and, as nodes and one-sentence edges, which level of the state sets the rules (federal, cantonal, "
         "municipal), who carries them out and decides, the office the user deals with at their place with its names "
-        "in the local languages, the laws with their SR numbers, the authoritative source, and the pitfalls a generic "
-        "answer falls into. place_dependence says whether the answer depends on the canton or municipality and, when "
+        "in the local languages, the laws with their SR numbers, and the pitfalls a generic answer falls into. Other "
+        "matched domains are only named: pass one in node_ids to walk it. place_dependence says whether the answer depends on the canton or municipality and, when "
         "the request did not say, the question to ask (derive the place from what the user said first; the place of "
         "work is not the place of residence). next_search gives the query (the question as asked; add no graph terms "
-        "to it) and place for search, which you call in the next turn, then resolve. covered_topics empty means this release publishes no facts on the subject: say so, "
-        "and name the authoritative source only as where to look. The graph is orientation, not citable evidence: "
+        "to it) and place for search, which you call in the next turn, then resolve. covered_topics empty means this release publishes no facts on the subject: say so. The graph is orientation, not citable evidence: "
         "answer only from resolve's facts. Without question and node_ids it returns the root page: the levels, the "
         "principles and the domains."),
     "get_coverage": (

@@ -1,6 +1,6 @@
 # Knowledge graph
 
-**Last update:** 24 September 2026
+**Last update:** 25 September 2026
 
 The knowledge graph is the orientation a calling model reads **before** it
 searches: which level of the state sets the rules of a domain, who carries them
@@ -186,18 +186,23 @@ embedder fails, the words alone decide and the result says so in its
 limitations. Both thresholds are first settings, to be calibrated with the
 graph regression (section 10).
 
-At most three domains are taken (those within half the best score) and
-expanded by one hop. An edge with a place is served when that place contains
-the user's place; a role is resolved to the institution that plays it at the
-most specific level the place reaches (commune, then canton, then CH). The
-result stays within 8 KB (about 2,000 tokens, so the orientation does not
-crowd the caller's context before it searches). Over that, it is shortened
-before it is cut: first the summaries of nodes other than the matched and
-requested ones go (a caller asks for a node by its ID), then the edges' source
-URLs, and only then links, the least important first. Every matched domain's
-first contact, carrying-out, deciding and approving bodies, with the office at
-the user's place, come before any domain's laws, sources and pitfalls, since
-the second-best domain is often the subject.
+At most three domains are matched (those within half the best score), and
+only the best one is walked, by one hop: where the user turns first, who
+carries it out, decides and approves (each role with the office at the user's
+place), who sets the rules, what varies, the pitfalls and the laws. The other
+matches are named as nodes, and the guidance gives the exact call to walk one
+of them (`node_ids`), since the second-best domain is sometimes the subject. A
+word of a domain's label weighs 4.5, above its names and keywords (3): with
+only one domain walked, the first place matters most, and the label is the
+surest sign of the subject. An edge with a place is served when that place
+contains the user's place; a role is resolved to the institution that plays it
+at the most specific level the place reaches (commune, then canton, then CH).
+
+The result is small by what it serves, not by a size limit: one sentence per
+link, no summaries except for the nodes asked for by `node_ids`, and no source
+URLs, source pages or publishers. The caller cites resolve's pages; a URL in
+the orientation would invite a weak model to read the web instead of calling
+search. On the mvp-zurich questions the median answer is about 5 KB.
 
 **Place dependence.** Without a place the scope is CH, as for search and
 resolve; no cantonal or municipal office is picked. `place_dependence` names

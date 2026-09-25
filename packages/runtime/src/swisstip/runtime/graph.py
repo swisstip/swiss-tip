@@ -3,12 +3,14 @@
 Selection is deterministic and needs no model. The question's words are matched against every domain the graph
 knows, each word weighted by how rare it is across the domains and counted once at the strongest field it appears in
 (label, names and keywords above the names of the roles and pitfalls linked to the domain, above the summary), as
-search ranks concepts. The best domains, at most three, are expanded by one hop: who sets the rules, who carries them
-out and decides, where a person turns first, the laws and their authoritative source, the pitfalls. An edge that
-names a place is served by containment like a fact, for that place and the places inside it; a role is resolved to
-the institution that plays it at the most specific level the request's place reaches. The result says whether the
-answer depends on the canton or the municipality (`place_dependence`), what to search for next, and which topics of
-the release publish facts for the domains. It stays within a byte budget by dropping the least specific links first.
+search ranks concepts. At most three domains are matched, and only the best one is walked, by one hop: who sets the
+rules, who carries them out and decides, where a person turns first, the laws and the pitfalls. The others are named,
+for the caller to walk with node_ids when one of them is the subject. An edge that names a place is served by
+containment like a fact, for that place and the places inside it; a role is resolved to the institution that plays it
+at the most specific level the request's place reaches. The result says whether the answer depends on the canton or
+the municipality (`place_dependence`), what to search for next, and which topics of the release publish facts for the
+domains. It stays small by what it serves, not by a size limit: one line per link, a summary only for the nodes the
+caller asked for by node_ids, and no source URLs or source pages, so the caller searches instead of reading the web.
 Design: docs/architecture/knowledge-graph.md.
 """
 
@@ -29,7 +31,9 @@ from swisstip.core.release import GraphEdge, GraphNode, KnowledgeGraph, Strict, 
 from .semantic import SemanticError, _digest, _vectors
 from .service import tokens
 
-FIELD_WEIGHTS = {"label": 3.0, "names": 3.0, "keywords": 3.0, "linked": 2.0, "summary": 1.0}
+# A word of the label is the surest sign of the subject, and only the best domain is walked (graph regression:
+# 13 more questions reach their domain first than at 3.0).
+FIELD_WEIGHTS = {"label": 4.5, "names": 3.0, "keywords": 3.0, "linked": 2.0, "summary": 1.0}
 ANCHOR_FIELDS = frozenset({"label", "names", "keywords", "linked"})
 LINKING_RELATIONS = ("executed_by", "decided_by", "approved_by", "first_contact", "pitfall")
 DEPENDENCE_RELATIONS = ("executed_by", "decided_by", "first_contact", "varies_by")
@@ -44,7 +48,6 @@ PLACE_GENERIC_WORDS = ("city town canton commune municipality Stadt Kanton Gemei
                        "extérieures Confederation Eidgenossenschaft eidgenössisch confédération confederazione saint "
                        "sankt san")
 DOMAIN_SCORE_SHARE = 0.5
-BYTE_BUDGET = 8000
 # Embedding matching, when the server has a local embedder (hybrid search): the question against one text per domain.
 GRAPH_QUERY_PREFIX = "Instruct: Given a question, retrieve the Swiss public-administration domain it concerns.\nQuery: "
 SEMANTIC_FLOOR = 0.45
@@ -52,12 +55,13 @@ SEMANTIC_STRONG = 0.6
 FUSION_K = 5
 # The order a caller needs a domain's links in: where to turn and who carries it out first (with the office that plays
 # the role at the user's place right after its role), then who sets the rules, what differs, the traps and the law.
-# The budget drops links from the end, the best-matched domain's last.
 RELATION_ORDER = ("first_contact", "executed_by", "decided_by", "approved_by", "instance", "rules_set_by", "varies_by",
                   "pitfall", "legal_basis", "authoritative_source", "see_also", "published_by", "governed_by", "part_of")
-# The links that say where the user turns: every matched domain keeps them, with the office at the user's place,
-# before any domain's laws, sources and pitfalls, since the second-best domain is often the subject.
+# The links that say where the user turns, served first with the office at the user's place.
 TURN_TO = frozenset({"first_contact", "executed_by", "decided_by", "approved_by"})
+# The links a walk serves. Sources and publishers are left out: the caller cites resolve's pages, and a URL here invites
+# it to read the web instead of searching; see_also, governed_by and part_of say nothing about where to turn.
+WALKED = frozenset({*TURN_TO, "instance", "rules_set_by", "varies_by", "pitfall", "legal_basis"})
 RELATION_CAP = {"legal_basis": 4, "published_by": 3, "see_also": 2}
 LEVEL_WORD = {"municipal": "municipality", "cantonal": "canton"}
 DEPENDENCE_RANK = {"none": 0, "canton": 1, "municipality": 2}
@@ -74,8 +78,9 @@ GUIDANCE_PLACE = (" The answer depends on the user's {level}: derive it from wha
                   "not the place of residence) and ask only if it cannot be derived. You may search now, but resolve no "
                   "cantonal or municipal concept before the place is known, and never assume one.")
 GUIDANCE_NOT_COVERED = (" This release publishes no facts on {domains}: tell the user that this service does not cover it, "
-                        "name the authoritative source only as where to look, and do not answer from general knowledge "
-                        "as if it were grounded.")
+                        "and do not answer from general knowledge as if it were grounded.")
+GUIDANCE_OTHERS = (" The question also matched {labels}; only the best-matched domain is walked. If one of the others is the "
+                   "subject, call get_knowledge_graph again with node_ids {ids} for its offices and laws.")
 GUIDANCE_WEAK = (" The question's words reached no domain of the graph clearly; the nodes rest on incidental words. "
                  "Search once with the question before declining.")
 GUIDANCE_NONE = (" The question's words reached no domain of the graph. Search once with the question; if that finds "
@@ -169,7 +174,6 @@ class GraphIndex:
         self.out_edges: dict[str, list[GraphEdge]] = {n.node_id: [] for n in graph.nodes}
         for edge in graph.edges:
             self.out_edges[edge.from_id].append(edge)
-        self.urls = {e.evidence_id: e.url for e in graph.evidence}
         self.domains = [n for n in graph.nodes if n.kind == "domain"]
         self.bridges: dict[str, list[str]] = {}
         for topic in topics or []:
@@ -273,8 +277,9 @@ class GraphIndex:
         return edge.place is None or contains(edge.place, place)
 
     def expand(self, start: list[str], place: str, reviewed_only: bool) -> tuple[list[GraphNode], list[GraphEdge]]:
-        """The start nodes and their links, each link with its rank in `self.rank_of`: where the user turns (with the
-        office at their place) for every start node first, then the other links by start position and relation."""
+        """The start nodes and their walked links, each link with its rank in `self.rank_of`: where the user turns
+        (with the office at their place) for every start node first, then the other links by start position and
+        relation."""
         nodes: dict[str, GraphNode] = {}
         edges: list[GraphEdge] = []
         self.rank_of: dict[str, tuple] = {}
@@ -299,7 +304,8 @@ class GraphIndex:
                 continue
             counts: Counter = Counter()
             for edge in sorted(self.out_edges[node_id], key=lambda e: RELATION_ORDER.index(e.relation)):
-                if not self.applies(edge, place) or counts[edge.relation] >= RELATION_CAP.get(edge.relation, 99):
+                if (edge.relation not in WALKED or not self.applies(edge, place)
+                        or counts[edge.relation] >= RELATION_CAP.get(edge.relation, 99)):
                     continue
                 counts[edge.relation] += 1
                 relation = RELATION_ORDER.index(edge.relation)
@@ -309,9 +315,6 @@ class GraphIndex:
                 if target.kind == "role":
                     for instance in self.instances(target.node_id, place):
                         add_edge(instance, (tier, position, relation, 1))
-                if target.kind == "law":
-                    for source in [e for e in self.out_edges[target.node_id] if e.relation == "authoritative_source"][:1]:
-                        add_edge(source, (1, position, RELATION_ORDER.index("authoritative_source"), 1))
         for code in self.place_chain(place):
             add_node(f"place.{code.lower()}")
         return list(nodes.values()), edges
@@ -372,12 +375,20 @@ class GraphIndex:
         ranking = self.ranking(request.question) if request.question else Ranking([], None, "none")
         ranked, strength = ranking.chosen, ranking.strength
         domain_ids = [domain_id for _, domain_id in ranked]
-        start = list(dict.fromkeys([*request.node_ids, *domain_ids]))
-        nodes, edges = self.expand(start, place, request.reviewed_only)
+        # The nodes asked for are walked, else the best-matched domain; the other matches are named, not walked.
+        walked = list(dict.fromkeys(request.node_ids)) or domain_ids[:1]
+        others = [d for d in domain_ids if d not in walked and (not request.reviewed_only
+                                                                 or self.nodes[d].provenance.review_status == "human-reviewed")]
+        nodes, edges = self.expand(walked, place, request.reviewed_only)
+        nodes += [self.nodes[d] for d in others]
+        start = list(dict.fromkeys([*walked, *domain_ids]))
         domains = [d for d in start if d in self.nodes and self.nodes[d].kind == "domain"]
         covered = sorted({topic for d in domains for topic in self.bridges.get(d, [])})
         dependence = self.dependence(domains, scope)
         guidance = GUIDANCE
+        if others:
+            guidance += GUIDANCE_OTHERS.format(labels=", ".join(self.nodes[d].label for d in others),
+                                               ids=json.dumps(others))
         if strength == "weak":
             guidance += GUIDANCE_WEAK
         elif strength == "none":
@@ -394,7 +405,7 @@ class GraphIndex:
             guidance_for_caller=guidance, limitations=self.limitations())
         if ranking.mode == "lexical-fallback":
             result.limitations.append("Domains were matched by words only: the local embedding model was unavailable.")
-        return self.fit(result, nodes, edges, protected=set(domains) | set(request.node_ids))
+        return self.fill(result, nodes, edges, detailed=set(request.node_ids))
 
     def root(self, release_id: str, today: date) -> KnowledgeGraphResult:
         nodes = [n for n in self.graph.nodes if n.kind in ("level", "principle")]
@@ -404,7 +415,7 @@ class GraphIndex:
             release_id=release_id, graph_id=self.graph.graph_id, nodes=[], edges=[],
             domains=[DomainSummary(node_id=d.node_id, label=d.label, covered=d.node_id in self.bridges) for d in self.domains],
             guidance_for_caller=GUIDANCE_ROOT + self.stale_note(today), limitations=self.limitations())
-        return self.fit(result, nodes, edges, protected=ids)
+        return self.fill(result, nodes, edges, detailed=set())
 
     def stale_note(self, today: date) -> str:
         freshness = self.graph.freshness
@@ -419,47 +430,30 @@ class GraphIndex:
         return [f"Orientation, not evidence: the graph's statements summarise official pages; {reviewed} of its {total} "
                 "nodes and edges have been confirmed by a person, the rest are assistant-authored or derived and unreviewed."]
 
-    def fit(self, result: KnowledgeGraphResult, nodes: list[GraphNode], edges: list[GraphEdge],
-            protected: set[str]) -> KnowledgeGraphResult:
-        """Fill the result and fit it to the byte budget, shortening before cutting: first without the summaries of
-        the nodes other than the matched and requested ones (a caller asks for a node by its ID), then without the
-        edges' source URLs (the caller cites resolve's), and only then by dropping the least specific links; an
-        unlinked node goes with its last edge, the matched domains stay."""
+    def fill(self, result: KnowledgeGraphResult, nodes: list[GraphNode], edges: list[GraphEdge],
+             detailed: set[str]) -> KnowledgeGraphResult:
+        """Fill the result: the links in the order a caller needs them, one line each, and a summary only for the
+        nodes the caller asked for by node_ids."""
         statuses = Counter(item.provenance.review_status for item in [*nodes, *edges])
         common = statuses.most_common(1)[0][0] if statuses else None
         ranks = getattr(self, "rank_of", {})
         edges = sorted(edges, key=lambda e: ranks.get(e.edge_id, (99, 99, RELATION_ORDER.index(e.relation), 0)))
-        brevity = 0
-        while True:
-            linked = {e.from_id for e in edges} | {e.to_id for e in edges}
-            kept = [n for n in nodes if n.node_id in protected or n.node_id in linked or n.kind == "place"]
-            result.nodes = [self.node_out(n, common, summary=brevity == 0 or n.node_id in protected) for n in kept]
-            result.edges = [self.edge_out(e, common, source=brevity < 2) for e in edges]
-            result.review_status = common
-            size = len(json.dumps(result.model_dump(mode="json", exclude_none=True), ensure_ascii=False,
-                                  separators=(",", ":")).encode("utf-8"))
-            if size <= BYTE_BUDGET or not edges:
-                return result
-            if brevity < 2:
-                brevity += 1
-                continue
-            edges = edges[:-1]
+        result.nodes = [self.node_out(n, common, summary=n.node_id in detailed) for n in nodes]
+        result.edges = [self.edge_out(e, common) for e in edges]
+        result.review_status = common
+        return result
 
-    def url(self, evidence_ids: list[str]) -> str | None:
-        return self.urls.get(evidence_ids[0]) if evidence_ids else None
-
-    def node_out(self, node: GraphNode, common: str | None, summary: bool = True) -> GraphNodeOut:
+    def node_out(self, node: GraphNode, common: str | None, summary: bool = False) -> GraphNodeOut:
         status = node.provenance.review_status
-        # The edges carry the citations; a node's own source would repeat one of them for most nodes.
         return GraphNodeOut(node_id=node.node_id, kind=node.kind, label=node.label, names=node.names,
                             summary=node.summary if summary else None,
                             level=node.level, place=node.place, review_status=None if status == common else status)
 
-    def edge_out(self, edge: GraphEdge, common: str | None, source: bool = True) -> GraphEdgeOut:
+    @staticmethod
+    def edge_out(edge: GraphEdge, common: str | None) -> GraphEdgeOut:
         status = edge.provenance.review_status
         return GraphEdgeOut(from_id=edge.from_id, relation=edge.relation, to_id=edge.to_id, statement=edge.statement,
-                            place=edge.place, source_url=self.url(edge.evidence_ids) if source else None,
-                            review_status=None if status == common else status)
+                            place=edge.place, review_status=None if status == common else status)
 
 
 def check_graph(index: GraphIndex, place_index: PlaceIndex, checks: GraphChecks, today: date | None = None) -> dict:

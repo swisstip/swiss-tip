@@ -1,6 +1,6 @@
 # Swiss TIP - next steps and improvements
 
-**Last update:** 24 September 2026
+**Last update:** 25 September 2026
 
 What we would build next, and why. Each item names what the product does
 today, what should change and what it would bring. The items are planned
@@ -121,14 +121,16 @@ procedures, from the text of the law itself.
 and keywords, without the place names, and with the local embedding model as
 well when the server runs hybrid search. Its own regression replays every
 question of the acceptance suite and regression pack against the graph: with
-words only, 448 of 546 questions reach a domain of their topic, but only 8 of
-28 off-topic questions are kept away from a covered topic. The embedding
-thresholds (0.45 and 0.6) are first settings, not yet measured.
+words only, 444 of 546 questions reach a domain of their topic (368 as the
+first, the one the answer walks), and with the embedding model 507 (447 as the
+first, measured before the label weight of 4.5), but only 8 and 10 of 28 off-topic questions are kept away from a
+covered topic. The embedding thresholds (0.45 and 0.6) are first settings: 28
+off-topic questions from one pack are too few to set them.
 
 **Next.**
-- Calibrate the embedding thresholds on the graph regression's recorded
-  cosines, and keep the setting that declines best without losing subject
-  questions.
+- Write 50 to 100 off-topic and near-miss questions in several languages,
+  replay them on both packs, set the thresholds on one part and check them on
+  the rest.
 - Grade whole conversations: the team's DeepEval evaluator (OpenCode and the
   pi agent, several models) runs each question with and without the graph
   tool (`--no-knowledge-graph`), so the effect of the graph on the final
