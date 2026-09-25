@@ -33,3 +33,28 @@
 > across all Gemeinde & Cantons.
 > 
 > Because some wrong answers are simply too expensive.
+
+---
+
+**Slides 4 to 7, at most 40 seconds**
+
+**[Slide 4 - Evals]**
+
+> How do we know it's right? Every release is tested against 725
+> questions, and six gates stop it from shipping if a core case fails.
+
+**[Slide 5 - What comes next]**
+
+> Already built, shipping next: a knowledge graph that tells the assistant
+> which level of the state decides. Then source discovery by code, and
+> Apertus with Swisscom myAI.
+
+**[Slide 6 - Monetization]**
+
+> We earn in three ways: a hosted subscription, a self-hosting licence, and
+> packs funded by their publishers. A canton pays for its own pack, and
+> every assistant serves it free.
+
+**[Slide 7 - Closing]**
+
+> Swiss TIP. Grounded. In Switzerland. Thank you.
