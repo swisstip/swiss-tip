@@ -135,6 +135,32 @@ what to do with it:
 What is weak or missing is listed in the packs repository's
 [LIMITATIONS.md](https://github.com/swisstip/swiss-tip-mvp/blob/main/LIMITATIONS.md).
 
+**Parallel use and start-up time.** Over HTTP the endpoint is stateless: it
+keeps no session, so each call stands alone. The release is read-only and
+loaded once, and every tool call runs in its own worker thread. Several
+conversations can therefore use one server at the same time without sharing
+anything. Measured on 2026-09-25 with the `search` and `resolve` calls from
+[example calls](docs/example-call.md), all sent at the same moment:
+
+| Where | Calls sent together | All answered | Median | Slowest |
+| --- | --- | --- | --- | --- |
+| Hosted (AWS t3.small, 2 vCPU), `search` | 1 / 10 / 20 / 40 | yes | 0.2 / 1.7 / 3.1 / 6.0 s | 0.2 / 2.8 / 5.2 / 11.1 s |
+| Hosted, `resolve` | 1 / 20 / 40 | yes | 0.5 / 0.3 / 0.4 s | 0.5 / 0.5 / 0.7 s |
+| Local `docker run` (20-thread laptop), `search` | 10 / 40 | yes | 0.7 / 1.8 s | 1.1 / 3.1 s |
+
+`resolve` barely slows down. `search` embeds each query on the CPU, so
+several searches at once wait in line; the hosted instance handles about
+four a second. A conversation makes one call at a time with the model's
+reasoning in between, so a few dozen conversations at once stay within these
+numbers. For more, give the server more cores or run more copies: they share
+nothing, so any load balancer can spread the calls.
+
+Start-up, with the image already pulled: `/health` answers 12 to 13 seconds
+after `docker run` and the first search a moment later (two runs, the local
+laptop). Almost all of that time goes into loading the embedding model. The
+first pull adds the download, about three minutes (see
+[quick start](#quick-start)).
+
 ## How it works
 
 ```text
@@ -288,6 +314,23 @@ the model's own digest; the server refuses an index built for another release
 or another model. The script that builds it is in this repository and the
 command is in
 [developer setup](docs/developer-setup.md#rebuild-the-semantic-index).
+
+**How big the `mvp-zurich` data is.** Release `mvp-zurich-2026-09-25-v3`,
+the one the hosted endpoint serves, holds 21 topics, 238 concepts, 1,345
+facts and 1,615 evidence excerpts from 375 source documents. On disk, under
+[`releases/mvp-zurich/`](https://github.com/swisstip/swiss-tip-mvp/tree/main/releases/mvp-zurich)
+and [`datasets/mvp-zurich/`](https://github.com/swisstip/swiss-tip-mvp/tree/main/datasets/mvp-zurich)
+of the packs repository:
+
+| File | What it is | Size (gzipped) |
+| --- | --- | --- |
+| `release.json` | Facts, excerpts, citations, hashes, place register | 5.8 MB (0.9 MB) |
+| `semantic-index.json` | 238 concept vectors, 1,024 dimensions, `qwen3-embedding:0.6b` | 8.2 MB (2.7 MB) |
+| `readiness.json` | The attestation that binds the two files above | 3 KB |
+| `datasets/mvp-zurich/` | 15 waste-collection calendars for `lookup` | 0.8 MB |
+
+So the data itself is about 15 MB. Of the 850 MB image pull, the rest is the
+runtime: Python, the server and the embedding model with its runner.
 
 ## Repository
 
