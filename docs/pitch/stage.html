@@ -50,7 +50,8 @@
   aubergine, red, magenta and lila of its stylesheet, its hero gradient and
   its buttons square at the bottom-left corner. Manrope is the one thing
   fetched; offline the slides fall back to the system font. The replay pane
-  keeps the look of the interface it was recorded in.
+  keeps the look of the interface it was recorded in. The team's name, Tip
+  Top, closes the brand line on every slide.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -99,6 +100,11 @@
            color: transparent; }
   #brand .words { font-size: clamp(11px, .8vw, 14px); font-weight: 700; color: var(--dim);
                   text-transform: uppercase; letter-spacing: 1.26px; }
+  /* The team's name, at the far end of the brand line so it is on every slide. */
+  #brand .team { margin-left: auto; font-size: clamp(20px, 1.7vw, 32px); font-weight: 800;
+                 letter-spacing: -.02em; white-space: nowrap; }
+  #brand .team .label { font-size: .5em; font-weight: 700; color: var(--dim);
+                        text-transform: uppercase; letter-spacing: 1.26px; }
   .grad { background: var(--hero); -webkit-background-clip: text; background-clip: text;
           color: transparent; }
   #slides { position: relative; min-height: 0; min-width: 0; }
@@ -339,6 +345,7 @@
   <header id="brand">
     <span class="claim">make <span class="brace">{ai}</span> right</span>
     <span class="words">Hands-on, trustworthy, ethical and open</span>
+    <span class="team"><span class="label">Team</span> <span class="grad">Tip Top</span></span>
   </header>
   <div id="body">
   <div id="slides">
