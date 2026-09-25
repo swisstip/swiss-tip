@@ -30,7 +30,7 @@ The pitch is at **[swisstip.github.io/swiss-tip/pitch/stage.html](https://swisst
 | 6 | Prebuilt data | Shipped inside the image: release `mvp-zurich-2026-09-25-v3` with its semantic index and readiness attestation, and 15 waste-collection calendars, about 15 MB in all, from `releases/mvp-zurich/` and `datasets/mvp-zurich/` of [swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) ([sizes](#credentials-and-the-prebuilt-index)). Refresh: `docker pull` again, since the tag `mvp-zurich` follows the newest attested release, in the time of the download. The semantic index is rebuilt with the command in [developer setup](docs/developer-setup.md#rebuild-the-semantic-index), about 15 minutes on a CPU. The facts themselves are human-reviewed, so a release is not rebuilt automatically |
 | 7 | Credentials | None. The server needs no API key, token or account and calls no external service while answering ([credentials](#credentials-and-the-prebuilt-index)). Optional variables, all with working defaults: `PORT` (the port inside the container, default `8000`) and `SWISSTIP_CONNECTORS` (set empty to leave out the calendar and the `lookup` tool) |
 | 8 | Hosted endpoint | `https://51-96-83-1.sslip.io/mcp`, no authentication header; `https://51-96-83-1.sslip.io/health`. Up until the evaluation is complete |
-| 9 | Declared scope | Topics: residence permits and registration, cantonal migration offices, newcomers, entry and visas, AHV and pensions, social insurance, work and unemployment, tax at source, household taxes, health insurance, naturalisation, political rights, family benefits, housing, driving licences, vehicles and parking, customs, integration, waste, school holidays ([coverage at a glance](#coverage-at-a-glance)). Geography: federal rules for all of Switzerland; arrival registration in all 26 cantons (AG, AI, AR, BE, BL, BS, FR, GE, GL, GR, JU, LU, NE, NW, OW, SG, SH, SO, SZ, TG, TI, UR, VD, VS, ZG, ZH); the full procedures of ZH and the City of Zurich; waste collection in Basel, St. Gallen and Lugano. Languages: questions in German, French, Italian, Romansh or English; answers in the language of the question |
+| 9 | Declared scope | Topics: main topic **Residence permits and migration**; every topic of the challenge's topic table, covered, partly or not, in the [declared scope](#declared-scope) table below. Geography: all of Switzerland for federal rules; registration on arrival in all 26 cantons; ZH and the municipality of Zurich for the cantonal and municipal procedures of the topics below; waste in the municipalities of Basel, St. Gallen and Lugano; school holidays in 23 cantons (all except BL, NW and SH), with dates in 19 of them. Languages: questions in German, French, Italian, Romansh or English; answers in the language of the question |
 | 10 | One example call | Tool `search`, arguments `{"query": "register arrival City of Zurich", "limit": 3}`: returns the matching concepts, best first - `city-zurich-arrival` with the context it needs (`arrival_origin`) - with `match_strength` `strong` and `retrieval_mode` `hybrid`. The `resolve` that follows, and `curl` commands for both, are in [example calls](docs/example-call.md) |
 | 11 | Known limits | [Not covered](#coverage-at-a-glance): fees, appointments and processing times, amounts and calculators, individual eligibility, asylum, social assistance, other cantons beyond arrival registration, other municipalities beyond the waste of Basel, St. Gallen and Lugano. Weak spots: [LIMITATIONS.md](https://github.com/swisstip/swiss-tip-mvp/blob/main/LIMITATIONS.md) |
 | 12 | robots.txt and terms of use | `--obey-robots` of the downloader, on by default: it follows `robots.txt` and its crawl delays and fails closed when a policy cannot be read; `--no-obey-robots` overrides it and is recorded in the run. Build time only - the server never fetches a page ([source etiquette](#source-etiquette)) |
@@ -47,6 +47,43 @@ Swiss TIP is two repositories, both evaluated on their branch `main`:
 
 The commit that adds this table to `swiss-tip` comes after `dee8e12` and
 changes this README only.
+
+#### Declared scope
+
+The main topic is **residence permits and migration**: the federal rules for
+all of Switzerland, and the procedures of the Canton of Zurich (ZH) and the
+municipality of Zurich. Around it, the current release covers what a
+person living in or moving to Switzerland meets in everyday administrative
+life. Each topic of the
+[challenge's topic table](https://github.com/Swiss-ai-Weeks/swisscom-2026/tree/main/swiss-grounding-mcp#2-which-sources-should-we-use-and-will-swisscom-provide-a-list)
+is declared below as covered, partly covered or not covered:
+
+| # | Topic area | Declared | What is covered | Geography |
+| --- | --- | --- | --- | --- |
+| 1 | Health insurance premiums and basic insurance | Partly | The insurance duty on arrival, exemptions, what basic insurance pays, cost-sharing (franchise and retention), insurance models, changing insurer, unpaid premiums, cross-border commuters and treatment abroad, premium reduction and accident insurance. No premium amounts and no premium-reduction amounts | All of Switzerland; ZH |
+| 2 | Taxes and fees | Partly | Tax at source: who is taxed, the tariff codes, when the liability ends and the subsequent ordinary assessment. The tax return and tax office of the municipality of Zurich, and the radio and television fee. No tax amounts, tariff tables or deductions, and no office fees | All of Switzerland; ZH; municipality of Zurich |
+| 3 | Law and regulations | Partly | The federal law behind the other topics, cited by article: the Foreign Nationals and Integration Act, the free-movement agreement, the Code of Obligations on tenancy, the Federal Constitution on voting rights. No general legal questions | All of Switzerland |
+| 4 | Waste collection and recycling | Yes | Municipality of Zurich: bags, recycling, hazardous waste and the next collection dates by postal code. Basel and St. Gallen: collection zones and the next collection dates. Lugano: bags and ecocentri, without dates | Municipalities of Zurich, Basel, St. Gallen and Lugano |
+| 5 | Moving, residence registration and civil status | Yes | Registering on arrival in every canton, with its migration office, and in most cantons moving in from another canton. In the municipality of Zurich: registering an arrival, the newcomer checklist, deregistering on leaving, and marriage. No other civil-status procedures | All 26 cantons; municipality of Zurich |
+| 6 | Residence permits and migration | **Yes, main topic** | Permits L, B, C, Ci and G for EU/EFTA and third-country nationals, family reunification, renewal, lost permits, change of canton, study and work admission; entry and visas (visas C and D, the 90-in-180-days rule, ETIAS, the Entry/Exit System); naturalisation; integration offers and German courses in ZH. The visa fee and the decision time for a visa are covered; no permit fees or office processing times, no asylum procedure and no visa rules per nationality | All of Switzerland; ZH; municipality of Zurich |
+| 7 | Social insurance and pensions | Yes | AHV (who is insured, contributions, reference age, early and late retirement, survivors' pensions), the three pillars, pillar 3a, refunds and pension-fund payments on leaving, family allowances with their federal minimum, and parental leave. No individual pension or benefit amounts, and no invalidity insurance or supplementary benefits | All of Switzerland; ZH |
+| 8 | Work and unemployment | Yes | Signing on with the RAV and an unemployment fund, a jobseeker's duties, interim earnings, insolvency compensation, short-time work, notice periods and protection against dismissal. No daily-allowance amounts and no job vacancies | All of Switzerland; ZH |
+| 9 | Schools and education | Partly | Who sets the school holidays, and the dates of 2026/27 and 2027/28 where the canton publishes them - for the whole canton, or for its main town, a part of it or its upper schools where there is no single plan for the canton. For BE, BS, UR and VS who sets them, without dates. In the municipality of Zurich, the school holidays and kindergarten entry. No other schooling | Dates: AG, AI, AR, FR, GE, GL, GR, JU, LU, NE, OW, SG, SO, SZ, TG, TI, VD, ZG, ZH and the municipality of Zurich; without dates: BE, BS, UR, VS. Not covered: BL, NW, SH |
+| 10 | Public transport and mobility | No | - | - |
+| 11 | Road traffic, vehicles and driving licences | Partly | Driving on and exchanging a foreign licence, vehicles after a move and vehicle import, blue-zone parking permits | All of Switzerland; ZH; municipality of Zurich |
+| 12 | Housing and renting | Yes | Lease, deposit, notice, rent increases, defects, the reference interest rate and the Zurich initial-rent form. No finding a home | All of Switzerland; ZH |
+| 13 | Voting, elections and political rights | Partly | Who may vote and elect, foreign nationals' voting rights, and how to vote in ZH. No upcoming votes or results | All of Switzerland; ZH |
+| 14 | Companies, commercial register and VAT | No | - | - |
+| 15 | Customs and ordering from abroad | Yes | The value limit and duty-free quantities when travelling, declaring goods, import VAT, ordering from abroad, returns and repairs, pets, prohibited and restricted goods, moving household goods and a vehicle, and leaving with goods. No tariff numbers or duty rates per product | All of Switzerland |
+| 16 | Statistics, open data, geodata and weather | No | - | - |
+
+Outside the table, the addresses and hours of the Canton of Zurich and City
+of Zurich offices, dogs and medical emergencies are covered as well. Outside
+ZH and the municipality of Zurich, the federal rules still apply and are served with a
+caveat that the local procedure is not covered. Questions may come in German,
+French, Italian, Romansh or English, and the answer is written in the
+language of the question. The full list of what is not covered is under
+[coverage at a glance](#coverage-at-a-glance).
 
 ## Quick start
 
@@ -230,8 +267,9 @@ below describes the current one.
 - **Jurisdictions:** federal rules and arrival registration for **all 26
   cantons**, the full procedures of the **Canton of Zurich** and the **City of
   Zurich**, waste collection in the **Cities of Basel and St. Gallen** and
-  waste hand-over in the **City of Lugano**; federal rules still apply
-  elsewhere and are served with a caveat.
+  waste hand-over in the **City of Lugano**, and the school holidays of
+  23 cantons; federal rules still apply elsewhere and are served with a
+  caveat.
 - **Topics:** residence permits and registration, cantonal migration offices,
   entry and visas, AHV and the pillar system, tax return and tax at source,
   health and accident insurance, unemployment and the RAV, family allowances,
