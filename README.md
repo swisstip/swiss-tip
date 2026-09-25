@@ -79,9 +79,7 @@ is declared below as covered, partly covered or not covered:
 Outside the table, the addresses and hours of the Canton of Zurich and City
 of Zurich offices, dogs and medical emergencies are covered as well. Outside
 ZH and the municipality of Zurich, the federal rules still apply and are served with a
-caveat that the local procedure is not covered. Questions may come in German,
-French, Italian, Romansh or English, and the answer is written in the
-language of the question. The full list of what is not covered is under
+caveat that the local procedure is not covered. The assistant talks to the server in German or English; statements come back in English, and excerpts in the language of the cited page (German, French, Italian or English). The full list of what is not covered is under
 [coverage at a glance](#coverage-at-a-glance).
 
 ## Quick start
