@@ -18,6 +18,36 @@ Built for the **[Swiss {ai} Weeks](https://zh.ai-weeks.ch/)** hackathon in Zuric
 
 The pitch is at **[swisstip.github.io/swiss-tip/pitch/stage.html](https://swisstip.github.io/swiss-tip/pitch/stage.html)**.
 
+### Evaluation quick start
+
+| # | Criterion | Swiss TIP |
+| --- | --- | --- |
+| 1 | Commit to evaluate | Branch `main` of both repositories, the code and the knowledge base; the current commits are under [commit to evaluate](#commit-to-evaluate) |
+| 2 | Transport | Streamable HTTP, port `8000`, path `/mcp`, stateless, no authentication; `/health` beside it. stdio as well, with `--transport stdio` |
+| 3 | Runtime | A prebuilt image, `linux/amd64` and `linux/arm64` under one tag, so it runs natively on Apple silicon ([platforms](docker/README.md#platforms)). Inside: Python 3.14 (`python:3.14-slim`), `swisstip-mcp` 0.3.4 from PyPI, a CPU-only Ollama 0.34.0 with `qwen3-embedding:0.6b`. Nothing but Docker is needed on the host. From source instead: Python 3.14 and uv, see [developer setup](docs/developer-setup.md) |
+| 4 | Setup | `docker pull ghcr.io/swisstip/swiss-tip:mvp-zurich` - no prompts, no clone. About 850 MB to download, roughly three minutes; 1.6 GB on disk; 1.2 GiB of memory while running ([measured](docker/README.md#measured)) |
+| 5 | Start command | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` |
+| 6 | Prebuilt data | Shipped inside the image: release `mvp-zurich-2026-09-25-v3` with its semantic index and readiness attestation, and 15 waste-collection calendars, about 15 MB in all, from `releases/mvp-zurich/` and `datasets/mvp-zurich/` of [swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) ([sizes](#credentials-and-the-prebuilt-index)). Refresh: `docker pull` again, since the tag `mvp-zurich` follows the newest attested release, in the time of the download. The semantic index is rebuilt with the command in [developer setup](docs/developer-setup.md#rebuild-the-semantic-index), about 15 minutes on a CPU. The facts themselves are human-reviewed, so a release is not rebuilt automatically |
+| 7 | Credentials | None. The server needs no API key, token or account and calls no external service while answering ([credentials](#credentials-and-the-prebuilt-index)). Optional variables, all with working defaults: `PORT` (the port inside the container, default `8000`) and `SWISSTIP_CONNECTORS` (set empty to leave out the calendar and the `lookup` tool) |
+| 8 | Hosted endpoint | `https://51-96-83-1.sslip.io/mcp`, no authentication header; `https://51-96-83-1.sslip.io/health`. Up until the evaluation is complete |
+| 9 | Declared scope | Topics: residence permits and registration, cantonal migration offices, newcomers, entry and visas, AHV and pensions, social insurance, work and unemployment, tax at source, household taxes, health insurance, naturalisation, political rights, family benefits, housing, driving licences, vehicles and parking, customs, integration, waste, school holidays ([coverage at a glance](#coverage-at-a-glance)). Geography: federal rules for all of Switzerland; arrival registration in all 26 cantons (AG, AI, AR, BE, BL, BS, FR, GE, GL, GR, JU, LU, NE, NW, OW, SG, SH, SO, SZ, TG, TI, UR, VD, VS, ZG, ZH); the full procedures of ZH and the City of Zurich; waste collection in Basel, St. Gallen and Lugano. Languages: questions in German, French, Italian, Romansh or English; answers in the language of the question |
+| 10 | One example call | Tool `search`, arguments `{"query": "register arrival City of Zurich", "limit": 3}`: returns the matching concepts, best first - `city-zurich-arrival` with the context it needs (`arrival_origin`) - with `match_strength` `strong` and `retrieval_mode` `hybrid`. The `resolve` that follows, and `curl` commands for both, are in [example calls](docs/example-call.md) |
+| 11 | Known limits | [Not covered](#coverage-at-a-glance): fees, appointments and processing times, amounts and calculators, individual eligibility, asylum, social assistance, other cantons beyond arrival registration, other municipalities beyond the waste of Basel, St. Gallen and Lugano. Weak spots: [LIMITATIONS.md](https://github.com/swisstip/swiss-tip-mvp/blob/main/LIMITATIONS.md) |
+| 12 | robots.txt and terms of use | `--obey-robots` of the downloader, on by default: it follows `robots.txt` and its crawl delays and fails closed when a policy cannot be read; `--no-obey-robots` overrides it and is recorded in the run. Build time only - the server never fetches a page ([source etiquette](#source-etiquette)) |
+| 13 | Parallel use | Yes: stateless, read-only, one worker thread per call; 40 simultaneous calls answered on the hosted instance. `/health` answers 12 to 13 seconds after `docker run`, once the model is loaded ([measured](#evaluating-swiss-tip)) |
+
+#### Commit to evaluate
+
+Swiss TIP is two repositories, both evaluated on their branch `main`:
+
+| Repository | Purpose | Branch | Commit |
+| --- | --- | --- | --- |
+| [swisstip/swiss-tip](https://github.com/swisstip/swiss-tip) | The MCP server itself: code only, no knowledge base | `main` | [`dee8e12`](https://github.com/swisstip/swiss-tip/commit/dee8e1212c56d77e971cc1d0dcef9f6f7379c3b8) |
+| [swisstip/swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) | The MVP knowledge base only: `mvp-zurich`, release `mvp-zurich-2026-09-25-v3` | `main` | [`f17cd5b`](https://github.com/swisstip/swiss-tip-mvp/commit/f17cd5b6754ce9af43f2da7336daefa513e042a5) |
+
+The commit that adds this table to `swiss-tip` comes after `dee8e12` and
+changes this README only.
+
 ## Quick start
 
 Three ways in, from the simplest to the most involved. Every one of them
@@ -52,7 +82,7 @@ The image carries everything: the MCP server, the `mvp-zurich` knowledge base
 with its readiness attestation and semantic index, a CPU-only Ollama with
 the `qwen3-embedding:0.6b` model, so search is hybrid (lexical plus
 embeddings) from the first request, and the calendar connector with the
-pack's 15 waste-collection calendars behind the fifth tool, `lookup`. No
+pack's 15 waste-collection calendars behind the fourth tool, `lookup`. No
 clone, no Python, no API key and no model download.
 
 ```shell
@@ -175,13 +205,13 @@ from curated facts, each citing an exact excerpt of an official page by URL,
 access date and hash, and it is served only after its acceptance and
 readiness checks pass. Every fact names its review status, and a caller can
 ask for reviewed facts only. The server offers three tools: `search`,
-`resolve` and `get_evidence`; a fourth, `get_coverage`, which lists the topics
-and concepts, is hidden unless the server is started with `--with-coverage`,
+`resolve` and `get_evidence`; `get_coverage`, which lists the topics and
+concepts, is hidden unless the server is started with `--with-coverage`,
 because callers that saw it opened with it instead of searching. `resolve` returns a typed status
 that says whether the question is covered, whether a detail such as the
 canton is missing, or whether the facts are stale. Where a
 [dataset connector](docs/architecture/dataset-connectors.md) is registered,
-as on the hosted instance, a fifth tool, `lookup`, returns the rows of an
+as on the hosted instance, a fourth tool, `lookup`, returns the rows of an
 open dataset a municipality publishes - the next collection dates for a
 postal code or a collection zone - with the dataset's publisher, licence and
 source hash. The full design is in the
@@ -205,8 +235,9 @@ below describes the current one.
 - **Topics:** residence permits and registration, cantonal migration offices,
   entry and visas, AHV and the pillar system, tax return and tax at source,
   health and accident insurance, unemployment and the RAV, family allowances,
-  naturalisation, voting rights, renting, foreign driving licences, customs,
-  waste and recycling, integration offers, and City of Zurich services.
+  naturalisation, voting rights, renting, foreign driving licences,
+  vehicles and parking, customs, waste and recycling, integration offers,
+  school holidays, and City of Zurich services.
 - **Collection dates:** the next collection days from the cities' own open
   data - the City of Zurich by postal code (organic waste, paper, cardboard,
   household waste, the hazardous-waste van), Basel and St. Gallen by
@@ -241,11 +272,11 @@ below describes the current one.
   Basel and St. Gallen for the calendars); every fact cites an exact excerpt
   with its URL, access date and hash.
 
-**Current release - `mvp-zurich-2026-09-24-v5`:** 20 topics, 214 concepts and
-**1,279 facts, all human-reviewed**, cited to 1,538 excerpts across 338 official
+**Current release - `mvp-zurich-2026-09-25-v3`:** 21 topics, 238 concepts and
+**1,345 facts, all human-reviewed**, cited to 1,615 excerpts across 375 official
 documents, and 15 collection calendars. Coverage grows
 with each release, so these figures are a snapshot: the running server reports
-the live numbers through `get_coverage` and `/health`, and
+the live numbers through `/health`, and
 [COVERAGE.md](https://github.com/swisstip/swiss-tip-mvp/blob/main/COVERAGE.md)
 describes the release in full.
 
@@ -267,19 +298,19 @@ publishers and are reproduced only as cited evidence, see [NOTICE](NOTICE).
 ## Freshness, and what happens when it lapses
 
 Answers come from a **dated snapshot**, never from a live fetch at request
-time. For the current release the snapshot date is **24 September 2026**: every
+time. For the current release the snapshot date is **25 September 2026**: every
 fact says what its official page published on or before that date, and every
 citation carries its own `accessed_on` date, so a caller can always tell how
 old the evidence is.
 
 The release declares a freshness window of 60 days, which runs out on
-**23 November 2026**. The server does not quietly keep serving after that. Once
+**24 November 2026**. The server does not quietly keep serving after that. Once
 the window has passed, `resolve` returns the typed status `STALE` instead of
 `SUPPORTED`, and says so in its guidance:
 
-> The source snapshot of 2026-09-24 is older than 60 days on 2026-11-23. These
-> facts say what the official pages published on 2026-09-24, not what holds on
-> 2026-11-23: present them as published on 2026-09-24, do not confirm that
+> The source snapshot of 2026-09-25 is older than 60 days on 2026-11-24. These
+> facts say what the official pages published on 2026-09-25, not what holds on
+> 2026-11-24: present them as published on 2026-09-25, do not confirm that
 > opening hours, availability, officeholders, rates, contacts or rules still
 > apply, and tell the user to check the cited page.
 
@@ -287,8 +318,8 @@ So an assistant is told to present the facts as historical and to send the user
 to the source, rather than asserting that they are current. A caller cannot
 dodge this by asking for an earlier date: the guidance names that too. The
 window is a property of the release, so publishing a fresher release resets it,
-and `/health` and `get_coverage` both report the snapshot date and the date the
-release goes stale.
+and `/health` reports the snapshot date and the date the release goes
+stale.
 
 This matters most for the values that move: fees, rates, opening hours,
 officeholders and deadlines. Two things keep those honest. Amounts and
