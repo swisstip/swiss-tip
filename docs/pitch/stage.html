@@ -30,6 +30,16 @@
   three during recording put that arithmetic a day wrong (see the record), so
   re-read the dates of any rerun before replacing this one.
 
+  The minute is three slides, problem, solution and benefit, each naming its
+  part. The problem sets two questions side by side. The registration one is
+  the question the replay answers, and the wrong answer it quotes was
+  recorded: the screenshot is a backup slide. The Rottweiler one is only
+  told: its "AI" line is the usual import checklist, not a recording, and no
+  exchange about it is replayed. The ban it names is served by the release
+  (concept zh-banned-dog-breeds: breed-type list II, Rottweiler since
+  1 January 2025). The backups follow the close: the contract card, the
+  recorded wrong answer, the architecture and the agent map.
+
   Scale the panel with --ui on #replay; everything in it is sized from that.
 
   The screen is the jury's by default. "p", or ?rehearse in the address,
@@ -111,6 +121,11 @@
   .wide { max-width: 34ch; }
   .kill { color: var(--accent); }
   .good { color: var(--ok); }
+  /* The part of the minute a slide belongs to - problem, solution, benefit -
+     in the colour of its part: .kill, .good or .grad. */
+  .kicker { font-size: clamp(11px, .8vw, 14px); font-weight: 800; text-transform: uppercase;
+            letter-spacing: 1.26px; width: fit-content; }
+  .slide > .kicker { margin-bottom: calc(clamp(14px, 2.2vh, 30px) / -2); }
   #slides ul { margin: 0; padding-left: 1.1em; font-size: clamp(16px, 1.25vw, 23px);
                line-height: 1.7; color: var(--dim); }
   .split { display: grid; grid-template-columns: auto 1fr; gap: clamp(20px, 2.5vw, 48px);
@@ -147,9 +162,50 @@
                    object-fit: cover; object-position: top;
                    box-shadow: 0 10px 32px rgba(34, 0, 48, .14); }
   body.backup pre.run { width: fit-content; font-size: clamp(12px, .95vw, 18px); }
-  .cite { font-family: var(--mono); font-size: clamp(13px, 1.15vw, 22px);
-          color: var(--dim); border-left: 3px solid; border-image: var(--hero) 1; padding-left: 14px;
-          line-height: 1.6; }
+
+  /* The problem: two questions, the answer a normal assistant gives, and
+     what it leaves out, in the red of .fine. */
+  .cases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+           gap: clamp(12px, 1.4vw, 24px); }
+  .case { display: flex; flex-direction: column; gap: .8em; background: var(--panel);
+          border: 1px solid var(--line); border-radius: var(--corner);
+          padding: clamp(14px, 1.5vw, 28px); }
+  .case .q { font-family: var(--mono); font-size: clamp(12px, .9vw, 17px); line-height: 1.5;
+             color: var(--dim); }
+  .case .a { font-size: clamp(20px, 1.9vw, 32px); line-height: 1.25; font-weight: 700;
+             letter-spacing: -.015em; color: var(--ink); }
+  .case .who { color: var(--dim); }
+  .miss { margin-top: auto; color: var(--accent); font-weight: 700;
+          font-size: clamp(17px, 1.35vw, 25px); line-height: 1.35; padding: .4em .7em;
+          border-left: 4px solid var(--accent); background: rgba(228, 4, 63, .07); }
+  .miss span { display: block; font-size: clamp(10px, .72vw, 13px); letter-spacing: 1.26px;
+               text-transform: uppercase; margin-bottom: .15em; }
+
+  /* The solution: four properties, drawn like the boxes of the architecture
+     backup, the review in the violet of its "A person reviews". */
+  .props { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+           gap: clamp(10px, 1.1vw, 20px); max-width: 62rem; }
+  .prop { background: var(--panel); border: 1px solid var(--line); border-radius: var(--corner);
+          padding: clamp(12px, 1.3vw, 24px); font-size: clamp(14px, 1.05vw, 19px);
+          line-height: 1.4; color: var(--dim); }
+  .prop b { display: block; font-size: clamp(18px, 1.55vw, 28px); line-height: 1.2;
+            font-weight: 800; letter-spacing: -.015em; color: var(--ink); margin-bottom: .2em; }
+  .prop.ok { border-color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+
+  /* The benefit: the knowledge base served today and two it could be. */
+  .kbs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+         gap: clamp(10px, 1.1vw, 20px); max-width: 62rem; }
+  .kb { display: flex; flex-direction: column; gap: .35em; background: var(--panel);
+        border: 1px solid var(--line); border-radius: var(--corner);
+        padding: clamp(12px, 1.3vw, 24px); font-size: clamp(14px, 1.05vw, 19px);
+        line-height: 1.4; color: var(--dim); }
+  .kb .tag { font-size: clamp(10px, .72vw, 13px); font-weight: 700; text-transform: uppercase;
+             letter-spacing: 1.26px; }
+  .kb b { font-size: clamp(18px, 1.55vw, 28px); line-height: 1.2; font-weight: 800;
+          letter-spacing: -.015em; color: var(--ink); }
+  .kb.on { background: var(--ink); border-color: var(--ink); color: #e6d9ee; }
+  .kb.on .tag { color: var(--lila); }
+  .kb.on b { color: #fff; }
 
   pre.card { font-family: var(--mono); font-size: clamp(13px, 1.15vw, 22px);
              line-height: 1.75; color: var(--ink); background: var(--panel);
@@ -281,40 +337,51 @@
 
     <section class="slide on">
       <div class="mark">0:00 &middot; send the question, then turn to the room</div>
-      <h1>You landed on Wednesday.<br>You start work on Monday.</h1>
-      <p class="wide">By when do you have to register?</p>
-    </section>
-
-    <section class="slide">
-      <div class="mark">0:05 &middot; while it runs</div>
-      <div class="split wrong">
-        <img class="bad" src="../images/bad-example.jpg"
-             alt="Another chat assistant: register within 14 days of arrival, no later than September 30, 2026">
-        <div>
-          <h2>A normal assistant gave<br>
-            <span class="kill">a true rule, but the wrong date.</span></h2>
-          <ul>
-            <li>it said: fourteen days from arrival &mdash; <b>September 30</b></li>
-            <li>it never said: <b>register before your first working day</b></li>
-          </ul>
-          <p class="wide">That is the limit that binds.<br>You start work unregistered.</p>
-          <p class="wide fine">And you can be fined for it.</p>
+      <div class="kicker kill">Problem</div>
+      <h1>Confident, and often <span class="kill">wrong.</span></h1>
+      <div class="cases">
+        <div class="case">
+          <div class="q"><b>You:</b> When do I have to register after moving to Zurich?</div>
+          <div class="a"><span class="who">AI:</span> &ldquo;Within 14 days.&rdquo;</div>
+          <div class="miss"><span>Missing</span>Before your first day of work.</div>
+        </div>
+        <div class="case">
+          <div class="q"><b>You:</b> How do I import my Rottweiler to Zurich?</div>
+          <div class="a"><span class="who">AI:</span> &ldquo;Microchip, rabies vaccine, pet passport.&rdquo;</div>
+          <div class="miss"><span>Missing</span>Rottweilers are banned in Zurich.</div>
         </div>
       </div>
     </section>
 
     <section class="slide">
-      <div class="mark">0:22 &middot; the answer stands</div>
-      <h2 class="good">Before Monday.<br>Not in two weeks.</h2>
-      <div class="cite">14 days from arrival &nbsp;&rarr;&nbsp; the later limit<br>
-before your first working day &nbsp;&rarr;&nbsp; the one that binds<br>
-both quoted from the page they came from<br>
-SEM &middot; Canton of Zurich &middot; as_of the day it ran</div>
-      <p class="wide">The rules come from the server.<br>The date is the model's arithmetic.</p>
+      <div class="mark">0:25 &middot; the answer stands; point at it</div>
+      <div class="kicker good">Solution</div>
+      <h1>Swiss TIP.<br>A trusted information <span class="good">platform.</span></h1>
+      <div class="props">
+        <div class="prop"><b>Any assistant</b>plugs in through MCP</div>
+        <div class="prop ok"><b>Reviewed facts</b>the answer comes from them, not from memory</div>
+        <div class="prop"><b>Official source</b>excerpt, link and date on every fact</div>
+        <div class="prop"><b>Honest gaps</b>not covered? It says so instead of guessing</div>
+      </div>
     </section>
 
     <section class="slide">
-      <div class="mark">0:42 &middot; what it is</div>
+      <div class="mark">0:44 &middot; land on the last line</div>
+      <div class="kicker grad">Benefit</div>
+      <h1>Any knowledge <span class="grad">base.</span></h1>
+      <div class="kbs">
+        <div class="kb on"><span class="tag">Served today</span><b>Swiss residence</b>
+          moving to and living in Zurich</div>
+        <div class="kb"><span class="tag">Same platform</span><b>Financial regulation</b>
+          such as MiFID II</div>
+        <div class="kb"><span class="tag">Same platform</span><b>Company policies</b>
+          your own internal rules</div>
+      </div>
+      <h2>Wherever a wrong answer is <span class="kill">expensive.</span></h2>
+    </section>
+
+    <section class="slide backup">
+      <div class="mark">backup &middot; what it is, for questions</div>
 <pre class="card">Swiss TIP - MCP server - contract swiss-tip/v4
 
   <b>4 tools     </b> get_coverage - search - resolve - get_evidence
@@ -332,10 +399,22 @@ SEM &middot; Canton of Zurich &middot; as_of the day it ran</div>
   <b>datasets    </b> 5 waste calendars - 4,547 collection dates</pre>
     </section>
 
-    <section class="slide">
-      <div class="mark">0:55 &middot; close</div>
-      <h1>The evidence layer<br>your assistant can <span class="grad">cite.</span></h1>
-      <p class="wide">Zurich, from the residence permit<br>to the rubbish calendar.<br>Same pipeline for any canton.</p>
+    <section class="slide backup">
+      <div class="mark">backup &middot; the recorded wrong answer, for questions</div>
+      <div class="split wrong">
+        <img class="bad" src="../images/bad-example.jpg"
+             alt="Another chat assistant: register within 14 days of arrival, no later than September 30, 2026">
+        <div>
+          <h2>A normal assistant gave<br>
+            <span class="kill">a true rule, but the wrong date.</span></h2>
+          <ul>
+            <li>it said: fourteen days from arrival &mdash; <b>September 30</b></li>
+            <li>it never said: <b>register before your first working day</b></li>
+          </ul>
+          <p class="wide">That is the limit that binds.<br>You start work unregistered.</p>
+          <p class="wide fine">And you can be fined for it.</p>
+        </div>
+      </div>
     </section>
 
     <section class="slide backup">
@@ -481,7 +560,7 @@ SEM &middot; Canton of Zurich &middot; as_of the day it ran</div>
   var at = 0;
 
   // The backup slides are reachable but not counted: the deck still reads as
-  // five slides, and more presses bring them up for questions.
+  // three slides, and more presses bring them up for questions.
   slides.forEach(function (slide, i) {
     if (slide.classList.contains('backup')) return;
     var d = document.createElement('span');
