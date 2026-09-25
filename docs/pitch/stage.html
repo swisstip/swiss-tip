@@ -222,6 +222,24 @@
   .kb.on .tag { color: var(--lila); }
   .kb.on b { color: #fff; }
 
+    .eval { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: clamp(10px, 1.1vw, 20px); max-width: 76rem; }
+    .eval-card { display: flex; flex-direction: column; gap: .35em; background: var(--panel);
+           border: 1px solid var(--line); border-radius: var(--corner);
+           padding: clamp(14px, 1.5vw, 28px); color: var(--dim);
+           font-size: clamp(14px, 1.05vw, 19px); line-height: 1.35; }
+    .eval-card.best { border-color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+    .eval-card .tag { color: var(--dim); font-size: clamp(10px, .72vw, 13px); font-weight: 700;
+          letter-spacing: 1.26px; text-transform: uppercase; }
+    .eval-card b { color: var(--ink); font-size: clamp(18px, 1.55vw, 28px); line-height: 1.2;
+       font-weight: 800; letter-spacing: -.015em; }
+    .eval-card .score { margin-top: auto; padding-top: .5em; color: var(--ok); font-size: clamp(28px, 3vw, 52px);
+            font-weight: 800; line-height: 1; }
+    .eval-meta { display: flex; flex-wrap: wrap; gap: .5em 1.2em; color: var(--dim);
+           font-size: clamp(15px, 1.15vw, 21px); }
+    .eval-meta b { color: var(--ink); }
+    .eval-note { max-width: 72ch; color: var(--dim); font-size: clamp(13px, .95vw, 17px); line-height: 1.4; }
+
   pre.card { font-family: var(--mono); font-size: clamp(13px, 1.15vw, 22px);
              line-height: 1.75; color: var(--ink); background: var(--panel);
              border: 1px solid var(--line); border-radius: var(--corner);
@@ -410,7 +428,7 @@
       <div class="mark">backup &middot; what it is, for questions</div>
 <pre class="card">Swiss TIP - MCP server - contract swiss-tip/v4
 
-  <b>4 tools     </b> get_coverage - search - resolve - get_evidence
+  <b>3 tools     </b> search - resolve - get_evidence
                + lookup, where a dataset connector is registered
   <b>4 statuses  </b> SUPPORTED - NEEDS_CONTEXT - OUT_OF_COVERAGE - STALE
                the server never composes the answer
@@ -423,6 +441,19 @@
   <b>Zurich      </b> 20 topics - 211 concepts - 1,268 facts - 334 documents
   <b>cantons     </b> registering on arrival in all 26 - Zurich in full
   <b>datasets    </b> 5 waste calendars - 4,547 collection dates</pre>
+    </section>
+
+    <section class="slide backup">
+      <div class="mark">backup &middot; evaluation, for questions</div>
+      <div class="kicker good">Evaluation</div>
+      <h1>Fact accuracy across <span class="good">harnesses.</span></h1>
+      <div class="eval">
+        <div class="eval-card best"><span class="tag">Codex</span><b>GPT-5.5</b><span>30 reviewed cases</span><span class="score">0.86</span></div>
+        <div class="eval-card"><span class="tag">OpenCode</span><b>GPT-5.5</b><span>30 reviewed cases</span><span class="score">0.85</span></div>
+        <div class="eval-card"><span class="tag">OpenCode</span><b>GPT-4.1</b><span>30 reviewed cases</span><span class="score">0.58</span></div>
+      </div>
+      <div class="eval-meta"><span><b>90</b> evaluations</span><span><b>0.0</b> unsupported-claim rate</span><span><b>3</b> harness/model setups</span></div>
+      <p class="eval-note">Fact accuracy is the mean of the optional DeepEval judge metric. Results compare the assistant and harness, not a guarantee for every future model or question.</p>
     </section>
 
     <section class="slide backup">
@@ -477,7 +508,7 @@
 
         <rect class="box key" x="560" y="226" width="440" height="100" rx="10"/>
         <text class="t" x="578" y="258">Swiss TIP MCP server</text>
-        <text class="s" x="578" y="285">get_coverage &middot; search &middot; resolve &middot; get_evidence</text>
+        <text class="s" x="578" y="285">search &middot; resolve &middot; get_evidence</text>
         <text class="s" x="578" y="304">returns facts + excerpts, never the answer</text>
 
         <path class="arrow both" d="M144 276H184"/>
