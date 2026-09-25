@@ -8,26 +8,28 @@
 
 > Your AI assistant just helped you break Swiss law, and sounded sure
 > about it.
+> After moving to Zürich you ask by when you need to register yourself.
+> " 14 days." Correct, but also wrong.
 >
-> Ask one when you have to register after moving to Zurich: "within 14
-> days." Correct, and wrong: if you start work sooner, you must register
-> before your first day.
->
-> Ask how to import your dog: a perfect checklist, and not one word that
+> Ask how to import your dog: you get a nice checklist, and not one word that
 > Rottweilers are banned in Zurich.
 
 **[0:25 - Solution; point at the answer]**
 
-> Swiss TIP is a trusted information platform. Any assistant connects to it
+> Let me introduce you to Swiss TIP
+> A trusted information platform. Any assistant connects
 > through MCP and answers from reviewed facts, each with its official
 > source.
 >
-> On the right, an output of a real run: the same question, register
-> before you start work, with its sources. And if something isn't covered, it says so
-> instead of guessing.
+> On the right, the real answer to our first question.
+> Register before your first day of working. With source.
+> And if something isn't covered, it doesn't just guess.
+> It tells you that it doesn't know.
 
 **[0:44 - Benefit]**
 
 > Swiss residence is just our first knowledge base. The same platform can
-> serve financial regulation like MiFID, or your company's own policies.
+> serve financial regulations, or your company's own policies or even any AI
+> across all Gemeinde & Cantons.
+> 
 > Because some wrong answers are simply too expensive.
