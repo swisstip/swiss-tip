@@ -10,8 +10,13 @@ as "weak:<question>" is one the release does not cover: it must come back
 with a weak or empty match, so an off-topic question is declined in hybrid
 mode too. Prints one line per query with the retrieval mode, the match
 strength, the latency and the top concepts.
+
+Each embedding call waits 10 seconds, as in the server, or the seconds
+given in SWISSTIP_CHECK_TIMEOUT: an image built for another platform runs
+this check under emulation, where one embedding takes several seconds.
 """
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -32,7 +37,8 @@ def main(argv: list[str]) -> int:
     except SemanticError as exc:
         print(f"check-semantic: {index_path}: {exc}", file=sys.stderr)
         return 1
-    service.semantic_search = SemanticSearch(index, OllamaEmbedder(model=index.model))
+    timeout = float(os.environ.get("SWISSTIP_CHECK_TIMEOUT") or 10)
+    service.semantic_search = SemanticSearch(index, OllamaEmbedder(model=index.model, timeout_seconds=timeout))
     failed = 0
     for query in queries:
         expect_weak = query.startswith("weak:")

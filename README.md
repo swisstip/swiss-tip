@@ -61,7 +61,9 @@ docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich
 
 The first run pulls about 850 MB, roughly three minutes on a normal
 connection; the server then answers within about 15 seconds of starting, once
-the model is loaded. Check it, and connect your client:
+the model is loaded. The image is published for `linux/amd64` and
+`linux/arm64`, so an Apple silicon Mac runs it natively, without emulation
+([platforms](docker/README.md#platforms)). Check it, and connect your client:
 
 ```shell
 curl -s http://127.0.0.1:8000/health

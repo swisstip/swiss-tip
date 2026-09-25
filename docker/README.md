@@ -57,6 +57,31 @@ builds from the repository root with only `LICENSE` and `NOTICE` admitted,
 and copies them to `/usr/share/doc/swiss-tip/`, outside the release mount
 point, so every image built on it carries them.
 
+## Platforms
+
+Every image that serves - both MCP images, the pack and slim release
+images, the sidecar and both calendar images - is published for
+`linux/amd64` and `linux/arm64` under the same tag, and Docker pulls the
+one for its machine: an Apple silicon Mac runs them natively, without
+emulation. The Ollama runtime in them has a CPU backend for each x86 and Arm
+generation. The two OpenCode test images (`swiss-tip-opencode` and
+`swiss-tip-demo`) are `linux/amd64` only, as they carry the linux-x64
+OpenCode binary; they are no part of the server.
+
+A local build is for the machine's own platform. Both platforms at once
+need the containerd image store (Docker Desktop: Settings, General, "Use
+containerd for pulling and storing images") and `--platform
+linux/amd64,linux/arm64`; the other platform is built under emulation. The
+arm64 variant, built and started under emulation on an amd64 machine on
+25 September 2026, passed the pack image's build checks (the four check
+searches hybrid, with the same top concepts as on amd64, and 15 of 15
+calendars registered) and came up healthy with `--semantic-timeout 120`
+after about 150 s. Under emulation one embedding takes 7 to 23 s, against
+0.2 to 0.4 s natively, which is why the pack image's check search waits
+120 s per call when the target platform is not the build platform, and why
+an emulated start needs the longer timeout: the server checks one
+embedding before it serves.
+
 ## Build
 
 The order matters: each image builds on the previous one.
