@@ -25,6 +25,11 @@ from typing import Callable, Iterable
 # self-identifying crawlers. Some official CDNs (www.ch.ch) answer any other
 # form with an error page and HTTP 200.
 DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; SwissTIPDemoCrawler/0.1)"
+# Some official hosts (www.gl.ch, the tg.ch sites) reset the connection for any
+# self-identifying crawler. A catalogue entry opts into this browser form with
+# "user_agent": "browser"; robots.txt is still read for the crawler's own name.
+BROWSER_USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/128.0 Safari/537.36")
 REDIRECT_CODES = frozenset({301, 302, 303, 307, 308})
 
 
@@ -280,6 +285,7 @@ class SafeCrawler:
         limits: CrawlLimits | None = None,
         *,
         user_agent: str = DEFAULT_USER_AGENT,
+        robots_name: str | None = None,
         allow_query_strings: bool = False,
         allow_private_networks: bool = False,
         respect_robots: bool = True,
@@ -294,6 +300,8 @@ class SafeCrawler:
         self.source = source
         self.limits = limits or CrawlLimits()
         self.user_agent = user_agent
+        # The robots.txt group this crawler obeys; a browser user agent would otherwise match only "*".
+        self.robots_name = robots_name or robots_agent(user_agent)
         self.allow_query_strings = allow_query_strings
         self.allow_private_networks = allow_private_networks
         # Source etiquette is on by default: the crawler fetches robots.txt, obeys its Disallow rules and crawl
@@ -474,8 +482,8 @@ class SafeCrawler:
         if result.status == 200 and result.outcome == "fetched":
             parser.parse(result.body.decode("utf-8", errors="replace").splitlines())
             self._record_robots_status(origin, "loaded")
-            crawl_delay = parser.crawl_delay(robots_agent(self.user_agent))
-            request_rate = parser.request_rate(robots_agent(self.user_agent))
+            crawl_delay = parser.crawl_delay(self.robots_name)
+            request_rate = parser.request_rate(self.robots_name)
             declared_delays = [self._effective_delay_seconds]
             if crawl_delay is not None:
                 declared_delays.append(float(crawl_delay))
@@ -499,7 +507,7 @@ class SafeCrawler:
 
     def _robots_can_fetch(self, url: str) -> bool:
         parser = self._load_robots(url)
-        return parser is not None and parser.can_fetch(robots_agent(self.user_agent), url)
+        return parser is not None and parser.can_fetch(self.robots_name, url)
 
     def _candidate_url(self, base_url: str, href: str, depth: int) -> str | None:
         try:

@@ -1,6 +1,6 @@
 # Container images
 
-**Last update:** 24 September 2026
+**Last update:** 25 September 2026
 
 **Start here:** `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` is the
 whole server in one command - the full pack image, with the release, the semantic index and

@@ -5,7 +5,7 @@
 # starts the services it names and leaves the embedding sidecar out:
 #
 #   python scripts/test/container/synthetic_pack.py --out /tmp/synthetic
-#   SWISSTIP_PACK=synthetic SWISSTIP_TEST_SERVER_IMAGE=swiss-tip-mcp:0.3.2-slim SWISSTIP_TEST_PACK_DIR=/tmp/synthetic \
+#   SWISSTIP_PACK=synthetic SWISSTIP_TEST_SERVER_IMAGE=swiss-tip-mcp:0.4.0-slim SWISSTIP_TEST_PACK_DIR=/tmp/synthetic \
 #     docker compose -f compose.yaml -f scripts/test/container/compose.synthetic.yaml --profile demo up -d --wait swiss-tip demo
 #
 # SWISSTIP_PACK only satisfies compose.yaml, whose image this file replaces;
