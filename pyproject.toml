@@ -14,7 +14,7 @@
 # README remains valid; uv.lock is the resolution both share when uv is used.
 [project]
 name = "swiss-tip"
-version = "0.3.2"
+version = "0.3.3"
 description = "Swiss TIP workspace: the MCP server, the knowledge-base pipeline and the tooling around them"
 requires-python = ">=3.14"
 dependencies = [

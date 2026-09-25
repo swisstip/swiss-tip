@@ -6,8 +6,8 @@
 # /srv/swiss-tip/datasets; the pack's calendar image in the packs repository
 # carries the bundles instead, on this image.
 #
-#   docker build -f docker/calendar-connector/Dockerfile -t swiss-tip-calendar-connector:0.3.2 .
-#   docker run --rm -p 8100:8100 -v "$PWD/datasets/<pack>:/srv/swiss-tip/datasets:ro" swiss-tip-calendar-connector:0.3.2
+#   docker build -f docker/calendar-connector/Dockerfile -t swiss-tip-calendar-connector:0.3.3 .
+#   docker run --rm -p 8100:8100 -v "$PWD/datasets/<pack>:/srv/swiss-tip/datasets:ro" swiss-tip-calendar-connector:0.3.3
 #
 # The build context is the repository root, for LICENSE and NOTICE; the
 # Dockerfile.dockerignore next to this file admits those two files only.
@@ -21,7 +21,7 @@
 
 ARG PYTHON_IMAGE=python:3.14-slim
 FROM ${PYTHON_IMAGE}
-ARG SWISSTIP_VERSION=0.3.2
+ARG SWISSTIP_VERSION=0.3.3
 # Empty is PyPI. Another index is used with PyPI behind it, for the dependencies.
 ARG PACKAGE_INDEX=""
 

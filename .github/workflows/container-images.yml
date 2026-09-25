@@ -82,7 +82,7 @@ on:
       swisstip_mcp_version:
         description: swisstip-mcp version (the tag of both MCP images and of the calendar connector image)
         type: string
-        default: 0.3.2
+        default: 0.3.3
       package_index:
         description: Index to take swisstip-mcp from; testpypi rehearses a version that is not released yet
         type: choice
