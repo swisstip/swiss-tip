@@ -142,6 +142,9 @@ is the default.
 **Next.** Make Apertus, the Swiss open model, available through Swisscom's
 API as a provider profile, measure it against the current default on the
 existing acceptance and regression packs, and keep a one-line switch back.
+The switch waits for Apertus 2.0: the current version suits plain structured
+output, while 2.0 is to be optimised for agentic work and tool use, which
+the agent-driven steps and the assistants calling the MCP tools rely on.
 
 **Why.** Swiss content processed by a Swiss model, with the quality measured
 rather than assumed.
