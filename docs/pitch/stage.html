@@ -222,8 +222,8 @@
   .kb.on .tag { color: var(--lila); }
   .kb.on b { color: #fff; }
 
-    .eval { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: clamp(10px, 1.1vw, 20px); max-width: 76rem; }
+    .eval { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(10px, 1.1vw, 20px); width: 100%; max-width: 52rem; }
     .eval-card { display: flex; flex-direction: column; gap: .35em; background: var(--panel);
            border: 1px solid var(--line); border-radius: var(--corner);
            padding: clamp(14px, 1.5vw, 28px); color: var(--dim);
@@ -458,9 +458,8 @@
       <div class="eval">
         <div class="eval-card best"><span class="tag">Codex</span><b>GPT-5.5</b><span>30 reviewed cases</span><span class="score">0.86</span></div>
         <div class="eval-card"><span class="tag">OpenCode</span><b>GPT-5.5</b><span>30 reviewed cases</span><span class="score">0.85</span></div>
-        <div class="eval-card"><span class="tag">OpenCode</span><b>GPT-4.1</b><span>30 reviewed cases</span><span class="score">0.58</span></div>
       </div>
-      <div class="eval-meta"><span><b>90</b> evaluations</span><span><b>0.0</b> unsupported-claim rate</span><span><b>3</b> harness/model setups</span></div>
+      <div class="eval-meta"><span><b>60</b> evaluations</span><span><b>0.0</b> unsupported-claim rate</span><span><b>2</b> harness/model setups</span></div>
       <p class="eval-note">Fact accuracy is the mean of the optional DeepEval judge metric. Results compare the assistant and harness, not a guarantee for every future model or question.</p>
     </section>
 
