@@ -112,6 +112,7 @@ def validate_source_catalog(data: dict, *, allow_empty: bool = False) -> dict:
                      "Municipal sources require an explicit municipality and BFS code")
         _require(entry["priority"] in {"P0", "P1", "P2"}, "Invalid source priority")
         _require(entry["scan_status"] in SCAN_STATUSES, "Invalid scan status")
+        _require(entry.get("user_agent") in {None, "browser"}, "user_agent must be absent or 'browser'")
         _require(bool(entry["title"]) and bool(entry["notes"]), "Missing source title or scan notes")
         _require(bool(entry["topic_hints"]) and set(entry["topic_hints"]) <= set(topics), "Unknown planning topic")
         _require(bool(source.allowed_hosts) and urlsplit(source.start_url).hostname in source.allowed_hosts,

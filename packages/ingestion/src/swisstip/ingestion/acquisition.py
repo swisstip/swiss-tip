@@ -28,7 +28,7 @@ import time
 import uuid
 from urllib.parse import unquote, urldefrag, urlsplit
 
-from .crawler import CrawlLimits, SafeCrawler, SourceDefinition
+from .crawler import BROWSER_USER_AGENT, DEFAULT_USER_AGENT, CrawlLimits, SafeCrawler, SourceDefinition, robots_agent
 
 
 DOCUMENT_TYPES = ("application/pdf", "application/octet-stream", "text/plain", "application/xml", "text/xml")
@@ -350,18 +350,21 @@ def snapshot(target: dict, output: Path, allowed_hosts: tuple[str, ...] | None =
     prefixes = tuple(target.get("allowed_path_prefixes") or ("/",))
     source = SourceDefinition(source_id=target["url_id"], start_url=target["url"],
                               allowed_hosts=hosts, allowed_path_prefixes=prefixes)
+    browser = any(entry.get("user_agent") == "browser" for entry in target.get("registry_entries", []))
+    user_agent = BROWSER_USER_AGENT if browser else DEFAULT_USER_AGENT
     started = now()
     try:
-        report = SafeCrawler(source, limits, allow_query_strings=True, respect_robots=respect_robots,
+        report = SafeCrawler(source, limits, user_agent=user_agent, robots_name=robots_agent(DEFAULT_USER_AGENT),
+                             allow_query_strings=True, respect_robots=respect_robots,
                              opener=CurlOpener() if transport == "curl" else None,
                              document_content_types=DOCUMENT_TYPES,
                              on_page=save, on_document=save).crawl().to_dict()
         result = {**target, "started_at": started, "finished_at": now(),
                   "status": "saved" if captured else "not_saved", "snapshots": captured,
-                  "report": report, "transport": transport}
+                  "report": report, "transport": transport, "user_agent": user_agent}
     except Exception as exc:
         result = {**target, "started_at": started, "finished_at": now(),
-                  "status": "error", "snapshots": captured,
+                  "status": "error", "snapshots": captured, "user_agent": user_agent,
                   "error": f"{type(exc).__name__}: {exc}"}
     write_json(attempt / "manifest.json", result)
     write_json(folder / "latest.json", result)
