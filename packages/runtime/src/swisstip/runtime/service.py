@@ -117,14 +117,14 @@ SEARCH_MATCH_NOTE = ("Ranked candidates from this release. Resolve the relevant 
                      "ranking does not establish complete coverage of the question.")
 SEARCH_WEAK_NOTE = ("Weak candidates only: the query's distinctive words match no published concept, so these hits rest "
                     "on incidental words or a nearby subject. The question probably lies outside the scope_statement in "
-                    "this result; if so, tell the user that this service does not cover it and answer nothing from "
+                    "this result or matches its out_of_scope list; if so, tell the user that this service does not cover it and answer nothing from "
                     "general knowledge. Resolve a listed concept only if the question is clearly about it. Do not search "
                     "again with rephrased queries.")
 SEARCH_EMPTY_NOTE = ("No candidates matched this query under the active retrieval method. This does not establish "
-                     "that the subject is outside coverage: compare the question with the scope_statement in this "
-                     "result. If no published topic fits, tell the user that this service does not cover it instead of "
-                     "searching again with rephrased queries or answering from general knowledge; if one fits, call "
-                     "get_coverage once with that topic to find its concepts.")
+                     "that the subject is outside coverage: compare the question with the scope_statement and the "
+                     "out_of_scope list in this result. If the scope does not cover it, tell the user that this service "
+                     "does not cover it instead of searching again with rephrased queries or answering from general "
+                     "knowledge; if the scope clearly covers it, search once more with the question's key terms only.")
 # Search with a jurisdiction: a concept published for other places only cannot apply where the user lives. It is kept
 # out of the ranking, so a caller does not resolve it only to be refused, and named, so the caller can say that the
 # subject is published, but not for the user's place.
@@ -145,7 +145,8 @@ SEARCH_PLACE_NOT_RECOGNISED = (" The place register does not hold {parts}, so th
 QUERY_LANGUAGE_MIN_CONCEPT_SHARE = 0.5
 SEARCH_NOTES = {"strong": SEARCH_MATCH_NOTE, "weak": SEARCH_WEAK_NOTE, "none": SEARCH_EMPTY_NOTE}
 RESULT_LIMITATIONS_NOTE = ("Not a legal review: English paraphrases of the cited excerpts, no eligibility decision for a "
-                           "person, freshness counted from the access date; the full list is in get_coverage.")
+                           "person, freshness counted from the access date.")
+RESULT_LIMITATIONS_POINTER = " The full list is in get_coverage."
 # Added to weak and none results: a question in a language the index does not carry reads weak even when its subject
 # is covered, so one translated search is the exception to "do not search again".
 SEARCH_LANGUAGE_RETRY = (" One exception: if the question is in a language other than {languages} and this query was "
@@ -169,14 +170,16 @@ QUERY_LANGUAGE_ONE_SEARCH = ("Search ONCE per question, in {languages}, never in
                              "search in another language rarely finds other concepts. ")
 NATIONAL_LANGUAGES = ("de", "fr", "it", "rm")
 # The rules come before the scope: a client that cuts the instructions short (Claude Code keeps 2,048 characters)
-# keeps the two calls, the translation and the guidance, and the scope also reaches the caller through get_coverage
-# and every weak or empty search result.
+# keeps the two calls, the translation and the guidance, and the scope also reaches the caller through every weak or
+# empty search result, with the out-of-scope list.
 INSTRUCTIONS = ("Swiss TIP serves published, cited facts from official Swiss sources; it composes no answers. "
                 "{languages} A question normally takes two calls: search with the question and, when known, the "
                 "user's canton or municipality as jurisdiction, then resolve the relevant concept_ids with the user's "
-                "jurisdiction, today's date and the context the question implies. Call get_coverage only when unsure "
-                "whether the question is in scope, and get_evidence only for a verbatim quote. Follow "
+                "jurisdiction, today's date and the context the question implies. {optional} Follow "
                 "guidance_for_caller in every result. Scope: {scope}")
+INSTRUCTIONS_OPTIONAL = "Call get_evidence only for a verbatim quote."
+INSTRUCTIONS_OPTIONAL_COVERAGE = ("Call get_coverage only when unsure whether the question is in scope, and "
+                                  "get_evidence only for a verbatim quote.")
 # The release's context vocabulary, sent once per session with the instructions and again on the resolve schema,
 # because a client may drop either. A caller that knows the fields and their published values before its first call
 # fills the context on the first resolve instead of learning it from a NEEDS_CONTEXT round trip. The mapping from
@@ -363,8 +366,13 @@ def argument_error(path: str, message: str, code: ErrorCode = ErrorCode.INVALID_
 
 class ReleaseService:
     def __init__(self, release: Release, semantic_search: SemanticSearch | None = None,
-                 semantic_error: str | None = None, connectors: ConnectorRegistry | None = None):
+                 semantic_error: str | None = None, connectors: ConnectorRegistry | None = None,
+                 coverage_tool: bool = True):
         self.release = release
+        # Whether get_coverage is listed and served. The MCP server hides it by default: callers that saw it opened
+        # with it and chose their next calls from the topic list instead of searching. Search results carry the scope
+        # and the out-of-scope list whenever a question may lie outside them, so a decline needs no other call.
+        self.coverage_tool = coverage_tool
         self.semantic_search = semantic_search
         self.semantic_error = semantic_error
         # The dataset connectors registered behind the release's concepts; None or empty means no lookup tool.
@@ -402,7 +410,7 @@ class ReleaseService:
         # get_evidence, read on every call, carry the review status the caller must pass on and one pointer: the
         # full list cost about 1.2 KB per call, a tenth of a single-turn budget, and said the same thing every time.
         self.limitations = [*manifest.limitations, review_line]
-        self.result_limitations = [review_line, RESULT_LIMITATIONS_NOTE]
+        self.result_limitations = [review_line, RESULT_LIMITATIONS_NOTE + (RESULT_LIMITATIONS_POINTER if coverage_tool else "")]
         self.search_limitations = list(self.result_limitations)
         # Search index: the tokens of every field per concept, and the rarity of each token across concepts. A token
         # found in most concepts ("Aufenthalt", "Schweiz", "Bewilligung") says little about which concept a question
@@ -434,14 +442,16 @@ class ReleaseService:
         else:
             self.query_language_note, retry = "", ""
         self.search_notes = {"strong": SEARCH_MATCH_NOTE, "weak": SEARCH_WEAK_NOTE + retry, "none": SEARCH_EMPTY_NOTE + retry}
-        self.instructions = " ".join(INSTRUCTIONS.format(scope=manifest.scope_statement.strip(),
-                                                         languages=self.query_language_note).split())
+        self.instructions = " ".join(INSTRUCTIONS.format(
+            scope=manifest.scope_statement.strip(), languages=self.query_language_note,
+            optional=INSTRUCTIONS_OPTIONAL_COVERAGE if coverage_tool else INSTRUCTIONS_OPTIONAL).split())
         if self.context_note:
             self.instructions += "\n" + self.context_note
 
     def tools(self) -> list[str]:
-        """The tools this server lists: the four of the release, and lookup while a dataset is registered."""
-        names = list(TOOL_CONTRACTS)
+        """The tools this server lists: the four of the release (three while get_coverage is hidden), and lookup while
+        a dataset is registered."""
+        names = [name for name in TOOL_CONTRACTS if self.coverage_tool or name != "get_coverage"]
         if self.connectors is not None and self.connectors.datasets:
             names.extend(CONNECTOR_TOOL_CONTRACTS)
         return names
@@ -487,10 +497,10 @@ class ReleaseService:
 
     @classmethod
     def from_file(cls, path: Path, semantic_search: SemanticSearch | None = None,
-                  semantic_error: str | None = None) -> "ReleaseService":
+                  semantic_error: str | None = None, coverage_tool: bool = True) -> "ReleaseService":
         release = load_release(path)
         assert_valid(release)
-        return cls(release, semantic_search=semantic_search, semantic_error=semantic_error)
+        return cls(release, semantic_search=semantic_search, semantic_error=semantic_error, coverage_tool=coverage_tool)
 
     # --- helpers -------------------------------------------------------------
 
@@ -701,6 +711,8 @@ class ReleaseService:
                             match_signals=MatchSignals(lexical_share=lexical_share, anchored_weight=anchored_weight,
                                                        best_semantic_score=best_semantic_score),
                             scope_statement=self.release.manifest.scope_statement if strength != "strong" else None,
+                            out_of_scope=self.release.manifest.out_of_scope if strength != "strong" else None,
+                            out_of_scope_response=self.release.manifest.out_of_scope_response if strength != "strong" else None,
                             matched_count=len(hits), truncated=len(hits) > request.limit, retrieval_mode=mode,
                             ranking_model=model, ranking_model_digest=digest, fallback_reason=reason,
                             limitations=self.search_limitations)
@@ -734,7 +746,7 @@ class ReleaseService:
         label = self.place_index.label
         if concept is None:
             return ConceptResolution(concept_id=concept_id, status=Status.OUT_OF_COVERAGE, gaps=[CoverageGap(
-                dimension="concept_not_published", message="Unknown concept_id; take IDs from get_coverage or search.",
+                dimension="concept_not_published", message="Unknown concept_id; take IDs from search.",
                 published_values=sorted(self.concepts))])
         if scope.code is None:
             served = ", ".join(self.place_index.described(code) for code in self.place_index.countries)

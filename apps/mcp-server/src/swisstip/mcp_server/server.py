@@ -7,6 +7,7 @@
                                                       MCP on /mcp, the health payload on /health
     swisstip-server --health                          load, validate, print counts, exit
     swisstip-server --require-ready                   refuse a release without a matching readiness.json
+    swisstip-server --with-coverage                   list and serve get_coverage as well (hidden by default)
     swisstip-server --print-client-config [opencode]  print a client configuration
     swisstip-server --print-client-config opencode --url https://host/mcp
                                                       print a configuration for a remote endpoint
@@ -20,7 +21,11 @@ one log line to stderr with tool, status, bytes and latency. The server
 composes no answers: it returns facts, excerpts, citations and typed
 statuses, as defined in docs/architecture/tool-contracts.md. Its MCP
 instructions and the search description name the languages to search in,
-measured on the release.
+measured on the release. It lists search, resolve and get_evidence (and
+lookup while a dataset connector is registered); get_coverage is hidden
+unless --with-coverage is given, because callers that saw it opened with it
+and chose their calls from its topic list instead of searching. Weak and
+empty search results carry the scope and the out-of-scope list instead.
 
 Over HTTP the MCP endpoint is stateless, answers with JSON and requires no
 authentication: it serves a read-only release of public information.
@@ -168,9 +173,11 @@ def remote_client_config(url: str, flavour: str) -> dict:
 
 def client_config(release: Path, flavour: str, *, semantic_index: Path | None = None,
                   ollama_url: str = "http://127.0.0.1:11434", semantic_timeout: float = 10,
-                  semantic_min_score: float = 0.5, semantic_candidates: int = 10) -> dict:
+                  semantic_min_score: float = 0.5, semantic_candidates: int = 10, with_coverage: bool = False) -> dict:
     python = sys.executable
     args = ["-m", "swisstip.mcp_server.server", "--release", str(release.resolve())]
+    if with_coverage:
+        args.append("--with-coverage")
     if semantic_index is not None:
         args.extend(["--semantic-index", str(semantic_index.resolve()), "--ollama-url", ollama_url,
                      "--semantic-timeout", str(semantic_timeout), "--semantic-min-score", str(semantic_min_score),
@@ -193,6 +200,8 @@ def main(argv=None) -> int:
     parser.add_argument("--health", action="store_true", help="load and validate the release, print counts, exit")
     parser.add_argument("--require-ready", action="store_true",
                         help="refuse to serve (or to report healthy) a release without a matching readiness.json next to it")
+    parser.add_argument("--with-coverage", action="store_true",
+                        help="list and serve get_coverage as well; hidden by default, so callers start with search")
     parser.add_argument("--print-client-config", nargs="?", const="generic", choices=["generic", "opencode"],
                         help="print a client configuration for this server and exit")
     parser.add_argument("--url", help="with --print-client-config: the remote Streamable HTTP endpoint to connect to")
@@ -218,10 +227,11 @@ def main(argv=None) -> int:
         print(json.dumps(client_config(args.release, args.print_client_config, semantic_index=args.semantic_index,
                                        ollama_url=args.ollama_url, semantic_timeout=args.semantic_timeout,
                                        semantic_min_score=args.semantic_min_score,
-                                       semantic_candidates=args.semantic_candidates), indent=2))
+                                       semantic_candidates=args.semantic_candidates,
+                                       with_coverage=args.with_coverage), indent=2))
         return 0
     try:
-        service = ReleaseService.from_file(args.release)
+        service = ReleaseService.from_file(args.release, coverage_tool=args.with_coverage)
     except (OSError, ValueError, ReleaseInvalid) as exc:
         print(json.dumps(dict(status="error", release=str(args.release), error=str(exc))), file=sys.stderr if not args.health else sys.stdout)
         return 2

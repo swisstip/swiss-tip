@@ -1,3 +1,4 @@
+import json
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -302,6 +303,31 @@ class ServiceTests(unittest.TestCase):
         self.assertIsInstance(self.service.dispatch("get_coverage", {"parent_id": "other"}), ToolError)
         error = self.service.dispatch("get_coverage", {"release_id": "nope"})
         self.assertEqual(error.error.code.value, "RELEASE_UNAVAILABLE")
+
+    def test_hidden_coverage_tool(self):
+        # The MCP server's default: get_coverage is neither listed nor served, and no text a caller reads points to it.
+        service = ReleaseService(sample_release(), coverage_tool=False)
+        self.assertEqual(service.tools(), ["search", "resolve", "get_evidence"])
+        refused = service.dispatch("get_coverage", {})
+        self.assertIsInstance(refused, ToolError)
+        self.assertEqual(refused.error.code.value, "INVALID_ARGUMENT")
+        self.assertNotIn("get_coverage", service.instructions)
+        for name in service.tools():
+            self.assertNotIn("get_coverage", service.tool_description(name), name)
+            self.assertNotIn("get_coverage", json.dumps(service.tool_input_schema(name)), name)
+        for query in ("registration", "zzzz"):
+            result = service.dispatch("search", {"query": query})
+            self.assertNotIn("get_coverage", result.model_dump_json(), query)
+        empty = service.dispatch("search", {"query": "zzzz"})
+        self.assertEqual(empty.match_strength, "none")
+        self.assertEqual(empty.out_of_scope, ["Fees"])
+        self.assertEqual(empty.out_of_scope_response, "Say so.")
+        # A strong result carries none of the scope fields.
+        strong = service.dispatch("search", {"query": "registration"})
+        self.assertEqual(strong.match_strength, "strong")
+        self.assertIsNone(strong.out_of_scope)
+        unknown = service.dispatch("resolve", {"concept_ids": ["nope"]})
+        self.assertNotIn("get_coverage", unknown.model_dump_json())
 
     def test_search_ranks_by_label_aliases_and_statements_with_stemming(self):
         self.assertEqual(tokens("Registration registers registrieren"), {"regist"})

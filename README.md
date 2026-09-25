@@ -101,10 +101,11 @@ build a knowledge base, see [developer setup](docs/developer-setup.md).
 
 **What is evaluated.** The server at `https://51-96-83-1.sslip.io/mcp`,
 serving the current release of the `mvp-zurich` knowledge base with hybrid
-search and the calendar connector: five tools, `get_coverage`, `search`,
-`resolve`, `get_evidence` and `lookup`. The declared scope is under
-[coverage at a glance](#coverage-at-a-glance) and, verbatim, in the
-`scope_statement` and `out_of_scope` that `get_coverage` returns.
+search and the calendar connector: four tools, `search`, `resolve`,
+`get_evidence` and `lookup`. The declared scope is under
+[coverage at a glance](#coverage-at-a-glance) and, verbatim, in the server
+instructions and in the `scope_statement` and `out_of_scope` of every weak or
+empty `search` result.
 
 **A first check.** [Example calls](docs/example-call.md) shows the server
 working in two calls: a `search` that finds the concept for a question, and a
@@ -171,8 +172,10 @@ A knowledge base ships as one versioned, hashed release bundle. It is built
 from curated facts, each citing an exact excerpt of an official page by URL,
 access date and hash, and it is served only after its acceptance and
 readiness checks pass. Every fact names its review status, and a caller can
-ask for reviewed facts only. The server offers four tools: `get_coverage`,
-`search`, `resolve` and `get_evidence`. `resolve` returns a typed status
+ask for reviewed facts only. The server offers three tools: `search`,
+`resolve` and `get_evidence`; a fourth, `get_coverage`, which lists the topics
+and concepts, is hidden unless the server is started with `--with-coverage`,
+because callers that saw it opened with it instead of searching. `resolve` returns a typed status
 that says whether the question is covered, whether a detail such as the
 canton is missing, or whether the facts are stale. Where a
 [dataset connector](docs/architecture/dataset-connectors.md) is registered,
@@ -186,8 +189,9 @@ source hash. The full design is in the
 
 The server is knowledge-base agnostic; the published MVP knowledge base is
 **`mvp-zurich`** ([swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp)).
-`get_coverage` returns the live scope, out-of-scope list and limitations of
-whatever release is loaded; the snapshot below describes the current one.
+The server instructions and every weak or empty `search` result carry the
+live scope and out-of-scope list of whatever release is loaded; the snapshot
+below describes the current one.
 
 - **Subject:** everyday administrative life in Switzerland, for people who
   live here and people moving here, of any nationality.
@@ -223,8 +227,8 @@ whatever release is loaded; the snapshot below describes the current one.
   enforcement; public transport, the commercial register, statistics and
   weather; cantons other than Zurich beyond arrival registration, and
   municipalities other than the City of Zurich beyond the waste of Basel, St.
-  Gallen and Lugano; any country other than Switzerland. `get_coverage`
-  returns the full list.
+  Gallen and Lugano; any country other than Switzerland. A weak or empty
+  `search` result carries the full list.
 - **Sources:** authoritative Swiss publishers only - federal (the offices
   under `admin.ch`, among them SEM, FOPH, FOCBS, FSIO and the Central
   Compensation Office, the law on `fedlex.admin.ch`, `ch.ch` and
@@ -288,7 +292,7 @@ This matters most for the values that move: fees, rates, opening hours,
 officeholders and deadlines. Two things keep those honest. Amounts and
 calculators are **out of scope** by declaration, not by omission - tariff
 tables, tax and pension amounts, premiums and every calculator are listed in
-`out_of_scope`, which `get_coverage` returns. And where a rate is published,
+`out_of_scope`, which every weak or empty `search` result carries. And where a rate is published,
 the statement carries its own effective date rather than presenting it as
 timeless. The mortgage reference interest rate reads:
 

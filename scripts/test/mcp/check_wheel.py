@@ -7,10 +7,10 @@ wheel, and the image build on the slim MCP image, with a synthetic release, so t
 
 Without --url the server is started over stdio with the interpreter that runs this script, so it tests the packages
 installed there; with --url the round trip runs against a running Streamable HTTP endpoint, a container. The round
-trip itself is swisstip.mcp_server.roundtrip, which the quickstart runs on a fetched pack as well: it takes the first
-concept of the first topic from get_coverage, finds it again with search by its label, resolves it for its own
-jurisdiction with the first allowed value of every required context field, reads the evidence of a served fact and
-provokes a typed error. The checks of the published packs live with the packs, in swiss-tip-mvp.
+trip itself is swisstip.mcp_server.roundtrip, which the quickstart runs on a fetched pack as well: it checks that
+get_coverage is hidden, takes the first concept a search with the scope statement of the instructions finds, finds it
+again with search by its label, resolves it for its own jurisdiction with the first allowed value of every required
+context field, reads the evidence of a served fact and provokes a typed error. The checks of the published packs live with the packs, in swiss-tip-mvp.
 """
 
 import argparse

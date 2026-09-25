@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swisstip-calendar-connector"
-version = "0.3.3"
+version = "0.3.4"
 description = "Swiss TIP calendar connector: dataset bundles of dated events by postal code, served to the MCP server over HTTP"
 requires-python = ">=3.14"
 dependencies = [

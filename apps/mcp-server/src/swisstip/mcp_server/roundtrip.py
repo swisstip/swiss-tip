@@ -2,9 +2,10 @@
 
 The round trip of the package build (scripts/test/mcp/check_wheel.py, on the installed wheel and the synthetic
 release), of the image build (the slim MCP image with that release mounted) and of the quickstart (on a fetched
-pack). It takes the first concept of the first topic from get_coverage, finds it again with search by its label,
-resolves it for its own jurisdiction with the first allowed value of every required context field, reads the
-evidence of a served fact and provokes a typed error. Over stdio the server is started with the interpreter given,
+pack). It checks that get_coverage is hidden (or, on a server started with --with-coverage, that its root names the
+scope), takes the first concept a search with the scope statement of the server instructions finds, finds it again
+with search by its label, resolves it for its own jurisdiction with the first allowed value of every required context
+field, reads the evidence of a served fact and provokes a typed error. Over stdio the server is started with the interpreter given,
 so the packages installed there are what is tested; with a URL the round trip runs against a running Streamable
 HTTP endpoint, a container. The checks that know a pack's content live with the packs, in swiss-tip-mvp.
 """
@@ -54,15 +55,27 @@ async def run(release: Path | None, url: str | None, report: Report = print_chec
         async with ClientSession(read, write) as session:
             init = await session.initialize()
             tools = [tool.name for tool in (await session.list_tools()).tools]
-            # lookup is listed while a dataset connector is registered, as in a pack image that carries its datasets.
-            four = ["get_coverage", "search", "resolve", "get_evidence"]
-            check(f"server {init.serverInfo.name} {init.serverInfo.version} lists the four tools"
-                  + (" and lookup" if tools == four + ["lookup"] else ""), tools in (four, four + ["lookup"]))
-            root = (await session.call_tool("get_coverage", {})).structuredContent
-            check(f"coverage root of {root.get('release_id')} names topics and jurisdictions",
-                  bool(root.get("topics")) and bool(root.get("jurisdictions")) and bool(root.get("scope_statement")))
-            topic = (await session.call_tool("get_coverage", {"parent_id": root["topics"][0]["topic_id"]})).structuredContent
-            concept = topic["concepts"][0]
+            # get_coverage is listed only by a server started with --with-coverage; lookup while a dataset connector
+            # is registered, as in a pack image that carries its datasets.
+            three = ["search", "resolve", "get_evidence"]
+            core = [name for name in tools if name != "lookup"]
+            check(f"server {init.serverInfo.name} {init.serverInfo.version} lists " + ", ".join(tools),
+                  core in (three, ["get_coverage", *three]) and tools[len(core):] in ([], ["lookup"]))
+            coverage = await session.call_tool("get_coverage", {})
+            if "get_coverage" in tools:
+                root = coverage.structuredContent
+                check(f"coverage root of {root.get('release_id')} names topics and jurisdictions",
+                      bool(root.get("topics")) and bool(root.get("jurisdictions")) and bool(root.get("scope_statement")))
+            else:
+                check("the hidden get_coverage is refused with a typed error",
+                      coverage.isError and coverage.structuredContent["error"]["code"] == "INVALID_ARGUMENT")
+            # A concept without knowing the content: the instructions end with the release's scope statement.
+            scope = (init.instructions or "").partition("Scope: ")[2].split("\n")[0]
+            first = (await session.call_tool("search", {"query": scope or "permit", "limit": 1})).structuredContent
+            check("a search with the scope statement of the instructions finds a concept", bool(first.get("results")))
+            if not first.get("results"):
+                return failures
+            concept = first["results"][0]
             found = (await session.call_tool("search", {"query": concept["label"], "limit": 10})).structuredContent
             hit = next((item for item in found["results"] if item["concept_id"] == concept["concept_id"]), None)
             check(f"search by its label finds {concept['concept_id']}", hit is not None)
@@ -72,13 +85,15 @@ async def run(release: Path | None, url: str | None, report: Report = print_chec
             parts = code.split("-")
             jurisdiction = {"country": parts[0], **({"canton": "-".join(parts[:2])} if len(parts) > 1 else {}),
                             **({"city": code} if len(parts) > 2 else {})}
+            # Resolved for today: an ageing release answers STALE with the facts it published, which is still a round
+            # trip; the freshness window is the readiness check's business, not the transport's.
             resolved = await session.call_tool("resolve", {"concept_ids": [concept["concept_id"]], "jurisdiction": jurisdiction,
-                                                           "as_of": root["freshness"]["snapshot_date"], "context": context})
+                                                           "context": context})
             body = resolved.structuredContent
             facts = body["results"][0].get("facts", []) if not resolved.isError else []
             check(f"resolve for {code} with {context or 'no context'} serves facts with citations: {body.get('status')}",
-                  not resolved.isError and body["status"] == "SUPPORTED" and bool(facts) and bool(body["results"][0]["citations"])
-                  and json.loads(resolved.content[0].text) == body)
+                  not resolved.isError and body["status"] in ("SUPPORTED", "STALE") and bool(facts)
+                  and bool(body["results"][0]["citations"]) and json.loads(resolved.content[0].text) == body)
             if facts:
                 evidence = (await session.call_tool("get_evidence", {"evidence_ids": facts[0]["evidence_ids"][:1]})).structuredContent
                 check("get_evidence returns the excerpt of a served fact", bool(evidence["evidence"][0]["original_excerpt"]))

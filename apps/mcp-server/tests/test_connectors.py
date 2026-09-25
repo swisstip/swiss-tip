@@ -90,7 +90,7 @@ class ConnectorRoundTripTests(unittest.TestCase):
                     return listed, resolved, looked_up, outside, unknown
 
         listed, resolved, looked_up, outside, unknown = asyncio.run(run())
-        self.assertEqual([t.name for t in listed], ["get_coverage", "search", "resolve", "get_evidence", "lookup"])
+        self.assertEqual([t.name for t in listed], ["search", "resolve", "get_evidence", "lookup"])
         lookup = next(t for t in listed if t.name == "lookup")
         self.assertTrue(lookup.annotations.readOnlyHint)
         self.assertEqual(lookup.inputSchema["properties"]["limit"]["default"], 3)

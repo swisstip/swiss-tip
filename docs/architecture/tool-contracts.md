@@ -58,7 +58,8 @@ its hardcoded scenario for harness development.
    (`CH-ZH-261` is the City of Zurich).
 6. **Every result names the release** it was answered from in `release_id`
    and ends with a `limitations` list the caller should pass on when
-   relevant. `get_coverage` carries the release's full list. `search`,
+   relevant. `get_coverage`, where the server lists it, carries the
+   release's full list. `search`,
    `resolve` and `get_evidence`, which a caller reads on every call, carry
    two lines: the review status of the served facts with its counts, and
    a pointer that names what the full list says and where it is. Lines
@@ -176,6 +177,16 @@ does not answer a canton-level request.
 
 ## 3. `get_coverage`
 
+Hidden by default. The MCP server lists and serves `get_coverage` only when
+started with `--with-coverage`; otherwise a call is refused with
+`INVALID_ARGUMENT` and no text a caller reads names the tool. Callers that
+saw it opened with it and chose their next calls from its topic list instead
+of searching, although the instructions asked for it only when unsure about
+the scope. A `weak` or `none` search result carries what the root page
+offered for a decline: `scope_statement`, `out_of_scope` and
+`out_of_scope_response` (section 4). The library (`ReleaseService`) keeps
+the tool for the admin console and the acceptance runs.
+
 Discover the catalog. The root page is deliberately small (about 1.5 KB in
 the mock, about 5 KB on the current Zurich release with its seven topics and
 28 jurisdictions; the round-trip check allows 6 KB) so that one call is
@@ -287,8 +298,10 @@ them (section 4.4).
 | `fallback_reason` | string or absent | Why optional semantic retrieval could not run |
 | `match_strength` | `strong`, `weak`, `none` or absent | Whether the question's distinctive words reached a published concept (section 4.1). `strong`: resolve the relevant hits. `weak`: the hits rest on incidental words or a nearby subject; the question probably lies outside the scope, decline it unless a hit is clearly its subject. `none`: no candidate. Older mock responses omit it |
 | `match_signals` | object or absent | `lexical_share`, `anchored_weight` and `best_semantic_score`, the signals behind the verdict, for the record |
-| `scope_statement` | string or absent | The release's scope statement, present on `weak` and `none` results so the caller can decline in the same call without `get_coverage` |
-| `guidance_for_caller` | string or absent | One text per `match_strength`: ranked candidates still need resolution against the caller's explicit scope and rephrasing rarely finds other concepts; weak candidates rest on incidental words, so compare the question with `scope_statement` and decline unless a hit is clearly its subject; an empty result does not establish domain noncoverage, so compare with `scope_statement` and, only if a topic fits, call `get_coverage` once for that topic. On `weak` and `none` it adds one exception: a question in a language other than the query languages is searched once more with its key terms in the preferred one |
+| `scope_statement` | string or absent | The release's scope statement, present on `weak` and `none` results so the caller can decline in the same call |
+| `out_of_scope` | list of string or absent | The subjects the release leaves out, present on `weak` and `none` results |
+| `out_of_scope_response` | string or absent | How to decline a question outside the scope, present on `weak` and `none` results |
+| `guidance_for_caller` | string or absent | One text per `match_strength`: ranked candidates still need resolution against the caller's explicit scope and rephrasing rarely finds other concepts; weak candidates rest on incidental words, so compare the question with `scope_statement` and decline unless a hit is clearly its subject; an empty result does not establish domain noncoverage, so compare with `scope_statement` and `out_of_scope` and, only if the scope clearly covers the question, search once more with its key terms. On `weak` and `none` it adds one exception: a question in a language other than the query languages is searched once more with its key terms in the preferred one |
 | `limitations` | list of string | |
 
 SearchHit: `concept_id`, `topic_id`, `label`, `description`, `jurisdictions`
@@ -618,7 +631,7 @@ in one call, for one jurisdiction, one date and one context.
 
 | Field | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `concept_ids` | list of string, 1 to 5, unique | yes | From `get_coverage` or `search` |
+| `concept_ids` | list of string, 1 to 5, unique | yes | From `search` |
 | `jurisdiction` | Jurisdiction | no, default the country the release serves | Where the user lives, in names or codes, at the most specific level known |
 | `as_of` | date | no, default today | Applicability date |
 | `context` | map of string to string | no, default empty | Values for the release's context fields (see below). A field the requested concepts do not use is ignored; a field the release does not publish is a `context_not_covered` gap |
@@ -973,10 +986,9 @@ For the standing Czech-citizen question the intended sequence is two calls:
 
 The result carries the facts, the citations, the two required user facts
 (arrival date, first working day) and the decision rule. The caller asks the
-user for the two dates and applies the rule. `get_coverage` is for the case
-where the caller is unsure the question is in scope at all, and
-`get_evidence` only when the user wants a verbatim quote; both are otherwise
-unnecessary, and the tool descriptions say so. A question in a language the
+user for the two dates and applies the rule. `get_evidence` is for a
+verbatim quote only, and the tool description says so; `get_coverage` is not
+listed by default (section 3). A question in a language the
 release does not index is searched with its key terms in the preferred query
 language (section 4.2). The recorded caller runs are
 in `.local/experiments/`.

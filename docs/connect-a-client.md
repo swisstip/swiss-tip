@@ -15,7 +15,7 @@ endpoint; for a server on your machine, started as the
 | Local endpoint | `http://127.0.0.1:8000/mcp` |
 | stdio | `docker run --rm -i ghcr.io/swisstip/swiss-tip:mvp-zurich --transport stdio` |
 | Server name used below | `swiss-tip`, or `swiss_tip` where a client wants no hyphen |
-| Tools | `get_coverage`, `search`, `resolve`, `get_evidence`, and `lookup` where the calendar connector runs, as on the hosted endpoint |
+| Tools | `search`, `resolve`, `get_evidence`, and `lookup` where the calendar connector runs, as on the hosted endpoint; `get_coverage` only on a server started with `--with-coverage` |
 
 Three things hold for every client:
 
