@@ -344,7 +344,7 @@ What we would build next, and why, is in
 [next steps and improvements](docs/product/next-steps.md). That covers:
 - the knowledge graph tool, which is built and open for review;
 - source discovery driven from the admin console rather than agent swarms;
-- the business model.
+- monetization.
 
 ## Repository
 

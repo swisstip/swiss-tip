@@ -175,7 +175,7 @@ sets out both.
 **Why.** Answers stay current without a person starting every refresh, and
 the platform serves any domain where a wrong answer is too expensive.
 
-## 9. Business model
+## 9. Monetization
 
 **Next.**
 - **Hosted subscription:** we operate the server and keep the packs fresh.
