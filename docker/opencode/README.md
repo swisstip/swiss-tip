@@ -54,7 +54,7 @@ the `swiss_tip` server, in a file only the container's user can read. A
 server that answers 401 ends the container at once with one line that says
 whether credentials were missing or refused.
 
-The host that serves the jury then carries the server and the sidecar only,
+The host that serves the MCP endpoint then carries the server and the sidecar only,
 and a demo session costs it a few tool calls, not an agent. That
 deployment can also host this image, behind a password.
 

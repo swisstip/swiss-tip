@@ -1,28 +1,27 @@
 # Connect a client
 
-**Last update:** 24 September 2026
+**Last update:** 26 September 2026
 
 How to connect an MCP client, an agent harness or an agent framework to
 Swiss TIP. The server speaks MCP over Streamable HTTP at `/mcp` - stateless,
 JSON responses, no authentication, no legacy SSE endpoint - and over stdio
-when a client starts it as a local process. Every example uses the hosted
-endpoint; for a server on your machine, started as the
-[README](../README.md#quick-start) describes, put the local URL in its place.
+when a client starts it as a local process. Every example uses a server on
+your machine, started as the [README](../README.md#quick-start) describes; for
+a server you host yourself, put its public HTTPS URL in its place.
 
 | | |
 | --- | --- |
-| Hosted endpoint | `https://51-96-83-1.sslip.io/mcp` |
 | Local endpoint | `http://127.0.0.1:8000/mcp` |
 | stdio | `docker run --rm -i ghcr.io/swisstip/swiss-tip:mvp-zurich --transport stdio` |
 | Server name used below | `swiss-tip`, or `swiss_tip` where a client wants no hyphen |
-| Tools | `search`, `resolve`, `get_evidence`, and `lookup` where the calendar connector runs, as on the hosted endpoint; `get_coverage` only on a server started with `--with-coverage` |
+| Tools | `search`, `resolve`, `get_evidence`, and `lookup` where the calendar connector runs, as in the `mvp-zurich` image; `get_coverage` only on a server started with `--with-coverage` |
 
 Three things hold for every client:
 
-- **Cloud clients need the hosted endpoint.** Claude's and ChatGPT's
+- **Cloud clients need a public endpoint.** Claude's and ChatGPT's
   connectors, Le Chat, Copilot Studio and OpenAI's hosted MCP tool call the
-  server from the vendor's cloud, so they reach only the public HTTPS URL,
-  never a server on your machine.
+  server from the vendor's cloud, so they reach only a public HTTPS URL,
+  never a server on your machine; host the image yourself for them.
 - **Timeouts.** A tool call normally answers in well under a second. A stdio
   server loads its embedding model before it answers, about ten seconds;
   pull the image first (`docker pull ghcr.io/swisstip/swiss-tip:mvp-zurich`)
@@ -35,8 +34,8 @@ Three things hold for every client:
 
 ## What was tested
 
-These routes were run against the hosted endpoint, listing its tools and
-calling one:
+These routes were run against a public deployment of the server during the
+hackathon, listing its tools and calling one:
 
 | Route | Version |
 | --- | --- |
@@ -55,14 +54,14 @@ September 2026 and was not run here.
 ### Claude Code
 
 ```shell
-claude mcp add --transport http swiss-tip https://51-96-83-1.sslip.io/mcp
+claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
 ```
 
 Options go before the name. `--scope project` writes the server into
 `.mcp.json`, to share it with a project:
 
 ```json
-{"mcpServers": {"swiss-tip": {"type": "http", "url": "https://51-96-83-1.sslip.io/mcp"}}}
+{"mcpServers": {"swiss-tip": {"type": "http", "url": "http://127.0.0.1:8000/mcp"}}}
 ```
 
 Over stdio instead:
@@ -74,14 +73,14 @@ claude mcp add --transport stdio swiss-tip -- docker run --rm -i ghcr.io/swissti
 ### Codex
 
 ```shell
-codex mcp add swiss-tip --url https://51-96-83-1.sslip.io/mcp
+codex mcp add swiss-tip --url http://127.0.0.1:8000/mcp
 ```
 
 or in `~/.codex/config.toml` (`.codex/config.toml` in a project):
 
 ```toml
 [mcp_servers.swiss-tip]
-url = "https://51-96-83-1.sslip.io/mcp"
+url = "http://127.0.0.1:8000/mcp"
 ```
 
 Over stdio, raise the start-up timeout (10 seconds by default), because the
@@ -100,13 +99,13 @@ Streamable HTTP server.
 ### Gemini CLI
 
 ```shell
-gemini mcp add --transport http --scope user swiss-tip https://51-96-83-1.sslip.io/mcp
+gemini mcp add --transport http --scope user swiss-tip http://127.0.0.1:8000/mcp
 ```
 
 or in `~/.gemini/settings.json`:
 
 ```json
-{"mcpServers": {"swiss-tip": {"httpUrl": "https://51-96-83-1.sslip.io/mcp"}}}
+{"mcpServers": {"swiss-tip": {"httpUrl": "http://127.0.0.1:8000/mcp"}}}
 ```
 
 A plain `url` without `"type": "http"` means SSE to Gemini CLI and fails
@@ -121,7 +120,7 @@ In `opencode.json` of the project, or `~/.config/opencode/opencode.json`:
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "swiss_tip": {"type": "remote", "url": "https://51-96-83-1.sslip.io/mcp", "enabled": true}
+    "swiss_tip": {"type": "remote", "url": "http://127.0.0.1:8000/mcp", "enabled": true}
   }
 }
 ```
@@ -142,7 +141,7 @@ extensions:
   swiss-tip:
     name: swiss-tip
     type: streamable_http
-    uri: https://51-96-83-1.sslip.io/mcp
+    uri: http://127.0.0.1:8000/mcp
     enabled: true
     timeout: 300
 ```
@@ -155,7 +154,7 @@ In `.vscode/mcp.json` of the workspace, or in the user configuration (command
 "MCP: Open User Configuration"):
 
 ```json
-{"servers": {"swiss-tip": {"type": "http", "url": "https://51-96-83-1.sslip.io/mcp"}}}
+{"servers": {"swiss-tip": {"type": "http", "url": "http://127.0.0.1:8000/mcp"}}}
 ```
 
 The top-level key is `servers`, not `mcpServers`. VS Code asks whether to
@@ -166,7 +165,7 @@ trust the server when it first starts it; the tools are used in agent mode.
 In `~/.cursor/mcp.json`, or `.cursor/mcp.json` in the project:
 
 ```json
-{"mcpServers": {"swiss-tip": {"url": "https://51-96-83-1.sslip.io/mcp"}}}
+{"mcpServers": {"swiss-tip": {"url": "http://127.0.0.1:8000/mcp"}}}
 ```
 
 Enable the server in Cursor's settings; tool calls ask for approval by
@@ -177,14 +176,14 @@ default.
 Its default agent, Devin Local:
 
 ```shell
-devin mcp add swiss-tip https://51-96-83-1.sslip.io/mcp
+devin mcp add swiss-tip http://127.0.0.1:8000/mcp
 ```
 
 or in `~/.config/devin/mcp_config.json` (on Windows
 `%APPDATA%\devin\mcp_config.json`; `.devin/mcp_config.json` in a project):
 
 ```json
-{"mcpServers": {"swiss-tip": {"url": "https://51-96-83-1.sslip.io/mcp", "transport": "http"}}}
+{"mcpServers": {"swiss-tip": {"url": "http://127.0.0.1:8000/mcp", "transport": "http"}}}
 ```
 
 The legacy Cascade agent and older Windsurf installs read
@@ -195,7 +194,7 @@ The legacy Cascade agent and older Windsurf installs read
 In `settings.json`, or Settings, AI, MCP Servers, Add Remote Server:
 
 ```json
-{"context_servers": {"swiss-tip": {"url": "https://51-96-83-1.sslip.io/mcp"}}}
+{"context_servers": {"swiss-tip": {"url": "http://127.0.0.1:8000/mcp"}}}
 ```
 
 Zed's documentation says it offers an OAuth sign-in for a remote server
@@ -212,7 +211,7 @@ schema: v1
 mcpServers:
   - name: swiss-tip
     type: streamable-http
-    url: https://51-96-83-1.sslip.io/mcp
+    url: http://127.0.0.1:8000/mcp
 ```
 
 Continue uses MCP tools in agent mode only.
@@ -222,7 +221,7 @@ Continue uses MCP tools in agent mode only.
 ### Claude Desktop and claude.ai
 
 **Remote, as a custom connector.** Customize, Connectors, "+", Add custom
-connector, with the hosted URL and no authentication (some of Anthropic's
+connector, with your public URL and no authentication (some of Anthropic's
 pages name the menu Settings, Connectors). A connector belongs to the
 account, so it appears in Claude Desktop, on claude.ai and on mobile alike.
 The Free plan allows one custom connector; on Team and Enterprise an owner
@@ -238,14 +237,14 @@ Claude Desktop after editing the file.
 ```
 
 ```json
-{"mcpServers": {"swiss-tip": {"command": "npx", "args": ["-y", "mcp-remote", "https://51-96-83-1.sslip.io/mcp", "--transport", "http-only"]}}}
+{"mcpServers": {"swiss-tip": {"command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:8000/mcp", "--transport", "http-only"]}}}
 ```
 
 ### ChatGPT
 
 In developer mode (Plus, Pro, Business, Enterprise and Education, on the
 web): turn developer mode on under Settings, Security and login; add an app
-at chatgpt.com/plugins with the hosted URL as its connection URL and "No
+at chatgpt.com/plugins with your public URL as its connection URL and "No
 Authentication"; then choose it in a chat from the plus menu, Developer mode.
 
 ### Open WebUI
@@ -265,7 +264,7 @@ In `librechat.yaml`:
 mcpServers:
   swiss-tip:
     type: streamable-http
-    url: https://51-96-83-1.sslip.io/mcp
+    url: http://127.0.0.1:8000/mcp
 ```
 
 LibreChat blocks local and private addresses by default. For a server on
@@ -283,13 +282,13 @@ mcpServers:
 ### Mistral Le Chat
 
 Connectors, Add Connector, Custom MCP Connector: a name without spaces or
-special characters (`swisstip`) and the hosted URL; Le Chat detects that no
+special characters (`swisstip`) and your public URL; Le Chat detects that no
 authentication is needed.
 
 ### Microsoft Copilot Studio
 
 Tools, Add a tool, New tool, Model Context Protocol: a name, a description,
-the hosted URL and authentication None.
+your public URL and authentication None.
 
 ### n8n
 
@@ -305,9 +304,9 @@ The interface in the browser, and the same checks from the command line
 (Node.js 22.19 or newer):
 
 ```shell
-npx @modelcontextprotocol/inspector --server-url https://51-96-83-1.sslip.io/mcp --transport http
-npx @modelcontextprotocol/inspector --cli https://51-96-83-1.sslip.io/mcp --transport http --method tools/list
-npx @modelcontextprotocol/inspector --cli https://51-96-83-1.sslip.io/mcp --transport http --method tools/call --tool-name search --tool-arg query="Karton Abfuhr" --tool-arg limit=1
+npx @modelcontextprotocol/inspector --server-url http://127.0.0.1:8000/mcp --transport http
+npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8000/mcp --transport http --method tools/list
+npx @modelcontextprotocol/inspector --cli http://127.0.0.1:8000/mcp --transport http --method tools/call --tool-name search --tool-arg query="Karton Abfuhr" --tool-arg limit=1
 ```
 
 In CLI mode the endpoint comes first; always pass `--transport http`.
@@ -329,7 +328,7 @@ import asyncio
 from mcp import Client
 
 async def main():
-    async with Client("https://51-96-83-1.sslip.io/mcp") as client:
+    async with Client("http://127.0.0.1:8000/mcp") as client:
         print([tool.name for tool in (await client.list_tools()).tools])
         result = await client.call_tool("search", {"query": "Anmeldung Zuzug Frist", "jurisdiction": {"city": "Zürich"}})
         print(result.structured_content["match_strength"])
@@ -345,7 +344,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 async def main():
-    async with streamable_http_client("https://51-96-83-1.sslip.io/mcp") as (read, write, _):
+    async with streamable_http_client("http://127.0.0.1:8000/mcp") as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
             result = await session.call_tool("search", {"query": "Anmeldung Zuzug Frist", "jurisdiction": {"city": "Zürich"}})
@@ -360,13 +359,13 @@ asyncio.run(main())
 from agents import Agent
 from agents.mcp import MCPServerStreamableHttp
 
-async with MCPServerStreamableHttp(name="swiss-tip", params={"url": "https://51-96-83-1.sslip.io/mcp", "timeout": 30},
+async with MCPServerStreamableHttp(name="swiss-tip", params={"url": "http://127.0.0.1:8000/mcp", "timeout": 30},
                                    cache_tools_list=True) as server:
     agent = Agent(name="Assistant", instructions="Answer questions about Switzerland with the swiss-tip tools.",
                   mcp_servers=[server])
 ```
 
-`HostedMCPTool` with `server_url` set to the hosted endpoint lets OpenAI call
+`HostedMCPTool` with `server_url` set to your public endpoint lets OpenAI call
 the server itself instead; that works with the public URL only.
 
 ### LangChain and LangGraph
@@ -374,7 +373,7 @@ the server itself instead; that works with the public URL only.
 ```python
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
-client = MultiServerMCPClient({"swiss-tip": {"transport": "http", "url": "https://51-96-83-1.sslip.io/mcp"}})
+client = MultiServerMCPClient({"swiss-tip": {"transport": "http", "url": "http://127.0.0.1:8000/mcp"}})
 tools = await client.get_tools()
 ```
 
@@ -386,7 +385,7 @@ Version 2 (`pydantic-ai-slim[mcp]`):
 from pydantic_ai import Agent
 from pydantic_ai.mcp import MCPToolset
 
-agent = Agent("<model>", toolsets=[MCPToolset("https://51-96-83-1.sslip.io/mcp")])
+agent = Agent("<model>", toolsets=[MCPToolset("http://127.0.0.1:8000/mcp")])
 ```
 
 ## stdio for any client
@@ -399,7 +398,7 @@ A client that starts its servers as local processes runs the image:
 
 The image carries the release, its semantic index and the embedding model,
 so search is hybrid over stdio as well, with no network. A client that only
-speaks stdio reaches the hosted endpoint through the bridge instead:
-`npx -y mcp-remote https://51-96-83-1.sslip.io/mcp --transport http-only`.
+speaks stdio reaches an HTTP endpoint through the bridge instead:
+`npx -y mcp-remote http://127.0.0.1:8000/mcp --transport http-only`.
 Running the server from a Python environment, without Docker, is in
 [developer setup](developer-setup.md).

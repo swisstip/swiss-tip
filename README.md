@@ -16,100 +16,11 @@ says so by name.
 Built for the **[Swiss {ai} Weeks](https://zh.ai-weeks.ch/)** hackathon in Zurich, 24 and 25 September
 2026, for the challenge **[Swiss Grounding MCP](https://zh.ai-weeks.ch/challenges/swiss-grounding-mcp)**, set by Swisscom's myAI team.
 
-The pitch is at **[swisstip.github.io/swiss-tip/pitch/stage.html](https://swisstip.github.io/swiss-tip/pitch/stage.html)**.
-
-### Evaluation quick start
-
-| # | Criterion | Swiss TIP |
-| --- | --- | --- |
-| 1 | Commit to evaluate | Branch `main` of both repositories, the code and the knowledge base; the current commits are under [commit to evaluate](#commit-to-evaluate) |
-| 2 | Transport | Streamable HTTP, port `8000`, path `/mcp`, stateless, no authentication; `/health` beside it. stdio as well, with `--transport stdio` |
-| 3 | Runtime | A prebuilt image, `linux/amd64` and `linux/arm64` under one tag, so it runs natively on Apple silicon ([platforms](docker/README.md#platforms)). Inside: Python 3.14 (`python:3.14-slim`), `swisstip-mcp` 0.3.4 from PyPI, a CPU-only Ollama 0.34.0 with `qwen3-embedding:0.6b`. Nothing but Docker is needed on the host. From source instead: Python 3.14 and uv, see [developer setup](docs/developer-setup.md) |
-| 4 | Setup | `docker pull ghcr.io/swisstip/swiss-tip:mvp-zurich` - no prompts, no clone. About 850 MB to download, roughly three minutes; 1.6 GB on disk; 1.2 GiB of memory while running ([measured](docker/README.md#measured)) |
-| 5 | Start command | `docker run --rm -p 8000:8000 ghcr.io/swisstip/swiss-tip:mvp-zurich` |
-| 6 | Prebuilt data | Shipped inside the image: release `mvp-zurich-2026-09-25-v3` with its semantic index and readiness attestation, and 15 waste-collection calendars, about 15 MB in all, from `releases/mvp-zurich/` and `datasets/mvp-zurich/` of [swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) ([sizes](#credentials-and-the-prebuilt-index)). Refresh: `docker pull` again, since the tag `mvp-zurich` follows the newest attested release, in the time of the download. The semantic index is rebuilt with the command in [developer setup](docs/developer-setup.md#rebuild-the-semantic-index), about 15 minutes on a CPU. The facts themselves are human-reviewed, so a release is not rebuilt automatically |
-| 7 | Credentials | None. The server needs no API key, token or account and calls no external service while answering ([credentials](#credentials-and-the-prebuilt-index)). Optional variables, all with working defaults: `PORT` (the port inside the container, default `8000`) and `SWISSTIP_CONNECTORS` (set empty to leave out the calendar and the `lookup` tool) |
-| 8 | Hosted endpoint | `https://51-96-83-1.sslip.io/mcp`, no authentication header; `https://51-96-83-1.sslip.io/health`. Runs on AWS in Zurich (`eu-central-2`): one EC2 `t3.small` (2 vCPU, x86_64, Amazon Linux 2023) serving the image of row 5 behind Caddy for HTTPS. Up until the evaluation is complete |
-| 9 | Declared scope | Topics: main topic **Residence permits and migration**; every topic of the challenge's topic table, covered, partly or not, in the [declared scope](#declared-scope) table below. Geography: all of Switzerland for federal rules; registration on arrival in all 26 cantons; ZH and the municipality of Zurich for the cantonal and municipal procedures of the topics below; waste in the municipalities of Basel, St. Gallen and Lugano; school holidays in 23 cantons (all except BL, NW and SH), with dates in 19 of them. Languages: users may ask in any language. The assistant talks to the server in German or English; statements come back in English, and excerpts in the language of the cited page (German, French, Italian or English) |
-| 10 | One example call | Tool `search`, arguments `{"query": "register arrival City of Zurich", "limit": 3}`: returns the matching concepts, best first - `city-zurich-arrival` with the context it needs (`arrival_origin`) - with `match_strength` `strong` and `retrieval_mode` `hybrid`. The `resolve` that follows, and `curl` commands for both, are in [example calls](docs/example-call.md) |
-| 11 | Known limits | [Not covered](#coverage-at-a-glance): fees, appointments and processing times, amounts and calculators, individual eligibility, asylum, social assistance, other cantons beyond arrival registration, other municipalities beyond the waste of Basel, St. Gallen and Lugano. Weak spots: [LIMITATIONS.md](https://github.com/swisstip/swiss-tip-mvp/blob/main/LIMITATIONS.md) |
-| 12 | robots.txt and terms of use | `--obey-robots` of the downloader, on by default: it follows `robots.txt` and its crawl delays and fails closed when a policy cannot be read; `--no-obey-robots` overrides it and is recorded in the run. Build time only - the server never fetches a page ([source etiquette](#source-etiquette)) |
-| 13 | Parallel use | Yes: stateless, read-only, one worker thread per call; 40 simultaneous calls answered on the hosted instance. `/health` answers 12 to 13 seconds after `docker run`, once the model is loaded ([measured](#evaluating-swiss-tip)) |
-
-#### Commit to evaluate
-
-Swiss TIP is two repositories, both evaluated on their branch `main`:
-
-| Repository | Purpose | Branch | Commit |
-| --- | --- | --- | --- |
-| [swisstip/swiss-tip](https://github.com/swisstip/swiss-tip) | The MCP server itself: code only, no knowledge base | `main` | [`dfb2d3f`](https://github.com/swisstip/swiss-tip/commit/dfb2d3f99fb984f1d7a88483d5aa6c80a8ab53ae) |
-| [swisstip/swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp) | The MVP knowledge base only: `mvp-zurich`, release `mvp-zurich-2026-09-25-v3` | `main` | [`f17cd5b`](https://github.com/swisstip/swiss-tip-mvp/commit/f17cd5b6754ce9af43f2da7336daefa513e042a5) |
-
-Commits after `dfb2d3f` in `swiss-tip` change this README only.
-
-#### Declared scope
-
-The main topic is **residence permits and migration**: the federal rules for
-all of Switzerland, and the procedures of the Canton of Zurich (ZH) and the
-municipality of Zurich. Around it, the current release covers what a
-person living in or moving to Switzerland meets in everyday administrative
-life. Each topic of the
-[challenge's topic table](https://github.com/Swiss-ai-Weeks/swisscom-2026/tree/main/swiss-grounding-mcp#2-which-sources-should-we-use-and-will-swisscom-provide-a-list)
-is declared below as covered, partly covered or not covered:
-
-| # | Topic area | Declared | What is covered | Geography |
-| --- | --- | --- | --- | --- |
-| 1 | Health insurance premiums and basic insurance | Partly | The insurance duty on arrival, exemptions, what basic insurance pays, cost-sharing (franchise and retention), insurance models, changing insurer, unpaid premiums, cross-border commuters and treatment abroad, premium reduction and accident insurance. No premium amounts and no premium-reduction amounts | All of Switzerland; ZH |
-| 2 | Taxes and fees | Partly | Tax at source: who is taxed, the tariff codes, when the liability ends and the subsequent ordinary assessment. The tax return and tax office of the municipality of Zurich, and the radio and television fee. No tax amounts, tariff tables or deductions, and no office fees | All of Switzerland; ZH; municipality of Zurich |
-| 3 | Law and regulations | Partly | The federal law behind the other topics, cited by article: the Foreign Nationals and Integration Act, the free-movement agreement, the Code of Obligations on tenancy, the Federal Constitution on voting rights. No general legal questions | All of Switzerland |
-| 4 | Waste collection and recycling | Yes | Municipality of Zurich: bags, recycling, hazardous waste and the next collection dates by postal code. Basel and St. Gallen: collection zones and the next collection dates. Lugano: bags and ecocentri, without dates | Municipalities of Zurich, Basel, St. Gallen and Lugano |
-| 5 | Moving, residence registration and civil status | Yes | Registering on arrival in every canton, with its migration office, and in most cantons moving in from another canton. In the municipality of Zurich: registering an arrival, the newcomer checklist, deregistering on leaving, and marriage. No other civil-status procedures | All 26 cantons; municipality of Zurich |
-| 6 | Residence permits and migration | **Yes, main topic** | Permits L, B, C, Ci and G for EU/EFTA and third-country nationals, family reunification, renewal, lost permits, change of canton, study and work admission; entry and visas (visas C and D, the 90-in-180-days rule, ETIAS, the Entry/Exit System); naturalisation; integration offers and German courses in ZH. The visa fee and the decision time for a visa are covered; no permit fees or office processing times, no asylum procedure and no visa rules per nationality | All of Switzerland; ZH; municipality of Zurich |
-| 7 | Social insurance and pensions | Yes | AHV (who is insured, contributions, reference age, early and late retirement, survivors' pensions), the three pillars, pillar 3a, refunds and pension-fund payments on leaving, family allowances with their federal minimum, and parental leave. No individual pension or benefit amounts, and no invalidity insurance or supplementary benefits | All of Switzerland; ZH |
-| 8 | Work and unemployment | Yes | Signing on with the RAV and an unemployment fund, a jobseeker's duties, interim earnings, insolvency compensation, short-time work, notice periods and protection against dismissal. No daily-allowance amounts and no job vacancies | All of Switzerland; ZH |
-| 9 | Schools and education | Partly | Who sets the school holidays, and the dates of 2026/27 and 2027/28 where the canton publishes them - for the whole canton, or for its main town, a part of it or its upper schools where there is no single plan for the canton. For BE, BS, UR and VS who sets them, without dates. In the municipality of Zurich, the school holidays and kindergarten entry. No other schooling | Dates: AG, AI, AR, FR, GE, GL, GR, JU, LU, NE, OW, SG, SO, SZ, TG, TI, VD, ZG, ZH and the municipality of Zurich; without dates: BE, BS, UR, VS. Not covered: BL, NW, SH |
-| 10 | Public transport and mobility | No | - | - |
-| 11 | Road traffic, vehicles and driving licences | Partly | Driving on and exchanging a foreign licence, vehicles after a move and vehicle import, blue-zone parking permits | All of Switzerland; ZH; municipality of Zurich |
-| 12 | Housing and renting | Yes | Lease, deposit, notice, rent increases, defects, the reference interest rate and the Zurich initial-rent form. No finding a home | All of Switzerland; ZH |
-| 13 | Voting, elections and political rights | Partly | Who may vote and elect, foreign nationals' voting rights, and how to vote in ZH. No upcoming votes or results | All of Switzerland; ZH |
-| 14 | Companies, commercial register and VAT | No | - | - |
-| 15 | Customs and ordering from abroad | Yes | The value limit and duty-free quantities when travelling, declaring goods, import VAT, ordering from abroad, returns and repairs, pets, prohibited and restricted goods, moving household goods and a vehicle, and leaving with goods. No tariff numbers or duty rates per product | All of Switzerland |
-| 16 | Statistics, open data, geodata and weather | No | - | - |
-
-Outside the table, the addresses and hours of the Canton of Zurich and City
-of Zurich offices, dogs and medical emergencies are covered as well. Outside
-ZH and the municipality of Zurich, the federal rules still apply and are served with a
-caveat that the local procedure is not covered. The assistant talks to the server in German or English; statements come back in English, and excerpts in the language of the cited page (German, French, Italian or English). The full list of what is not covered is under
-[coverage at a glance](#coverage-at-a-glance).
-
 ## Quick start
 
-Three ways in, from the simplest to the most involved. Every one of them
-speaks Streamable HTTP at `/mcp`, needs no authentication, and has a
-`/health` endpoint beside it.
-
-**Hosted for you.** A running instance is hosted on AWS and stays up until
-Swisscom's evaluation is complete; connect any MCP client to it, with nothing
-to install:
-
-```shell
-claude mcp add --transport http swiss-tip https://51-96-83-1.sslip.io/mcp
-```
-
-Its `/health` is at `https://51-96-83-1.sslip.io/health`.
-
-Any other client
-connects to the same URL: the endpoint speaks Streamable HTTP, is stateless
-and needs no authentication. [Connect a client](docs/connect-a-client.md)
-has the configuration for Claude Desktop and claude.ai, ChatGPT, Codex,
-Gemini CLI, OpenCode, Goose, VS Code, Cursor, Windsurf, Zed, Continue, Open
-WebUI, LibreChat, Le Chat, Copilot Studio, n8n, the MCP Inspector and the
-Python SDK and agent frameworks, says which of them were tested, and gives a
-stdio route for clients that start the server themselves.
-
-The same host runs a demo OpenCode client that is already connected to it.
-Open <https://demo.51-96-83-1.sslip.io/> and sign in as `opencode`; the
-hackathon team gives out the password on request.
+Two ways in, from the simpler to the more involved. Both speak Streamable
+HTTP at `/mcp`, need no authentication, and have a `/health` endpoint beside
+it.
 
 **On your machine, with Docker.** One command and Docker is all you need.
 The image carries everything: the MCP server, the `mvp-zurich` knowledge base
@@ -134,6 +45,16 @@ curl -s http://127.0.0.1:8000/health
 claude mcp add --transport http swiss-tip http://127.0.0.1:8000/mcp
 ```
 
+Any other client connects to the same URL.
+[Connect a client](docs/connect-a-client.md) has the configuration for Claude
+Desktop and claude.ai, ChatGPT, Codex, Gemini CLI, OpenCode, Goose, VS Code,
+Cursor, Windsurf, Zed, Continue, Open WebUI, LibreChat, Le Chat, Copilot
+Studio, n8n, the MCP Inspector and the Python SDK and agent frameworks, says
+which of them were tested, and gives a stdio route for clients that start the
+server themselves. Cloud clients such as Claude's and ChatGPT's connectors
+need a public HTTPS URL, so for them the image has to run on a host of your
+own.
+
 A healthy `/health` reports `"status": "ok"`, the release ID, the `readiness`
 record with status `ready`, `search.configured_mode` set to `hybrid`, and
 the calendar connector under `connectors` with its 15 calendars registered;
@@ -142,10 +63,10 @@ every `search` result names its own `retrieval_mode` as well. The tag
 packs repository also publishes a tag per release for pinning an exact one.
 
 **The same parts in three containers.** The single image above serves all
-five tools, and it is the image the hosted instance runs. The Compose file
-of this repository splits the same parts over three containers - the slim
-server, the embedding sidecar and the calendar connector - for a host that
-wants to run or restart them apart; it is all you need, no clone:
+five tools. The Compose file of this repository splits the same parts over
+three containers - the slim server, the embedding sidecar and the calendar
+connector - for a host that wants to run or restart them apart; it is all you
+need, no clone:
 
 ```shell
 curl -fsSLO https://raw.githubusercontent.com/swisstip/swiss-tip/main/compose.yaml
@@ -165,7 +86,7 @@ build a knowledge base, see [developer setup](docs/developer-setup.md).
 
 ## Evaluating Swiss TIP
 
-**What is evaluated.** The server at `https://51-96-83-1.sslip.io/mcp`,
+**What is evaluated.** The server in the `mvp-zurich` image,
 serving the current release of the `mvp-zurich` knowledge base with hybrid
 search and the calendar connector: four tools, `search`, `resolve`,
 `get_evidence` and `lookup`. The declared scope is under
@@ -177,7 +98,7 @@ empty `search` result.
 working in two calls: a `search` that finds the concept for a question, and a
 `resolve` that returns its human-reviewed fact on registering an arrival in
 the City of Zurich, with its citation. Each comes with its tool name, its
-arguments as JSON, a `curl` command for the hosted instance and what it
+arguments as JSON, a `curl` command for a local container and what it
 returns.
 
 **Is it the published source?** `/health` names the `release_id`, its
@@ -211,12 +132,12 @@ anything. Measured on 2026-09-25 with the `search` and `resolve` calls from
 
 | Where | Calls sent together | All answered | Median | Slowest |
 | --- | --- | --- | --- | --- |
-| Hosted (AWS t3.small, 2 vCPU), `search` | 1 / 10 / 20 / 40 | yes | 0.2 / 1.7 / 3.1 / 6.0 s | 0.2 / 2.8 / 5.2 / 11.1 s |
-| Hosted, `resolve` | 1 / 20 / 40 | yes | 0.5 / 0.3 / 0.4 s | 0.5 / 0.5 / 0.7 s |
+| AWS t3.small (2 vCPU), `search` | 1 / 10 / 20 / 40 | yes | 0.2 / 1.7 / 3.1 / 6.0 s | 0.2 / 2.8 / 5.2 / 11.1 s |
+| AWS t3.small, `resolve` | 1 / 20 / 40 | yes | 0.5 / 0.3 / 0.4 s | 0.5 / 0.5 / 0.7 s |
 | Local `docker run` (20-thread laptop), `search` | 10 / 40 | yes | 0.7 / 1.8 s | 1.1 / 3.1 s |
 
 `resolve` barely slows down. `search` embeds each query on the CPU, so
-several searches at once wait in line; the hosted instance handles about
+several searches at once wait in line; a 2-vCPU host handles about
 four a second. A conversation makes one call at a time with the model's
 reasoning in between, so a few dozen conversations at once stay within these
 numbers. For more, give the server more cores or run more copies: they share
@@ -245,7 +166,7 @@ because callers that saw it opened with it instead of searching. `resolve` retur
 that says whether the question is covered, whether a detail such as the
 canton is missing, or whether the facts are stale. Where a
 [dataset connector](docs/architecture/dataset-connectors.md) is registered,
-as on the hosted instance, a fourth tool, `lookup`, returns the rows of an
+as in the `mvp-zurich` image, a fourth tool, `lookup`, returns the rows of an
 open dataset a municipality publishes - the next collection dates for a
 postal code or a collection zone - with the dataset's publisher, licence and
 source hash. The full design is in the
@@ -282,7 +203,7 @@ below describes the current one.
   nearly every concept, English on some, French and Italian on a few. The
   tools tell the calling assistant to search once, in German or English, and
   to translate the key terms of a French, Italian or Romansh question into
-  German first; hybrid search (the hosted instance and the images with the
+  German first; hybrid search (the images with the
   embedding model) also matches some French and Italian questions directly,
   less reliably. Every municipality is known by its official name, and the
   larger places also by their names in the other national languages (Genf,
@@ -388,7 +309,7 @@ command is in
 [developer setup](docs/developer-setup.md#rebuild-the-semantic-index).
 
 **How big the `mvp-zurich` data is.** Release `mvp-zurich-2026-09-25-v3`,
-the one the hosted endpoint serves, holds 21 topics, 238 concepts, 1,345
+the one the `mvp-zurich` image serves, holds 21 topics, 238 concepts, 1,345
 facts and 1,615 evidence excerpts from 375 source documents. On disk, under
 [`releases/mvp-zurich/`](https://github.com/swisstip/swiss-tip-mvp/tree/main/releases/mvp-zurich)
 and [`datasets/mvp-zurich/`](https://github.com/swisstip/swiss-tip-mvp/tree/main/datasets/mvp-zurich)

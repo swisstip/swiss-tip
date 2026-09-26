@@ -1,14 +1,15 @@
 # Example calls
 
-**Last update:** 25 September 2026
+**Last update:** 26 September 2026
 
 Two calls that show the server works: a `search` finds the concept for a
 question, and a `resolve` returns its reviewed fact with the citation. This is
 the path an assistant takes for a covered question.
 
 The endpoint is stateless Streamable HTTP, so each call is one request with no
-session and no authentication. The commands use the hosted instance; for a
-local container, use `http://127.0.0.1:8000/mcp` instead.
+session and no authentication. The commands use a local container at
+`http://127.0.0.1:8000/mcp`, started as the [README](../README.md#quick-start)
+describes.
 
 ## 1. Search
 
@@ -25,11 +26,11 @@ the `concept_id` to resolve and the context each one needs. The first hit is
 `city-zurich-arrival`, "City of Zurich: registering arrival from abroad",
 which needs `arrival_origin` (`abroad` or `within_switzerland`). The result
 also names the `match_strength` (`strong` here), the `retrieval_mode`
-(`hybrid` on the hosted instance) and a `guidance_for_caller` that says to
+(`hybrid` in the `mvp-zurich` image) and a `guidance_for_caller` that says to
 resolve the relevant concept IDs next.
 
 ```shell
-curl -s https://51-96-83-1.sslip.io/mcp \
+curl -s http://127.0.0.1:8000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"query":"register arrival City of Zurich","limit":3}}}'
@@ -84,7 +85,7 @@ page with its publisher, URL and access date. Next to them come the
 only and to cite only the returned URL.
 
 ```shell
-curl -s https://51-96-83-1.sslip.io/mcp \
+curl -s http://127.0.0.1:8000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"resolve","arguments":{"concept_ids":["city-zurich-arrival"],"jurisdiction":{"city":"Zurich"},"context":{"arrival_origin":"abroad"}}}}'
