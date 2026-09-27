@@ -1,6 +1,6 @@
 # swisstip-ingestion
 
-**Last update:** 25 September 2026
+**Last update:** 27 September 2026
 
 Build-side source acquisition for Swiss TIP: download the exact pages of a
 source catalogue, resolve Fedlex legal texts to dated documents, and report
@@ -61,6 +61,29 @@ official hosts that reset the connection for any self-identifying crawler
 (`www.gl.ch` and the `tg.ch` sites). robots.txt is still matched by the
 `SwissTIPDemoCrawler` token, so a group written for the crawler keeps
 binding. No other value is accepted.
+
+HTML pages, PDFs, plain text and XML are saved, and so are Office documents
+(DOCX, DOC and RTF), which some city offices publish their resolutions as;
+the extraction reads every saved response by its signature.
+
+## Catalogue scope
+
+A Swiss catalogue names `country_code: "CH"` and the cantons it covers in
+`canton_codes`; a source is `federal` for `CH`, `cantonal` or `municipal`
+for a canton of the scope, and a municipal source names its municipality
+with the BFS number. A catalogue of another country declares its levels
+instead, the country first, and the regions it covers as codes of any level:
+
+```json
+"scope": {"country_code": "PL", "levels": ["national", "voivodeship", "county", "commune"],
+          "region_codes": ["PL-12-61-011"], "description": "...", "exclusions": []}
+```
+
+A source's jurisdiction is then the country or a code within a declared
+region (one segment per level, so `PL-12-61-011` is a commune), and its
+`authority_level` is the level of that code's depth. Only the catalogue
+accepts such a scope so far; the release format and the server are Swiss
+only (see the Polish implementation plan in `docs/product/`).
 
 ## Run layout
 

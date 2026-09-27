@@ -14,14 +14,70 @@ from .crawler import CrawlLimits, SourceDefinition
 
 SOURCE_SCHEMAS = {"source-catalog/v1", "swisstip.source-catalog/v1"}
 SCAN_STATUSES = {"ready", "needs_access_review", "manual_adapter_required"}
-LANGUAGES = {"en", "de", "fr", "it", "rm"}
+LANGUAGES = {"en", "de", "fr", "it", "rm", "pl", "uk"}
 ID_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 CANTONS = frozenset("AG AI AR BE BL BS FR GE GL GR JU LU NE NW OW SG SH SO SZ TG TI UR VD VS ZG ZH".split())
+COUNTRY_CODE = re.compile(r"[A-Z]{2}")
+CODE_SEGMENT = re.compile(r"[0-9A-Z]{1,4}")
 
 
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def _depth(code: object, country: str) -> int | None:
+    """Levels below the country of a code such as ``PL-12-61-01-1``; None when it is not a code of the country."""
+    if not isinstance(code, str):
+        return None
+    parts = code.split("-")
+    if parts[0] != country or not all(CODE_SEGMENT.fullmatch(part) for part in parts[1:]):
+        return None
+    return len(parts) - 1
+
+
+def _within(code: str, region: str) -> bool:
+    return code == region or code.startswith(region + "-")
+
+
+def _swiss_source_check(scope: dict):
+    """Switzerland: a federal source speaks for CH, a cantonal or municipal one for a canton of the scope, and a
+    municipal one names its municipality with the BFS number."""
+    cantons = scope["canton_codes"]
+    _require(len(cantons) == len(set(cantons)) and set(cantons) <= {f"CH-{code}" for code in CANTONS},
+             "Invalid or duplicate cantonal scope")
+
+    def check(entry: dict, jurisdiction: str) -> None:
+        _require(jurisdiction in {"CH", *cantons}, "Source jurisdiction outside catalog scope")
+        _require(entry["authority_level"] in {"federal", "cantonal", "municipal"}, "Invalid authority level")
+        _require((entry["authority_level"] == "federal") == (jurisdiction == "CH"), "Authority/jurisdiction mismatch")
+        if entry["authority_level"] == "municipal":
+            _require(bool(entry["municipality"]["name"]) and re.fullmatch(r"[0-9]{4}", entry["municipality"]["bfs_code"]) is not None,
+                     "Municipal sources require an explicit municipality and BFS code")
+    return check
+
+
+def _declared_levels_check(scope: dict):
+    """Another country: the scope declares its levels, the country first (for Poland: national, voivodeship,
+    county, commune), and the regions it covers as codes of any level. A source's jurisdiction is the country or
+    lies within a region, and its authority level is the level of its code's depth."""
+    country = scope["country_code"]
+    levels = scope.get("levels")
+    _require(isinstance(levels, list) and len(levels) >= 2 and all(_identifier(level) for level in levels)
+             and len(set(levels)) == len(levels), "Declare the country's levels, the country first")
+    regions = scope.get("region_codes", [])
+    _require(isinstance(regions, list) and len(regions) == len(set(regions))
+             and all((depth := _depth(region, country)) is not None and 1 <= depth < len(levels) for region in regions),
+             "Invalid or duplicate regional scope")
+
+    def check(entry: dict, jurisdiction: str) -> None:
+        depth = _depth(jurisdiction, country)
+        _require(depth is not None and depth < len(levels)
+                 and (depth == 0 or any(_within(jurisdiction, region) for region in regions)),
+                 "Source jurisdiction outside catalog scope")
+        _require(entry["authority_level"] in levels, "Invalid authority level")
+        _require(entry["authority_level"] == levels[depth], "Authority/jurisdiction mismatch")
+    return check
 
 
 def _identifier(value: object) -> bool:
@@ -83,10 +139,9 @@ def validate_source_catalog(data: dict, *, allow_empty: bool = False) -> dict:
     topics = [item["topic_id"] for item in data["planning_topics"]]
     _require(all(_identifier(topic) for topic in topics) and len(set(topics)) == len(topics),
              "Planning topic IDs must be valid and unique")
-    _require(data["scope"]["country_code"] == "CH", "Expected Swiss jurisdiction")
-    cantons = data["scope"]["canton_codes"]
-    _require(len(cantons) == len(set(cantons)) and set(cantons) <= {f"CH-{code}" for code in CANTONS},
-             "Invalid or duplicate cantonal scope")
+    country = data["scope"]["country_code"]
+    _require(isinstance(country, str) and COUNTRY_CODE.fullmatch(country) is not None, "Invalid country code")
+    check_jurisdiction = _swiss_source_check(data["scope"]) if country == "CH" else _declared_levels_check(data["scope"])
     for values in data["crawl_profiles"].values():
         _require(set(values) == {field.name for field in fields(CrawlLimits)}, "Specify every crawl limit explicitly")
         for key, value in values.items():
@@ -103,13 +158,8 @@ def validate_source_catalog(data: dict, *, allow_empty: bool = False) -> dict:
         _https_url(source.start_url)
         _require(source.start_url not in urls, "Duplicate seed URL")
         _require(bool(source.canonical_authority), "Missing canonical authority")
-        _require(source.jurisdiction in {"CH", *cantons}, "Source jurisdiction outside catalog scope")
+        check_jurisdiction(entry, source.jurisdiction)
         _require(source.language in LANGUAGES, "Invalid seed language hint")
-        _require(entry["authority_level"] in {"federal", "cantonal", "municipal"}, "Invalid authority level")
-        _require((entry["authority_level"] == "federal") == (source.jurisdiction == "CH"), "Authority/jurisdiction mismatch")
-        if entry["authority_level"] == "municipal":
-            _require(bool(entry["municipality"]["name"]) and re.fullmatch(r"[0-9]{4}", entry["municipality"]["bfs_code"]) is not None,
-                     "Municipal sources require an explicit municipality and BFS code")
         _require(entry["priority"] in {"P0", "P1", "P2"}, "Invalid source priority")
         _require(entry["scan_status"] in SCAN_STATUSES, "Invalid scan status")
         _require(entry.get("user_agent") in {None, "browser"}, "user_agent must be absent or 'browser'")

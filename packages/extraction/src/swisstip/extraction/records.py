@@ -12,7 +12,7 @@ from .office_text import OfficeDependencyMissing, extract_ole_word, extract_open
 from .pdf_text import extract_pdf
 from .run_reader import document_id
 
-LANGUAGES = ("de", "fr", "it", "en", "rm")
+LANGUAGES = ("de", "fr", "it", "en", "rm", "pl")
 EXCLUDING_REVIEW_FLAGS = {"javascript_application_shell", "possible_access_challenge"}
 EXCLUDED_PAGE_KINDS = {"application_shell", "maintenance_page", "error_page"}
 OLE_SIGNATURE = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
@@ -40,7 +40,7 @@ def url_language(url: str) -> str | None:
             return segment.lower()
     if segments:
         stem = PurePosixPath(segments[-1]).stem
-        match = re.search(r"[-_](de|fr|it|en|rm)$", stem, re.I)
+        match = re.search(rf"[-_]({'|'.join(LANGUAGES)})$", stem, re.I)
         if match:
             return match[1].lower()
     return None

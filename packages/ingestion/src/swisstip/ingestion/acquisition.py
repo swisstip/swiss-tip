@@ -31,7 +31,11 @@ from urllib.parse import unquote, urldefrag, urlsplit
 from .crawler import BROWSER_USER_AGENT, DEFAULT_USER_AGENT, CrawlLimits, SafeCrawler, SourceDefinition, robots_agent
 
 
-DOCUMENT_TYPES = ("application/pdf", "application/octet-stream", "text/plain", "application/xml", "text/xml")
+# Office documents are saved as published (Polish city offices publish resolutions as DOCX); the
+# extraction reads them by their signature.
+DOCUMENT_TYPES = ("application/pdf", "application/octet-stream", "text/plain", "application/xml", "text/xml",
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword",
+                  "application/rtf")
 PRINT_LOCK = threading.Lock()
 SUMMARY_SCHEMA = "swisstip.catalogue-download/v1"
 PLAN_SCHEMA = "swisstip.catalogue-download-plan/v1"

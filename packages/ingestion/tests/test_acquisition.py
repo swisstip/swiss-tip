@@ -194,6 +194,17 @@ class SnapshotTests(unittest.TestCase):
         self.assertTrue((self.output / "pages" / self.target["url_id"] / "attempt-002/manifest.json").is_file())
         self.assertEqual(read_json(self.output / "pages" / self.target["url_id"] / "latest.json")["status"], "not_saved")
 
+    def test_office_documents_are_saved_as_published(self) -> None:
+        docx = b"PK\x03\x04 fake word document"
+        result = self.run_snapshot({
+            "https://official.example/robots.txt": FakeResponse(404, b"", content_type="text/plain"),
+            "https://official.example/allowed/start": FakeResponse(
+                200, docx, content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        })
+        self.assertEqual(result["status"], "saved")
+        saved = self.output / result["snapshots"][0]["relative_path"]
+        self.assertEqual(saved.read_bytes(), docx)
+
 
 class SummaryTests(unittest.TestCase):
     def test_summary_counts_pending_saved_and_supplements(self) -> None:

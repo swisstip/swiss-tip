@@ -60,6 +60,48 @@ class SourceCatalogTests(unittest.TestCase):
                     load_source_catalog(path)
 
 
+class DeclaredLevelsCatalogueTests(unittest.TestCase):
+    """A catalogue of another country declares its levels; the Swiss rules above stay as they are."""
+
+    POLISH = Path(__file__).parent / "fixtures" / "sources-pl.json"
+
+    def test_a_catalogue_with_declared_levels_validates(self) -> None:
+        data = load_source_catalog(self.POLISH)
+        self.assertEqual([(e["definition"]["jurisdiction"], e["authority_level"]) for e in data["sources"]],
+                         [("PL", "national"), ("PL-12", "voivodeship"), ("PL-12-61-011", "commune")])
+
+    def test_levels_regions_and_authority_are_checked(self) -> None:
+        original = json.loads(self.POLISH.read_text(encoding="utf-8"))
+        cases = {
+            "Invalid country code": lambda d: d["scope"].update(country_code="Poland"),
+            "Declare the country's levels": lambda d: d["scope"].pop("levels"),
+            "Declare the country's levels, the country first": lambda d: d["scope"].update(levels=["national"]),
+            "Invalid or duplicate regional scope": lambda d: d["scope"].update(region_codes=["PL-12", "PL-12"]),
+            "Invalid or duplicate regional scope ": lambda d: d["scope"].update(region_codes=["CH-ZH"]),
+            "Source jurisdiction outside catalog scope": lambda d: d["sources"][2]["definition"].update(jurisdiction="PL-14-65-011"),
+            "Source jurisdiction outside catalog scope ": lambda d: d["sources"][2]["definition"].update(jurisdiction="PL-12-61-011-7"),
+            "Invalid authority level": lambda d: d["sources"][2].update(authority_level="municipal"),
+            "Authority/jurisdiction mismatch": lambda d: d["sources"][2].update(authority_level="county"),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sources.json"
+            for message, mutate in cases.items():
+                data = deepcopy(original)
+                mutate(data)
+                path.write_text(json.dumps(data), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message.strip(), msg=message):
+                    load_source_catalog(path)
+
+    def test_swiss_catalogues_still_need_a_canton_scope(self) -> None:
+        data = json.loads(CATALOGUE.read_text(encoding="utf-8"))
+        data["scope"]["canton_codes"] = ["CH-XX"]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "sources.json"
+            path.write_text(json.dumps(data), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Invalid or duplicate cantonal scope"):
+                load_source_catalog(path)
+
+
 class CatalogueWriterTests(unittest.TestCase):
     """The writer the admin console edits a catalogue through; see docs/architecture/admin-console.md."""
 

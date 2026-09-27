@@ -1,0 +1,82 @@
+{
+  "schema_version": "source-catalog/v1",
+  "artifact_id": "civic-sources-test",
+  "version": "test-1",
+  "knowledge_space_id": "test",
+  "title": "Test catalogue (Poland, national and one city with county rights)",
+  "status": "SOURCES_ONLY",
+  "scope": {
+    "country_code": "PL",
+    "levels": ["national", "voivodeship", "county", "commune"],
+    "region_codes": ["PL-12"],
+    "description": "A synthetic catalogue in the shape of a Polish pack.",
+    "exclusions": []
+  },
+  "planning_topics": [
+    {"topic_id": "civic-participation", "label": "Civic participation"}
+  ],
+  "language_discovery": {"preferred_seed_language": "pl"},
+  "crawl_profiles": {},
+  "scan_sets": {"smoke": ["pl-local-government-act", "krakow-participatory-budget"]},
+  "parallel_page_groups": [],
+  "sources": [
+    {
+      "definition": {
+        "source_id": "pl-local-government-act",
+        "start_url": "https://isap.sejm.gov.pl/isap.nsf/DocDetails.xsp",
+        "allowed_hosts": ["isap.sejm.gov.pl"],
+        "allowed_path_prefixes": ["/isap.nsf"],
+        "canonical_authority": "Sejm RP",
+        "jurisdiction": "PL",
+        "language": "pl"
+      },
+      "title": "Act on municipal self-government",
+      "authority_level": "national",
+      "source_kind": "act",
+      "priority": "P0",
+      "topic_hints": ["civic-participation"],
+      "discovery": {"method": "official_search_result", "reference_url": "https://isap.sejm.gov.pl/", "located_on": "2026-09-27"},
+      "scan_status": "ready",
+      "notes": "Consolidated text."
+    },
+    {
+      "definition": {
+        "source_id": "malopolska-office",
+        "start_url": "https://www.malopolska.uw.gov.pl/",
+        "allowed_hosts": ["www.malopolska.uw.gov.pl"],
+        "allowed_path_prefixes": ["/"],
+        "canonical_authority": "Malopolski Urzad Wojewodzki",
+        "jurisdiction": "PL-12",
+        "language": "pl"
+      },
+      "title": "Voivodeship office",
+      "authority_level": "voivodeship",
+      "source_kind": "official_guidance",
+      "priority": "P2",
+      "topic_hints": ["civic-participation"],
+      "discovery": {"method": "official_page_link", "reference_url": "https://www.gov.pl/", "located_on": "2026-09-27"},
+      "scan_status": "ready",
+      "notes": "Entry point."
+    },
+    {
+      "definition": {
+        "source_id": "krakow-participatory-budget",
+        "start_url": "https://budzet.krakow.pl/",
+        "allowed_hosts": ["budzet.krakow.pl"],
+        "allowed_path_prefixes": ["/"],
+        "canonical_authority": "Urzad Miasta Krakowa",
+        "jurisdiction": "PL-12-61-011",
+        "language": "pl"
+      },
+      "title": "Participatory budget of the City of Krakow",
+      "authority_level": "commune",
+      "municipality": {"name": "Krakow"},
+      "source_kind": "official_guidance",
+      "priority": "P0",
+      "topic_hints": ["civic-participation"],
+      "discovery": {"method": "official_page_link", "reference_url": "https://www.krakow.pl/", "located_on": "2026-09-27"},
+      "scan_status": "ready",
+      "notes": "Service portal."
+    }
+  ]
+}
