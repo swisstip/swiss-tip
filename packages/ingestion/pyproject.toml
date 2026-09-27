@@ -8,6 +8,10 @@ version = "0.3.4"
 description = "Bounded source acquisition for Swiss TIP: catalogue download, Fedlex documents, gap report"
 requires-python = ">=3.14"
 
+[project.optional-dependencies]
+# The browser session of `swisstip-download --browser-host`, for official hosts behind a JavaScript bot challenge.
+browser = ["playwright>=1.47"]
+
 [project.scripts]
 swisstip-download = "swisstip.ingestion.download_cli:main"
 swisstip-gaps = "swisstip.ingestion.gap_report:main"

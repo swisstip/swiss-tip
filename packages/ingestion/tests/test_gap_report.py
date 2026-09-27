@@ -54,6 +54,18 @@ class GapReportTests(unittest.TestCase):
         for expected, manifest in cases.items():
             self.assertEqual(classify_failure({"status": "x", **manifest}), expected, expected)
 
+    def test_an_empty_body_served_with_success_is_a_retriable_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "run"
+            run.mkdir()
+            empty = target("https://bip.example/record", "bip-record")
+            write_json(run / "plan.json", {"catalogue": str(run / "missing.json"), "catalogue_sha256": "abc",
+                                           "targets": [empty]})
+            # No flag recorded: the empty body is re-detected from the saved bytes.
+            write_attempt(run, empty, 1, status="saved", body=b"")
+            row = build_report(run)["targets"][0]
+            self.assertEqual((row["gap"], row["retriable"]), ("empty-response", True))
+
     def test_report_classifies_every_target_and_renders_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory) / "run"

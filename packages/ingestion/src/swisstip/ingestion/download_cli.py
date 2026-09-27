@@ -18,6 +18,7 @@ from contextlib import nullcontext
 import hashlib
 import json
 from pathlib import Path
+import threading
 import time
 from typing import Sequence
 from urllib.parse import urlsplit
@@ -26,17 +27,21 @@ from .acquisition import (
     PLAN_SCHEMA, PRINT_LOCK, NetworkBudgetLock, catalogue_targets, complete_network_attempt,
     error_page, now, read_json, reserve_network_attempt, saved_and_intact, snapshot, summary, write_json,
 )
+from .browser import BrowserOpener
 from .catalog import load_source_catalog, select_sources
 from .plugins import load_source_plugins
 
 
 MAX_RESPONSE_BYTES = 25_000_000
+BROWSER_TURN = threading.Lock()
 
 
-def target_is_ready(target: dict) -> bool:
-    """Registry seeds follow their scan status; plain catalogue links are always eligible."""
+def target_is_ready(target: dict, browser_hosts: frozenset[str] = frozenset()) -> bool:
+    """Registry seeds follow their scan status; plain catalogue links are always eligible. On a host fetched
+    through the browser session, an entry that needs a manual adapter is eligible: the browser is that adapter."""
     entries = target.get("registry_entries", [])
-    return not entries or any(entry["scan_status"] == "ready" for entry in entries)
+    ready = {"ready", "manual_adapter_required"} if urlsplit(target["url"]).hostname in browser_hosts else {"ready"}
+    return not entries or any(entry["scan_status"] in ready for entry in entries)
 
 
 def build_plan(catalogue: Path, markdown: Path | None, *, scan_set: str | None, source_ids: list[str] | None,
@@ -82,6 +87,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         help="also download registry seeds whose scan_status is not 'ready'")
     parser.add_argument("--workers", type=int, choices=range(1, 5), default=4, help="host groups in parallel")
     parser.add_argument("--transport", choices=("urllib", "curl"), default="urllib")
+    parser.add_argument("--browser-host", action="append", default=[], metavar="HOST",
+                        help="fetch the targets on this host through a headless browser session that passes the "
+                             "host's JavaScript bot challenge; requests keep the crawler's User-Agent and robots.txt "
+                             "is still obeyed; repeatable; needs Playwright")
+    parser.add_argument("--browser-channel", default=None,
+                        help="installed browser for --browser-host (msedge, chrome); default: Playwright's Chromium")
     parser.add_argument("--obey-robots", action=argparse.BooleanOptionalAction, default=True,
                         help="respect robots.txt and its crawl delays, failing closed when the policy cannot be read "
                              "(default); --no-obey-robots overrides it at your own responsibility and "
@@ -90,6 +101,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     plugins.add_argument("--source-plugin", action="append", help="enabled source plugin; repeatable; default: fedlex")
     plugins.add_argument("--no-source-plugins", action="store_true", help="only snapshot listed URLs")
     args = parser.parse_args(argv)
+    browser_hosts = frozenset(host.lower() for host in args.browser_host)
 
     registry = load_source_plugins([] if args.no_source_plugins else args.source_plugin)
     args.output.mkdir(parents=True, exist_ok=True)
@@ -122,6 +134,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("governed download requires human confirmation of the plan and network budget")
     if plan.get("network_budget") and plugin_plan["sources"]:
         parser.error("a confirmed governed plan cannot enable unbudgeted source plugins")
+    if plan.get("network_budget") and browser_hosts:
+        parser.error("a confirmed governed plan cannot use --browser-host: the challenge page's requests are not "
+                     "charged to the budget")
 
     groups: dict[str, list[dict]] = defaultdict(list)
     for target in plan["targets"]:
@@ -132,7 +147,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 continue
             if prior["status"] != "saved" and not args.retry_failed:
                 continue
-        if not (args.include_not_ready or target_is_ready(target)):
+        if not (args.include_not_ready or target_is_ready(target, browser_hosts)):
             statuses = sorted({entry["scan_status"] for entry in target["registry_entries"]})
             print(f"skipped ({', '.join(statuses)}): {target['url']}", flush=True)
             continue
@@ -140,19 +155,40 @@ def main(argv: Sequence[str] | None = None) -> int:
         groups[host].append(target)
 
     def download_group(targets: list[dict]) -> None:
+        # One browser session per host group, created in the group's own thread (Playwright's sync API is bound
+        # to the thread that started it) and closed when the group is done. Groups that need the browser take
+        # turns: two sessions started from parallel threads left a run hanging; the other groups stay parallel.
+        if any(urlsplit(target["url"]).hostname in browser_hosts for target in targets):
+            with BROWSER_TURN:
+                download_targets(targets)
+        else:
+            download_targets(targets)
+
+    def download_targets(targets: list[dict]) -> None:
         result: dict = {}
-        for index, target in enumerate(targets):
-            if index:
-                time.sleep(max(2, result.get("report", {}).get("effective_delay_seconds", 2)))
-            if plan.get("network_budget"):
-                reservation_id, limits = reserve_network_attempt(args.output, plan, target)
-                result = snapshot(target, args.output, transport=args.transport, limits=limits,
-                                  respect_robots=args.obey_robots)
-                complete_network_attempt(args.output, plan, reservation_id, result)
-            else:
-                result = snapshot(target, args.output, transport=args.transport, respect_robots=args.obey_robots)
-            with PRINT_LOCK:
-                print(f"{result['status']}: {target['url']}", flush=True)
+        browser = None
+        try:
+            for index, target in enumerate(targets):
+                if index:
+                    time.sleep(max(2, result.get("report", {}).get("effective_delay_seconds", 2)))
+                opener = None
+                if urlsplit(target["url"]).hostname in browser_hosts:
+                    browser = browser or BrowserOpener(channel=args.browser_channel)
+                    opener = browser
+                transport = "browser" if opener else args.transport
+                if plan.get("network_budget"):
+                    reservation_id, limits = reserve_network_attempt(args.output, plan, target)
+                    result = snapshot(target, args.output, transport=transport, limits=limits,
+                                      respect_robots=args.obey_robots, opener=opener)
+                    complete_network_attempt(args.output, plan, reservation_id, result)
+                else:
+                    result = snapshot(target, args.output, transport=transport, respect_robots=args.obey_robots,
+                                      opener=opener)
+                with PRINT_LOCK:
+                    print(f"{result['status']}: {target['url']}", flush=True)
+        finally:
+            if browser is not None:
+                browser.close()
 
     budget_lock = NetworkBudgetLock(args.output) if plan.get("network_budget") else nullcontext()
     with budget_lock:

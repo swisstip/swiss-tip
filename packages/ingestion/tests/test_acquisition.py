@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -181,6 +182,17 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(acquisition.review_flags(ordinary, ".html"), [])
         self.assertEqual(acquisition.review_flags(chch, ".pdf"), [])
 
+    def test_an_empty_body_served_with_success_is_flagged_and_counts_as_an_error_page(self) -> None:
+        # The record pages of Warsaw's Public Information Bulletin without a session cookie, 27 September 2026.
+        self.assertEqual(acquisition.review_flags(b"", ".txt"), ["empty_response"])
+        self.assertEqual(acquisition.review_flags(b" \r\n", ".html"), ["empty_response"])
+        path = self.output / "pages" / "empty" / "attempt-001" / "response.txt"
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"")
+        saved = {"status": "saved", "snapshots": [{"relative_path": path.relative_to(self.output).as_posix(),
+                                                    "review_flags": []}]}
+        self.assertTrue(acquisition.error_page(saved, self.output), "a copy without flags is judged by its bytes")
+
     def test_pdf_documents_are_saved_by_signature_and_failures_keep_a_manifest(self) -> None:
         pdf = b"%PDF-1.7 fake"
         result = self.run_snapshot({
@@ -292,7 +304,7 @@ class DownloadCliTests(unittest.TestCase):
     def test_download_skips_intact_pages_not_ready_seeds_and_retries_on_request(self) -> None:
         calls: list[str] = []
 
-        def fake_snapshot(target, output, allowed_hosts=None, transport="urllib", respect_robots=True):
+        def fake_snapshot(target, output, allowed_hosts=None, transport="urllib", respect_robots=True, opener=None):
             calls.append(target["url"])
             attempt = len(list((output / "pages" / target["url_id"]).glob("attempt-*"))) + 1
             path = output / "pages" / target["url_id"] / f"attempt-{attempt:03d}" / "response.html"
@@ -320,6 +332,81 @@ class DownloadCliTests(unittest.TestCase):
             self.assertEqual(self.run_cli("--download", "--include-not-ready", "--retry-failed"), 1)
             self.assertEqual(calls[2:], ["https://official.example/allowed/review"])
         self.assertEqual(read_json(self.output / "summary.json")["counts"], {"saved": 1, "not_saved": 1})
+
+    def test_browser_hosts_are_fetched_through_one_session_even_when_they_need_an_adapter(self) -> None:
+        self.catalogue = registry(self.tmp, [
+            source_entry("official-start", "https://official.example/allowed/start"),
+            source_entry("official-review", "https://official.example/allowed/shell", scan_status="manual_adapter_required"),
+        ])
+        calls: list[tuple[str, str, object]] = []
+        sessions: list[object] = []
+
+        class FakeBrowser:
+            def __init__(self, channel=None):
+                self.channel, self.closed = channel, False
+                sessions.append(self)
+
+            def close(self):
+                self.closed = True
+
+        def fake_snapshot(target, output, allowed_hosts=None, transport="urllib", respect_robots=True, opener=None):
+            calls.append((target["url"].rsplit("/", 1)[1], transport, opener))
+            return {**target, "status": "not_saved", "snapshots": [], "report": {}}
+
+        with patch.object(download_cli, "snapshot", side_effect=fake_snapshot), \
+                patch.object(download_cli, "BrowserOpener", FakeBrowser), \
+                patch("swisstip.ingestion.download_cli.time.sleep"), \
+                patch("swisstip.ingestion.plugin_downloads.run_source_plugins", return_value=[]):
+            self.run_cli("--download")
+            self.assertEqual(calls, [("start", "urllib", None)], "without the argument the adapter entry waits")
+            self.assertEqual(sessions, [])
+            self.run_cli("--download", "--retry-failed", "--browser-host", "official.example",
+                         "--browser-channel", "msedge")
+        self.assertEqual([(name, transport) for name, transport, _ in calls[1:]],
+                         [("start", "browser"), ("shell", "browser")])
+        self.assertEqual(len(sessions), 1, "one browser session serves the host group")
+        self.assertTrue(all(opener is sessions[0] for _, _, opener in calls[1:]))
+        self.assertEqual(sessions[0].channel, "msedge")
+        self.assertTrue(sessions[0].closed)
+
+    def test_browser_host_groups_take_turns_while_other_groups_stay_parallel(self) -> None:
+        entries = []
+        for source_id, host in (("official-start", "a.example"), ("official-review", "b.example")):
+            entry = source_entry(source_id, f"https://{host}/allowed/page")
+            entry["definition"]["allowed_hosts"] = [host]
+            entries.append(entry)
+        self.catalogue = registry(self.tmp, entries)
+        lock, active, peak, sessions = threading.Lock(), [0], [0], []
+
+        class FakeBrowser:
+            def __init__(self, channel=None):
+                sessions.append(self)
+
+            def close(self):
+                pass
+
+        def fake_snapshot(target, output, allowed_hosts=None, transport="urllib", respect_robots=True, opener=None):
+            with lock:
+                active[0] += 1
+                peak[0] = max(peak[0], active[0])
+            threading.Event().wait(0.1)
+            with lock:
+                active[0] -= 1
+            return {**target, "status": "not_saved", "snapshots": [], "report": {}}
+
+        with patch.object(download_cli, "snapshot", side_effect=fake_snapshot), \
+                patch.object(download_cli, "BrowserOpener", FakeBrowser), \
+                patch("swisstip.ingestion.plugin_downloads.run_source_plugins", return_value=[]):
+            self.run_cli("--download", "--workers", "2", "--browser-host", "a.example", "--browser-host", "b.example")
+        self.assertEqual((peak[0], len(sessions)), (1, 2), "two browser sessions never run at once")
+
+    def test_a_governed_plan_refuses_the_browser_session(self) -> None:
+        self.run_cli()
+        plan = read_json(self.output / "plan.json")
+        acquisition.write_json(self.output / "plan.json", {**plan, "network_budget": {"max_requests": 10}})
+        with self.assertRaises(SystemExit), redirect_stderr(io.StringIO()) as errors:
+            self.run_cli("--download", "--browser-host", "official.example")
+        self.assertIn("cannot use --browser-host", errors.getvalue())
 
     def test_retry_failed_refetches_a_saved_error_page(self) -> None:
         self.run_cli("--source", "official-start")

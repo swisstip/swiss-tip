@@ -19,6 +19,16 @@ Implemented and tested:
   catalogues are checked exactly as before.
 - **Acquisition of Office documents.** The downloader saves DOCX, DOC and
   RTF responses, which Polish city offices publish resolutions as.
+- **Hosts behind a bot challenge.** `swisstip-download --browser-host HOST`
+  makes every request, robots.txt included, with the crawler's own HTTP
+  client and the cookies of a browser session, and opens a headless browser
+  only when a response is a JavaScript challenge; the challenge page may
+  reach nothing but its robots.txt and AWS WAF's token service. The saved
+  bytes stay the server's response and every crawler rule still applies
+  (`ingestion/browser.py`, optional Playwright dependency).
+- **Empty responses.** An empty body served with success is flagged
+  `empty_response`, is refetched by `--retry-failed` like an error page
+  served with success, and is a retriable gap in the gap report.
 - **Language hints.** `pl` is a catalogue language (with `uk`), and the
   extraction reads a `pl` path segment or file-name suffix as a language
   hint.
@@ -210,4 +220,4 @@ by topic.
 | City pages change often (fees, dates, zones) | Validity windows on facts and the freshness policy; a stale release says so |
 | No Polish-speaking reviewer | The release states its review counts; readiness does not require review, but the demo claims only what was reviewed |
 | The event's rules exclude code written before it | Decided before the event (see "Decisions") |
-| Official hosts behind a bot challenge: `um.warszawa.pl` and its document and district servers answer every request, robots.txt included, with a JavaScript challenge, so the crawler's robots check fails closed | Warsaw is curated from its Public Information Bulletin, the 19115 cards and the voivodeship's journal; the pages behind the challenge are catalogued as `manual_adapter_required` until a browser-rendering adapter exists |
+| Official hosts behind a bot challenge: `um.warszawa.pl` and its document and district servers answer every request, robots.txt included, with a JavaScript challenge, so the crawler's robots check fails closed | The pages stay catalogued as `manual_adapter_required`, and the download fetches them with `--browser-host`; a host that changes its challenge can break that session, so the Warsaw facts that the Public Information Bulletin or the voivodeship's journal also state are cited there |

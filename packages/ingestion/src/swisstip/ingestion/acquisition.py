@@ -292,6 +292,9 @@ def catalogue_targets(registry: Path, entries: list[dict], markdown: Path | None
 def review_flags(body: bytes, suffix: str) -> list[str]:
     """Cheap content checks that mark a saved HTML response for human review."""
     flags = []
+    if not body.strip():
+        # An empty body served with success (a session gate, an unfinished bot challenge) is not a page.
+        flags.append("empty_response")
     if suffix == ".html":
         text = body.decode("utf-8", errors="replace").lower()
         if "<app-root" in text or "<fedlex" in text:
@@ -306,7 +309,8 @@ def review_flags(body: bytes, suffix: str) -> list[str]:
 
 
 def error_page(result: dict, output: Path) -> bool:
-    """A saved response whose title says it is an error page, although the server answered with success.
+    """A saved response whose title says it is an error page, or whose body is empty, although the server
+    answered with success.
 
     Copies made by other tools carry no flags, so the saved bytes are checked too.
     """
@@ -315,13 +319,16 @@ def error_page(result: dict, output: Path) -> bool:
         flags = set(item.get("review_flags", []))
         if path.is_file():
             flags.update(review_flags(path.read_bytes(), path.suffix.lower()))
-        if "error_page_title" in flags:
+        if flags & {"error_page_title", "empty_response"}:
             return True
     return False
 
 
 def snapshot(target: dict, output: Path, allowed_hosts: tuple[str, ...] | None = None,
-             transport: str = "urllib", limits: CrawlLimits | None = None, respect_robots: bool = True) -> dict:
+             transport: str = "urllib", limits: CrawlLimits | None = None, respect_robots: bool = True,
+             opener=None) -> dict:
+    """Fetch one target at depth zero. ``opener`` is a shared opener for this transport (the browser session of
+    ``transport="browser"``); without it urllib or curl is used."""
     folder = output / "pages" / target["url_id"]
     folder.mkdir(parents=True, exist_ok=True)
     attempt_number = 1
@@ -360,7 +367,7 @@ def snapshot(target: dict, output: Path, allowed_hosts: tuple[str, ...] | None =
     try:
         report = SafeCrawler(source, limits, user_agent=user_agent, robots_name=robots_agent(DEFAULT_USER_AGENT),
                              allow_query_strings=True, respect_robots=respect_robots,
-                             opener=CurlOpener() if transport == "curl" else None,
+                             opener=opener or (CurlOpener() if transport == "curl" else None),
                              document_content_types=DOCUMENT_TYPES,
                              on_page=save, on_document=save).crawl().to_dict()
         result = {**target, "started_at": started, "finished_at": now(),
@@ -368,8 +375,11 @@ def snapshot(target: dict, output: Path, allowed_hosts: tuple[str, ...] | None =
                   "report": report, "transport": transport, "user_agent": user_agent}
     except Exception as exc:
         result = {**target, "started_at": started, "finished_at": now(),
-                  "status": "error", "snapshots": captured, "user_agent": user_agent,
+                  "status": "error", "snapshots": captured, "transport": transport, "user_agent": user_agent,
                   "error": f"{type(exc).__name__}: {exc}"}
+    if hasattr(opener, "take_log"):
+        # The bot challenges a browser session passed for this attempt: what the page requested and refused.
+        result["browser_challenges"] = opener.take_log()
     write_json(attempt / "manifest.json", result)
     write_json(folder / "latest.json", result)
     return result

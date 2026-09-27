@@ -20,7 +20,15 @@ and the normalization binding for extraction.
 ./.venv/Scripts/python.exe -m unittest discover -s packages/ingestion/tests
 ```
 
-Standard library only. Tests make no network requests.
+Standard library only, except the optional browser session of
+`--browser-host`, which needs Playwright and a browser:
+
+```shell
+./.venv/Scripts/python.exe -m pip install -e "packages/ingestion[browser]"
+./.venv/Scripts/python.exe -m playwright install chromium   # not needed with --browser-channel msedge or chrome
+```
+
+Tests make no network requests and start no browser.
 
 ## Download a pack's sources
 
@@ -43,6 +51,8 @@ seeds are a subset of those 115 links.
 | `--include-not-ready` | Also fetch registry seeds whose `scan_status` is not `ready` (they are planned but skipped by default) |
 | `--workers N` | Host groups downloaded in parallel, 1 to 4; requests to one host stay sequential with the robots delay |
 | `--transport curl` | Fetch through the native curl binary (system certificate store); the crawler still checks every redirect |
+| `--browser-host HOST` | Fetch the targets on this host through a headless browser session that passes the host's JavaScript bot challenge (see below); such targets are fetched even when their entry is `manual_adapter_required`; repeatable |
+| `--browser-channel NAME` | The installed browser for `--browser-host`: `msedge` or `chrome`; default Playwright's own Chromium |
 | `--no-source-plugins` | Only snapshot the listed URLs; skip Fedlex resolution |
 
 A run directory is bound to the catalogue bytes it was planned from; a changed
@@ -64,7 +74,45 @@ binding. No other value is accepted.
 
 HTML pages, PDFs, plain text and XML are saved, and so are Office documents
 (DOCX, DOC and RTF), which some city offices publish their resolutions as;
-the extraction reads every saved response by its signature.
+the extraction reads every saved response by its signature. A response with
+an empty body served with success is flagged `empty_response` and counts,
+like an error page served with success, as not saved for `--retry-failed`.
+
+### Hosts behind a bot challenge
+
+Some official hosts answer every request that does not come from a browser,
+robots.txt included, with a JavaScript challenge (the City of Warsaw's
+`um.warszawa.pl` returns HTTP 202, an empty body and
+`x-amzn-waf-action: challenge`). A plain client cannot read their
+robots.txt, so the crawler fails closed and saves nothing. For public
+information behind such a gate, `--browser-host` gives the targets on that
+host a browser session (`browser.py`, Playwright):
+
+- Every request, robots.txt included, is made by the crawler's own
+  non-redirecting urllib opener with the session's cookies, so the crawler
+  reads each response itself: its robots, allowlist, redirect, size,
+  byte-budget, request-budget and content-encoding rules apply as for any
+  other transport, and the saved bytes are the server's response, not a
+  rendered page.
+- Only when a response is a challenge (HTTP 202 with
+  `x-amzn-waf-action: challenge`) does the headless browser open the
+  origin's robots.txt, whose challenge script sets a new token cookie; the
+  request is then repeated once. The challenge page may load nothing but
+  that robots.txt and AWS WAF's token service (`*.token.awswaf.com`); any
+  other request, and any navigation away from robots.txt, is aborted. A
+  host without a challenge never starts the browser.
+- The attempt's manifest records `transport: "browser"` and, under
+  `browser_challenges`, each challenge with what the page requested and
+  what was refused. No new token, or a second challenge after it, is a
+  network failure, on which the crawler fails closed.
+- The session keeps the request's User-Agent: the crawler's own, or for an
+  entry with `"user_agent": "browser"` the browser form, each in its own
+  browser context. The challenge's own requests are not charged to a run's
+  budgets, so a governed plan with a confirmed network budget refuses
+  `--browser-host`.
+- Host groups that use the browser take turns (one session at a time, since
+  two sessions started from parallel threads left a run hanging); the other
+  host groups stay parallel under `--workers`.
 
 ## Catalogue scope
 

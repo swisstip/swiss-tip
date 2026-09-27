@@ -137,6 +137,9 @@ def assess_target(target: dict, run: Path, covered: dict[str, list[dict]]) -> di
         if "error_page_title" in flags:
             gap, retriable, action = "soft-error-page", True, \
                 "the server answered HTTP 200 with an error page; retry with --retry-failed, and if it stays an error page, check the URL in a browser and rediscover the page or update the catalogue"
+        elif "empty_response" in flags:
+            gap, retriable, action = "empty-response", True, \
+                "the server answered with success and an empty body (a session gate or an unfinished bot challenge); retry with --retry-failed, with --browser-host for a host behind a challenge"
         elif "javascript_application_shell" in flags:
             if row["plugin_documents"]:
                 gap, retriable, action = "javascript-shell-resolved", False, \
