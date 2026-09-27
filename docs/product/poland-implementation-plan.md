@@ -51,9 +51,14 @@ excerpt of an official page, is applied by containment to the resident's
 place, is reviewed by a named person, and the release passes its acceptance
 suite and readiness gates.
 
-The target events are the HackYeah challenges in the Smart City category
-and on connecting residents' needs with knowledge and people (3-4 October
-2026, Kraków).
+The target event is HackYeah (3-4 October 2026, Kraków). Two of its tasks
+match the pack: the open task **Smart City** ("technology that helps cities
+work better", with communication with citizens, public services and access
+to information named in the brief) and the partner task **HubMI.pl**
+("connect residents' needs more effectively with knowledge, proven
+solutions, and people ready to take action"). The event allows one project
+per task and discourages entering one project in two tasks, so the pack
+enters one of them (see "Decisions" and "Demo").
 
 ## Principles
 
@@ -70,15 +75,17 @@ and on connecting residents' needs with knowledge and people (3-4 October
 4. **Tests use a synthetic Polish pack**, never the real one (see
    `AGENTS.md`).
 
-## Decisions before the first line of code
+## Decisions
 
-| Decision | Proposal | Why it matters |
+| Decision | Decided | Why it matters |
 | --- | --- | --- |
 | Code format of places | `PL`, `PL-12` (voivodeship), `PL-12-61` (county), `PL-12-61-011` (commune: the last three digits of its seven-digit TERYT code, the commune number and its type digit) | One segment per level, so the level is the depth of the code; the type digit separates the urban and rural parts of one commune; containment stays a prefix test. The source catalogue accepts this format |
 | Request parts | `country`, `region`, `city` as today (`region` is already an accepted alias of `canton`); the county is derived from the city | Residents name their city, rarely their county; the tool contract stays small |
-| Language of statements | Polish, with English aliases and sample questions | The audience is the whole population; `mvp-zurich` states facts in English |
-| Scope of the first release | The seven draft questions of the pack README, for three cities | Every question has at least two different answers in the pack |
-| HackYeah rules | Read the participant manual on code written before the event | Decides whether the product is presented as the team's prior open-source work or rebuilt on site |
+| Languages | Evidence in Polish only: every excerpt is cut from a Polish official page. Statements, summaries, aliases and sample questions in English, as editorial translations of the Polish excerpts; source terms and sample questions in Polish too. The release names English and Polish as its query languages, and the server tells the calling model to call the tools in English or Polish | The excerpt stays the authoritative text; English statements keep one wording across the Swiss and Polish packs, and a caller can search in either language |
+| Scope of the first release | The civic-participation topics for the three cities, the participatory budget first | They match the HubMI.pl partner brief and carry the strongest trap questions |
+| HackYeah | Open-source code written before the event is allowed when it is fairly cited in the presentation and the code, and AI tools are credited (FAQ 13 and 14 of hackyeah.pl, verified on 27 September 2026); the core idea and the final solution must be the team's own. So the software changes of this plan are prepared in advance, and the Polish data is built during the event as a proof of concept | The code must be ready and tested before 3 October 2026; the pack's curation, review and attestation happen at the event; the slides and the README credit Swiss TIP as the base and the tools used |
+| Entry | Open, decided by the morning of 3 October: one project per task, and the organisers strongly discourage one project in two tasks. Proposed: the open task Smart City, whose brief, criteria (Idea & Innovation 30 %, Relation to Category 20 %, Practical Applicability 20 %, Design 20 %, Completeness 10 %) and language rules are known now. HubMI.pl (15 000 PLN, "create a concept") publishes its own rules, jury and any rights transfer no later than 3 October; a second entry there would have to be a distinct product, for example an assistant that routes a resident's idea to the right instrument of their city | The jury scores the relation to the chosen task at 20 %, and the description, the slides and the screenshots are written for one brief |
+| Reviewer | The same named person who reviews `mvp-zurich` | Readiness records who confirmed each statement |
 
 ## Workstreams
 
@@ -187,20 +194,44 @@ In the packs repository, with the existing pipeline:
    city and the traps, before any page is fetched.
 2. `sources.json` for Kraków, Warsaw, Katowice, their voivodeships and the
    national sources; the bounded download into `.local/mvp-poland/`.
-3. Curation, with Polish statements and source terms copied from the
-   excerpts; institutions and basis per excerpt.
+3. Curation, with English statements summarising the Polish excerpts and
+   Polish source terms copied from them; institutions and basis per
+   excerpt.
 4. Review of every fact by a named Polish-speaking reviewer.
 5. Build, acceptance, regression pack, semantic index, readiness
    attestation; `COVERAGE.md` and `LIMITATIONS.md` extended to the pack.
 
 ### 7. Demo
 
-- The pack image and the slim image with the sidecar, as for `mvp-zurich`.
+- The pack image and the slim image with the sidecar, as for `mvp-zurich`,
+  under a name chosen for the Polish deployment: "Swiss TIP" and "Grounded.
+  In Switzerland." are the Zurich pitch, not Kraków's.
 - A side-by-side of a generic assistant and an assistant with the server on
-  the draft questions, the same way the Swiss cases were graded.
-- The civic-participation topic as the answer to the second challenge: the
-  participatory budget and the local initiative per city, with dates and
-  offices.
+  the draft questions, the same way the Swiss cases were graded, recorded
+  as screenshots and a 60-second video: the open-task jury scores Design
+  and Practical Applicability at 20 % each, and the server has no interface
+  of its own, so the chat client of the demo image is what the jury sees.
+- The civic-participation topic as the HubMI.pl material, if that task is
+  entered: the participatory budget and the local initiative per city, with
+  dates and offices.
+- What HackYeah requires, verified on 27 September 2026 on hackyeah.pl (the
+  rules of 7 July 2026, the FAQ and the participant guide):
+  - The submission goes to the HackTribe platform: a title of at most five
+    words and a description of at most 500 words, both in English; at least
+    one image; a presentation of at most ten slides as PDF, in English;
+    optionally a 60-second video, a demo link and one repository the jury
+    can open. The description names every team member.
+  - Deadlines: the participant guide says a draft by Saturday 3 October at
+    20:00 and the final submission by Sunday 4 October at 12:00; the FAQ
+    and the rules say Sunday at 23:00. Plan for noon and confirm on site.
+    Nothing may change after the deadline.
+  - The full task text is revealed when coding starts; the rules of the
+    partner tasks are published no later than 3 October. Finalists pitch to
+    the jury, one presenter per team. A jury awards nothing below 50 % of
+    the points.
+  - Previously written code, external resources and AI tools are allowed
+    and must be cited in the presentation and the code; a partner task may
+    require the winners to transfer the rights to their solution.
 
 ## Order and the smallest useful slice
 
@@ -208,8 +239,9 @@ Workstreams 1 to 3 block the pack; 4 and 5 improve it. The smallest slice
 that serves a real question is: the hierarchy (1), the three cities in the
 place register (2, from a hand-checked extract of TERYT if the importer is
 not ready), `ł` folding and Polish stopwords (3), and one topic of the pack
-(the waste fee) curated, reviewed and attested (6). The rest follows topic
-by topic.
+(the participatory budget) curated, reviewed and attested (6). The rest
+follows topic by topic. Workstreams 1 to 5 are code and are done before
+the event; step 6 is the event's proof of concept.
 
 ## Risks
 
@@ -218,6 +250,7 @@ by topic.
 | A change to validation or the place index alters a Swiss answer | The Swiss acceptance and regression packs replay on every change; a Swiss difference blocks |
 | Polish inflection makes lexical search miss | Aliases in users' words, sample questions in Polish, hybrid search; the regression pack measures it |
 | City pages change often (fees, dates, zones) | Validity windows on facts and the freshness policy; a stale release says so |
-| No Polish-speaking reviewer | The release states its review counts; readiness does not require review, but the demo claims only what was reviewed |
-| The event's rules exclude code written before it | Decided before the event (see "Decisions") |
+| The reviewer reads Polish excerpts against English statements | Each statement is checked against its Polish excerpt, which stays the authoritative text; the release states its review counts, and the demo claims only what was reviewed |
 | Official hosts behind a bot challenge: `um.warszawa.pl` and its document and district servers answer every request, robots.txt included, with a JavaScript challenge, so the crawler's robots check fails closed | The pages stay catalogued as `manual_adapter_required`, and the download fetches them with `--browser-host`; a host that changes its challenge can break that session, so the Warsaw facts that the Public Information Bulletin or the voivodeship's journal also state are cited there |
+| Design and usability are 40 % of the open-task score, and the server has no interface of its own | The chat client of the demo image, the screenshots and the 60-second video are prepared with the pack, and the description and the slides are written for the chosen task's brief |
+| Expected answers written on 27 September 2026 go stale before the event: Kraków's voting closed on 28 September, Katowice's consultation on 29 September, and its 2027 local-initiative call opens on 1 October | The acceptance-test document restates the date-bound cases as of 3 October 2026 before they become claims, and every replay states its date in the request |
