@@ -8,11 +8,18 @@ statement outrank one resting on a portal summary or an unreviewed candidate
 when a query does not separate them. The publisher's level never weighs:
 a municipal page is authoritative for a narrower jurisdiction, not less
 authoritative. Design: docs/architecture/institutions-and-provenance-weights.md.
+
+The level of a basis is a level id of the release's place hierarchy, and the
+label starts with that level's adjective: LEVEL_WORD for a Swiss release,
+the declared hierarchy's words ("National act", "Commune ordinance")
+otherwise. Design: docs/architecture/country-profiles.md, section 7.
 """
 
-from .release import Basis, BasisKind, EvidenceRecord, FactRecord, InstitutionLevel, RankingPolicy
+from .hierarchy import SWISS, Hierarchy
+from .release import Basis, BasisKind, EvidenceRecord, FactRecord, RankingPolicy
 
 NORM_KINDS = ("act", "ordinance", "treaty", "directive")
+# The words of the built-in Swiss levels (SWISS.words); a declared hierarchy passes its own.
 LEVEL_WORD = {"federal": "Federal", "cantonal": "Cantonal", "municipal": "Municipal"}
 DEFAULT_RANKING_POLICY = RankingPolicy(
     floor=0.7, aggregate="max",
@@ -23,9 +30,11 @@ DEFAULT_RANKING_POLICY = RankingPolicy(
                    "automatically-derived-unreviewed": 0.6})
 
 
-def basis_label(level: InstitutionLevel, kind: BasisKind, norm: str | None = None, refers_to: str | None = None) -> str:
-    """The served label: "Federal act: AIG, SR 142.20, Art. 12", "Cantonal authority guidance", ..."""
-    word = LEVEL_WORD[level]
+def basis_label(level: str, kind: BasisKind, norm: str | None = None, refers_to: str | None = None,
+                words: dict[str, str] = LEVEL_WORD) -> str:
+    """The served label: "Federal act: AIG, SR 142.20, Art. 12", "Cantonal authority guidance", ...; words maps the
+    level ids of the release's hierarchy to their adjectives, which the caller checks the level against."""
+    word = words[level]
     if kind in ("act", "ordinance", "treaty", "directive") and not norm:
         raise ValueError(f"a basis of kind {kind} needs a norm")
     if kind in ("act", "ordinance"):
@@ -39,7 +48,8 @@ def basis_label(level: InstitutionLevel, kind: BasisKind, norm: str | None = Non
     elif kind == "directory":
         text = f"{word} authority directory"
     elif kind == "summary":
-        text = f"Portal summary of {level} rules"
+        # The adjective lower-cased is the level id for each Swiss level: "Portal summary of federal rules".
+        text = f"Portal summary of {word.lower()} rules"
     else:
         raise ValueError(f"unknown basis kind {kind!r}")
     if refers_to:
@@ -47,8 +57,10 @@ def basis_label(level: InstitutionLevel, kind: BasisKind, norm: str | None = Non
     return text
 
 
-def make_basis(level: InstitutionLevel, kind: BasisKind, norm: str | None = None, refers_to: str | None = None) -> Basis:
-    return Basis(level=level, kind=kind, norm=norm, refers_to=refers_to, label=basis_label(level, kind, norm, refers_to))
+def make_basis(level: str, kind: BasisKind, norm: str | None = None, refers_to: str | None = None,
+               words: dict[str, str] = LEVEL_WORD) -> Basis:
+    return Basis(level=level, kind=kind, norm=norm, refers_to=refers_to,
+                 label=basis_label(level, kind, norm, refers_to, words))
 
 
 def basis_weight(basis: Basis | None, policy: RankingPolicy = DEFAULT_RANKING_POLICY) -> float:
@@ -76,6 +88,7 @@ def concept_authority(fact_weights: list[float], policy: RankingPolicy = DEFAULT
     return max(fact_weights) if policy.aggregate == "max" else sum(fact_weights) / len(fact_weights)
 
 
-def level_of_jurisdiction(code: str) -> InstitutionLevel:
-    parts = code.split("-")
-    return "federal" if len(parts) == 1 else "cantonal" if len(parts) == 2 else "municipal"
+def level_of_jurisdiction(code: str, hierarchy: Hierarchy = SWISS) -> str | None:
+    """The level id of a code by its depth: federal, cantonal or municipal (anything deeper) for a Swiss release;
+    in a declared hierarchy None for a code deeper than its lowest level."""
+    return hierarchy.level_id(code)

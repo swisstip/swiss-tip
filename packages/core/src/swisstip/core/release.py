@@ -22,6 +22,12 @@ jurisdiction codes, and the other spellings accepted for them. The server
 reads it to turn the place a caller names ("Wallisellen", "Kanton Zürich")
 into the code the facts carry. It decides which facts a request reaches, so
 it is part of the content digest; a release without one accepts codes only.
+
+A release of swiss-tip-release/v3 declares its country: the place register
+carries the hierarchy of levels (their names, the code format, the wording of
+places) and the manifest the query and evidence languages. A release without
+a hierarchy is Swiss; swisstip.core.hierarchy.hierarchy_of gives the built-in
+Swiss levels for it. Design: docs/architecture/country-profiles.md.
 """
 
 import hashlib
@@ -32,11 +38,13 @@ from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from . import RELEASE_SCHEMA_VERSION
+from . import RELEASE_SCHEMA_VERSION, RELEASE_SCHEMA_VERSION_DECLARED
 
 ProvenanceKind = Literal["curated-statement", "source-section", "model-candidate"]
 ReviewStatus = Literal["human-reviewed", "assistant-authored-unreviewed", "automatically-derived-unreviewed",
                        "model-candidate-automated-review"]
+# The level ids of the built-in Swiss hierarchy, kept as a type hint for importers; a release's levels are the ids of
+# its place hierarchy, checked by the validator.
 InstitutionLevel = Literal["federal", "cantonal", "municipal"]
 InstitutionBody = Literal["administration", "law_collection", "portal", "public_law_body"]
 BasisKind = Literal["act", "ordinance", "treaty", "directive", "guidance", "directory", "summary"]
@@ -68,18 +76,54 @@ class Institution(Strict):
     institution_id: str
     name: str = Field(description="English display name; served as the publisher of the institution's pages.")
     native_name: str | None = Field(default=None, exclude_if=absent, description="The institution's own name in its language.")
-    level: InstitutionLevel = Field(description="The tier of the state the institution belongs to.")
+    level: str = Field(description=(
+        "The tier of the state the institution belongs to: a level id of the release's place hierarchy "
+        "(federal, cantonal or municipal in a Swiss release)."))
     body: InstitutionBody
-    jurisdiction: str = Field(description="Whom the institution speaks for: CH, a canton code or a municipality code.")
+    jurisdiction: str = Field(description=(
+        "Whom the institution speaks for: the country code or a subdivision code (CH-ZH, PL-12-61-011)."))
 
 
 class Place(Strict):
-    """A country, canton or municipality a caller can name; its level follows from the code."""
+    """A place a caller can name: the country or one of its subdivisions; its level follows from the code."""
 
-    code: str = Field(description="Jurisdiction code: CH, a canton (CH-ZH) or a municipality (CH-ZH-261).")
+    code: str = Field(description=(
+        "Jurisdiction code: the country (CH) or a subdivision code (CH-ZH, CH-ZH-261, PL-12-61-011)."))
     name: str = Field(description="The official name as the register spells it; the name the server echoes.")
     aliases: list[str] = Field(default_factory=list, exclude_if=lambda value: not value, description=(
         "Other spellings accepted on input (English and other-language names); never served."))
+
+
+# The code segment of a level: a character class and a width, nothing else, so a release cannot put an arbitrary
+# regular expression into the validator or the place parser.
+SEGMENT = r"^\[(?:0-9|A-Z|0-9A-Z)\]\{[1-9](?:,[1-9])?\}$"
+
+
+class PlaceLevel(Strict):
+    """One level of a country's place hierarchy: its id, its words and the code segment of its places."""
+
+    id: str = Field(pattern=r"^[a-z][a-z_]*$", description=(
+        "Level id, used as Institution.level and Basis.level: national, voivodeship, county, commune."))
+    adjective: str = Field(description=(
+        "The word before a basis kind ('Voivodeship ordinance'); lower-cased in 'Portal summary of ... rules' "
+        "and in lists of levels."))
+    noun: str = Field(description="One place of the level: 'voivodeship'.")
+    plural: str = Field(description="Several places of the level: 'voivodeships'.")
+    label: str = Field(description=(
+        "Label template with at most {name}: 'commune of {name}'. Without a name the noun is used."))
+    segment: str | None = Field(default=None, exclude_if=absent, pattern=SEGMENT, description=(
+        "The code segment of the level, for example [0-9]{2}; absent at depth 0."))
+    note: str | None = Field(default=None, exclude_if=absent, description=(
+        "What a name at the lowest level is not (a district, a postcode); lowest level only."))
+
+
+class PlaceHierarchy(Strict):
+    """The levels of a country and how its places are coded and worded."""
+
+    country_adjective: str = Field(description="'Polish': 'official Polish sources'.")
+    levels: list[PlaceLevel] = Field(min_length=3, description=(
+        "The country first; the depth of a code (its number of dashes) is its index. Depth 1 is named by the "
+        "request part canton (alias region), the last level by city; levels in between have no request part."))
 
 
 class PlaceRegister(Strict):
@@ -90,6 +134,8 @@ class PlaceRegister(Strict):
     url: str
     accessed_on: date
     raw_sha256: str = Field(description="Hash of the register response the places were read from.")
+    hierarchy: PlaceHierarchy | None = Field(default=None, exclude_if=absent, description=(
+        "The country's levels and code format; absent in releases before swiss-tip-release/v3, which are Swiss."))
     generic_words: list[str] = Field(default_factory=list, exclude_if=lambda value: not value, description=(
         "Words a caller may put around a name without changing the place: 'Canton of', 'Stadt', 'Gemeinde'."))
     places: list[Place] = Field(min_length=1)
@@ -98,7 +144,8 @@ class PlaceRegister(Strict):
 class Basis(Strict):
     """What an excerpt is, independent of the page that carries it."""
 
-    level: InstitutionLevel = Field(description="Level of the body that enacted the norm or wrote the text.")
+    level: str = Field(description=(
+        "Level of the body that enacted the norm or wrote the text: a level id of the release's place hierarchy."))
     kind: BasisKind
     norm: str | None = Field(default=None, exclude_if=absent, description=(
         "Identity of the norm (abbreviation, SR or LS number, article); required for act, ordinance, treaty and directive."))
@@ -231,7 +278,7 @@ class EvidenceRecord(Strict):
 
 
 class Manifest(Strict):
-    schema_version: Literal["swiss-tip-release/v1", "swiss-tip-release/v2"] = RELEASE_SCHEMA_VERSION
+    schema_version: Literal["swiss-tip-release/v1", "swiss-tip-release/v2", "swiss-tip-release/v3"] = RELEASE_SCHEMA_VERSION
     release_id: str
     pack: str
     title: str
@@ -241,6 +288,11 @@ class Manifest(Strict):
     out_of_scope_response: str
     jurisdictions: list[str]
     languages: list[str]
+    query_languages: list[str] | None = Field(default=None, exclude_if=absent, description=(
+        "The languages callers write tool calls in, the translation target first. Absent: measured from the "
+        "release's source terms (releases before swiss-tip-release/v3)."))
+    evidence_languages: list[str] | None = Field(default=None, exclude_if=absent, description=(
+        "The only languages the cited excerpts may be in; the validator refuses any other."))
     freshness: Freshness
     provenance_kinds: dict[str, int]
     review_statuses: dict[str, int]
@@ -259,6 +311,9 @@ class Manifest(Strict):
     def version_matches_fields(self) -> "Manifest":
         if self.schema_version == "swiss-tip-release/v1" and self.acceptance_suite_sha256 is not None:
             raise ValueError("acceptance_suite_sha256 requires swiss-tip-release/v2")
+        if self.schema_version != RELEASE_SCHEMA_VERSION_DECLARED and (
+                self.query_languages is not None or self.evidence_languages is not None):
+            raise ValueError(f"query_languages and evidence_languages require {RELEASE_SCHEMA_VERSION_DECLARED}")
         return self
 
 

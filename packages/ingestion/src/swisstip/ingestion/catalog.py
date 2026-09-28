@@ -27,7 +27,7 @@ def _require(condition: bool, message: str) -> None:
 
 
 def _depth(code: object, country: str) -> int | None:
-    """Levels below the country of a code such as ``PL-12-61-01-1``; None when it is not a code of the country."""
+    """Levels below the country of a code such as ``PL-12-61-011``; None when it is not a code of the country."""
     if not isinstance(code, str):
         return None
     parts = code.split("-")

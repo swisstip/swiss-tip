@@ -6,8 +6,10 @@ How the server and the pipeline are taken to a second country: a pack of
 official public information for everyone who lives in a Polish city,
 `mvp-poland` in the packs repository. The pack's scope, draft questions and
 candidate sources are in its README (`releases/mvp-poland/README.md` of
-[swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp)). The code serves
-Swiss releases only; what is already built is listed under "Status".
+[swiss-tip-mvp](https://github.com/swisstip/swiss-tip-mvp)). The detailed
+design of workstreams 1 to 3 is
+[country-profiles.md](../architecture/country-profiles.md). The server
+serves Swiss releases only; what is already built is listed under "Status".
 
 ## Status
 
@@ -32,6 +34,26 @@ Implemented and tested:
 - **Language hints.** `pl` is a catalogue language (with `uk`), and the
   extraction reads a `pl` path segment or file-name suffix as a language
   hint.
+- **Country-neutral core, first half** (steps 0 to 3 and 6 of
+  [country-profiles.md](../architecture/country-profiles.md), the detailed
+  design of workstreams 1 to 3):
+  - a release may declare its country's place hierarchy (levels, names,
+    code segments) in its place register, and its query and evidence
+    languages; such a release is `swiss-tip-release/v3`, and a release that
+    declares nothing is Swiss and is read exactly as before;
+  - validation, legal-basis labels and the place index follow the declared
+    hierarchy: four levels, codes such as `PL-12-61-011` with their zeros
+    kept, `ł` folded for a release that declares Polish, Polish messages
+    for places not found or ambiguous;
+  - the TERC importer writes a Polish place file from the GUS register
+    (dry run: 16 voivodeships, 380 counties, 2,479 communes);
+  - proof that nothing Swiss changed: a capture of about 42,000 results of
+    both Swiss packs, and a rebuild of both, are byte-identical before and
+    after (swiss-tip-mvp `scripts/test/baseline/`).
+
+  Not yet: the served texts and Polish search (design step 4), the build of
+  a Polish release (step 5), the console (step 7), and a synthetic Polish
+  pack end to end (step 8). The server still serves Swiss releases only.
 
 Done in the packs repository: the civic-participation topics (the
 participatory budget, the local initiative and grants for NGOs,

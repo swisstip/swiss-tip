@@ -209,6 +209,41 @@ rebuild the releases. What the build does with the file, and the hand-written
 aliases beside it, is in
 [docs/architecture/release-format.md](../../docs/architecture/release-format.md).
 
+```shell
+./.venv/Scripts/python.exe -m swisstip.ingestion.places --terc .local/<pack>/places/TERC_Urzedowy_<day>.csv \
+  --url <eTERYT full-file download page> --accessed-on <day> --output config/places/pl-register.json
+```
+
+`--terc` reads TERC, the official register of the territorial division of
+Poland, from a full file of Statistics Poland (GUS) saved from its eTERYT
+pages. The download is a form, so the importer never fetches: `--url` names
+the page the file came from and `--accessed-on` the day, and both are
+required. The CSV (UTF-8 with BOM, `;`, columns
+`WOJ;POW;GMI;RODZ;NAZWA;NAZWA_DOD;STAN_NA`) becomes a place file of the same
+shape, sorted by code:
+
+| TERC rows | Kept as | Code | Name |
+| --- | --- | --- | --- |
+| No `POW` | voivodeship | `PL-12` | `NAZWA` lower-cased: `małopolskie` |
+| No `GMI`, `NAZWA_DOD` `powiat` | county | `PL-12-06` | `powiat krakowski` |
+| No `GMI`, a city with county rights | county | `PL-12-61` | `powiat m. Kraków` (the capital: `powiat m. st. Warszawa`) |
+| `RODZ` 1, 2, 3 (urban, rural, urban-rural commune) | commune | `PL-12-61-011`: `GMI` followed by `RODZ` | `NAZWA`; `Bolesławiec (gmina miejska)` with `NAZWA_DOD` when communes of one county share a name |
+| `RODZ` 4, 5 (town and rural area of an urban-rural commune), 8 (district of Warsaw), 9 (delegatura) | dropped | - | Parts of a commune, not places inside it |
+
+Every segment keeps its zeros. The register's own date (`STAN_NA`) goes
+into the title, `raw_sha256` hashes the file as read, and the command prints
+the voivodeships, counties and communes it kept and the dropped rows per
+`RODZ`. A file with a missing column, other than 16 voivodeships, a county
+or commune without its parent, a malformed or duplicate code, an unknown
+`RODZ`, an unexpected county `NAZWA_DOD`, more than one `STAN_NA` or a
+qualified name that is still not unique in its county is refused and
+nothing is written. Villages are not in TERC (they are in SIMC). The
+hierarchy of levels, the country entry, the generic words and the English
+names are not register output: they go into the hand-written
+`swiss-tip-place-aliases/v2` file beside it, as
+[docs/architecture/country-profiles.md](../../docs/architecture/country-profiles.md)
+describes. The tests use a synthetic TERC file.
+
 ## Discovered pages
 
 The downloader fetches catalogue URLs only. Pages that a link-following crawl

@@ -4,20 +4,30 @@ dataset is at hand, every excerpt against the record it was cut from.
     swisstip-validate-release releases/<pack>/release.json --text .local/<pack>/text
 
 The server runs the same checks once at startup and fails closed on any issue.
+
+Codes, levels and basis words are checked against the release's place
+hierarchy: the built-in Swiss one for a release that declares none, the
+declared one otherwise. A release that declares its country
+(swiss-tip-release/v3) is also checked for a well-formed hierarchy and for
+its declared query and evidence languages; those issues follow all others,
+and none of them can arise for a Swiss release.
 """
 
 import argparse
 import hashlib
 import json
 import re
+import string
 import sys
 from datetime import timedelta
 from pathlib import Path
 
-from .basis import DEFAULT_RANKING_POLICY, NORM_KINDS, basis_label, level_of_jurisdiction, strongest_basis
+from . import RELEASE_SCHEMA_VERSION_DECLARED
+from .basis import DEFAULT_RANKING_POLICY, NORM_KINDS, basis_label, strongest_basis
+from .hierarchy import SWISS_PATTERN, Hierarchy, hierarchy_of
 from .release import Release, content_hash, load_release, sha256_text
 
-JURISDICTION = re.compile(r"^CH(?:-[A-Z]{2}(?:-\d{1,4})?)?$")
+JURISDICTION = SWISS_PATTERN  # the Swiss code pattern, kept under its old name for importers
 LANGUAGE = re.compile(r"^[a-z]{2,3}$")
 IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -29,13 +39,15 @@ class ReleaseInvalid(ValueError):
 
 
 def contains(outer: str, inner: str) -> bool:
-    """Jurisdiction containment: CH contains every canton and municipality, a canton its municipalities."""
+    """Jurisdiction containment: a country contains every place below it (CH every canton and municipality), a
+    place every place below it (a canton its municipalities, PL-12 its counties and communes)."""
     return inner == outer or inner.startswith(outer + "-")
 
 
 def validate_release(release: Release, text_dir: Path | None = None, run_dir: Path | None = None) -> list[str]:
     issues: list[str] = []
     manifest = release.manifest
+    hierarchy = hierarchy_of(release.place_register)
     if content_hash(release) != manifest.content_sha256:
         issues.append("manifest content_sha256 does not match the release body")
     if manifest.freshness.stale_from != manifest.freshness.snapshot_date + timedelta(days=manifest.freshness.max_age_days):
@@ -77,7 +89,7 @@ def validate_release(release: Release, text_dir: Path | None = None, run_dir: Pa
             issues.append(f"fact {fact.fact_id} references unknown concept {fact.concept_id}")
         elif fact.fact_id not in concepts[fact.concept_id].fact_ids:
             issues.append(f"fact {fact.fact_id} is not listed by its concept")
-        if not JURISDICTION.match(fact.jurisdiction):
+        if not hierarchy.pattern.match(fact.jurisdiction):
             issues.append(f"fact {fact.fact_id} has a malformed jurisdiction {fact.jurisdiction!r}")
         elif fact.jurisdiction not in manifest.jurisdictions:
             issues.append(f"fact {fact.fact_id} jurisdiction {fact.jurisdiction} is not declared in the manifest")
@@ -126,17 +138,24 @@ def validate_release(release: Release, text_dir: Path | None = None, run_dir: Pa
         statuses[fact.provenance.review_status] = statuses.get(fact.provenance.review_status, 0) + 1
     if kinds != manifest.provenance_kinds or statuses != manifest.review_statuses:
         issues.append("manifest provenance or review counts differ from the facts")
-    issues.extend(check_institutions_and_basis(release, documents, evidence))
-    issues.extend(check_place_register(release))
+    issues.extend(check_institutions_and_basis(release, documents, evidence, hierarchy))
+    issues.extend(check_place_register(release, hierarchy))
     if text_dir is not None:
         issues.extend(check_against_text(release, Path(text_dir), Path(run_dir) if run_dir else None))
+    issues.extend(check_country_profile(release))
     return issues
 
 
-def check_institutions_and_basis(release: Release, documents: dict, evidence: dict) -> list[str]:
+def check_institutions_and_basis(release: Release, documents: dict, evidence: dict,
+                                 hierarchy: Hierarchy | None = None) -> list[str]:
     """The institution registry, the institution of every page, the basis of every excerpt and of every fact.
 
-    A release without institutions and bases (built before 16 September 2026) passes untouched."""
+    Levels are the level ids of the release's hierarchy. A release without institutions and bases (built before
+    16 September 2026) passes untouched."""
+    if hierarchy is None:
+        hierarchy = hierarchy_of(release.place_register)
+    words = hierarchy.words
+    national = hierarchy.levels[0].id if hierarchy.levels else None
     issues: list[str] = []
     manifest = release.manifest
     institutions = {i.institution_id: i for i in release.institutions}
@@ -145,9 +164,9 @@ def check_institutions_and_basis(release: Release, documents: dict, evidence: di
     for institution in release.institutions:
         if not IDENTIFIER.match(institution.institution_id):
             issues.append(f"malformed institution identifier {institution.institution_id!r}")
-        if not JURISDICTION.match(institution.jurisdiction):
+        if not hierarchy.pattern.match(institution.jurisdiction):
             issues.append(f"institution {institution.institution_id} has a malformed jurisdiction {institution.jurisdiction!r}")
-        elif level_of_jurisdiction(institution.jurisdiction) != institution.level:
+        elif hierarchy.level_id(institution.jurisdiction) != institution.level:
             issues.append(f"institution {institution.institution_id} is {institution.level} but speaks for {institution.jurisdiction}")
         if not institution.name.strip():
             issues.append(f"institution {institution.institution_id} has no name")
@@ -175,7 +194,10 @@ def check_institutions_and_basis(release: Release, documents: dict, evidence: di
         if basis.kind in NORM_KINDS and not (basis.norm or "").strip():
             issues.append(f"evidence {item.evidence_id} basis of kind {basis.kind} names no norm")
             continue
-        if basis.label != basis_label(basis.level, basis.kind, basis.norm, basis.refers_to):
+        if basis.level not in words:
+            issues.append(f"evidence {item.evidence_id} basis level {basis.level!r} is not a level of this release")
+            continue
+        if basis.label != basis_label(basis.level, basis.kind, basis.norm, basis.refers_to, words):
             issues.append(f"evidence {item.evidence_id} basis label does not match its fields")
     policy = manifest.ranking_policy or DEFAULT_RANKING_POLICY
     levels: dict[str, int] = {}
@@ -191,8 +213,9 @@ def check_institutions_and_basis(release: Release, documents: dict, evidence: di
             issues.append(f"fact {fact.fact_id} provenance basis is not the strongest basis of its evidence")
         if fact.provenance.basis is not None:
             basis_kinds[fact.provenance.basis.kind] = basis_kinds.get(fact.provenance.basis.kind, 0) + 1
-            if fact.jurisdiction == "CH" and fact.provenance.basis.level != "federal":
-                issues.append(f"fact {fact.fact_id} is federal but rests on a {fact.provenance.basis.level} basis")
+            # The country's own facts rest on the country's law: for CH, a federal basis.
+            if fact.jurisdiction == hierarchy.country and fact.provenance.basis.level != national:
+                issues.append(f"fact {fact.fact_id} is {national} but rests on a {fact.provenance.basis.level} basis")
         for item in cited:
             institution = institutions.get(item.institution_id or "")
             if institution and not contains(institution.jurisdiction, fact.jurisdiction):
@@ -205,20 +228,23 @@ def check_institutions_and_basis(release: Release, documents: dict, evidence: di
     return issues
 
 
-def check_place_register(release: Release) -> list[str]:
-    """The place register: well-formed unique codes, a name on every place, every municipality under a listed
-    canton and every canton under a listed country, and a place for every jurisdiction the release publishes, so
-    that the server can name whatever it answers for. A release without a register passes untouched."""
+def check_place_register(release: Release, hierarchy: Hierarchy | None = None) -> list[str]:
+    """The place register: unique codes well-formed for the release's hierarchy, a name on every place, every place
+    below the country under its listed parent (a municipality under its canton, a commune under its county), and a
+    place for every jurisdiction the release publishes, so that the server can name whatever it answers for. A
+    release without a register passes untouched."""
     register = release.place_register
     if register is None:
         return []
+    if hierarchy is None:
+        hierarchy = hierarchy_of(register)
     issues: list[str] = []
     codes = [place.code for place in register.places]
     if len(set(codes)) != len(codes):
         issues.append("duplicate codes in the place register")
     listed = set(codes)
     for place in register.places:
-        if not JURISDICTION.match(place.code):
+        if not hierarchy.pattern.match(place.code):
             issues.append(f"place {place.code!r} has a malformed code")
         elif "-" in place.code and place.code.rsplit("-", 1)[0] not in listed:
             issues.append(f"place {place.code} lies in {place.code.rsplit('-', 1)[0]}, which the register does not list")
@@ -227,6 +253,92 @@ def check_place_register(release: Release) -> list[str]:
     for jurisdiction in release.manifest.jurisdictions:
         if jurisdiction not in listed:
             issues.append(f"jurisdiction {jurisdiction} of the manifest is not in the place register")
+    return issues
+
+
+def check_country_profile(release: Release) -> list[str]:
+    """What a release that declares its country must get right: a well-formed place hierarchy with exactly one
+    country place that the manifest's jurisdictions lie in, swiss-tip-release/v3 if and only if a hierarchy is
+    declared, and its query and evidence languages. A malformed hierarchy accepts no code (every code is reported
+    malformed); these issues name the cause. A Swiss release declares none of it and passes untouched."""
+    issues: list[str] = []
+    manifest = release.manifest
+    register = release.place_register
+    declared = register.hierarchy if register is not None else None
+    if declared is not None:
+        levels = declared.levels
+        ids = [level.id for level in levels]
+        if len(levels) < 3:
+            issues.append(f"the place hierarchy has {len(levels)} level(s); it needs at least three")
+        if len(set(ids)) != len(ids):
+            issues.append("duplicate level ids in the place hierarchy")
+        for depth, level in enumerate(levels):
+            if depth == 0 and level.segment is not None:
+                issues.append(f"level {level.id} is the country and takes no code segment")
+            elif depth > 0 and level.segment is None:
+                issues.append(f"level {level.id} declares no code segment")
+            elif depth > 0 and not compiles(level.segment):
+                issues.append(f"level {level.id} code segment {level.segment!r} is not a valid width")
+            if level.note is not None and depth != len(levels) - 1:
+                issues.append(f"level {level.id} carries a note, which only the lowest level may")
+            if not name_template(level.label):
+                issues.append(f"level {level.id} label {level.label!r} carries a placeholder other than {{name}}")
+        countries = [place.code for place in register.places if "-" not in place.code]
+        if len(countries) != 1:
+            issues.append(f"the place register lists {len(countries)} country places (codes without a dash); "
+                          "a declared hierarchy needs exactly one")
+        else:
+            outside = [code for code in manifest.jurisdictions if code.split("-")[0] != countries[0]]
+            if outside:
+                issues.append(f"manifest jurisdictions {', '.join(outside)} do not lie in the register's country "
+                              f"{countries[0]}")
+        if manifest.schema_version != RELEASE_SCHEMA_VERSION_DECLARED:
+            issues.append(f"a place register that declares a hierarchy requires {RELEASE_SCHEMA_VERSION_DECLARED}")
+    elif manifest.schema_version == RELEASE_SCHEMA_VERSION_DECLARED:
+        issues.append(f"{RELEASE_SCHEMA_VERSION_DECLARED} requires a place register with a hierarchy")
+    # Both lists exist only in swiss-tip-release/v3 (a load error otherwise), so a Swiss release never reaches these.
+    if manifest.query_languages is not None:
+        issues.extend(language_list_issues("query_languages", manifest.query_languages))
+        for fact in release.facts:
+            if fact.language not in manifest.query_languages:
+                issues.append(f"fact {fact.fact_id} language {fact.language} is not one of the manifest's query_languages")
+    if manifest.evidence_languages is not None:
+        issues.extend(language_list_issues("evidence_languages", manifest.evidence_languages))
+        for item in release.evidence:
+            if item.language.split("-")[0].lower() not in manifest.evidence_languages:
+                issues.append(f"evidence {item.evidence_id} language {item.language} is not one of the manifest's "
+                              "evidence_languages")
+    return issues
+
+
+def compiles(segment: str) -> bool:
+    """A segment the level grammar admits can still fail to compile: [0-9]{9,1}."""
+    try:
+        re.compile(segment)
+    except re.error:
+        return False
+    return True
+
+
+def name_template(label: str) -> bool:
+    """A label template carries no placeholder but a plain {name}: 'commune of {name}', 'national'."""
+    try:
+        fields = [(field, spec, conversion) for _, field, spec, conversion in string.Formatter().parse(label)
+                  if field is not None]
+    except ValueError:  # an unmatched brace
+        return False
+    return all(field == ("name", "", None) for field in fields)
+
+
+def language_list_issues(name: str, codes: list[str]) -> list[str]:
+    issues = []
+    if not codes:
+        issues.append(f"manifest {name} lists no language")
+    if len(set(codes)) != len(codes):
+        issues.append(f"duplicate languages in manifest {name}")
+    for code in codes:
+        if not LANGUAGE.match(code):
+            issues.append(f"manifest {name} has a malformed language {code!r}")
     return issues
 
 
